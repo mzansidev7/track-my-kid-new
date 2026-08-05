@@ -1,7 +1,8 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { AuthProvider } from "../authContext/auth-context";
+import { AuthProvider } from "../context/authContext/auth-context";
+import { SubscriptionProvider } from "../context/subscriptionContext/SubscriptionContext";
 import { ThemeProvider } from "../styles/theme";
 
 export default function AuthLayout() {
@@ -9,23 +10,25 @@ export default function AuthLayout() {
     <ThemeProvider>
       <SafeAreaProvider>
         <AuthProvider>
-          <SafeAreaView
-            style={{ flex: 1, backgroundColor: "#F8F9FA" }}
-            edges={[]}
-          >
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: "#F8F9FA" },
-              }}
-            />
+          <SubscriptionProvider>
+            <SafeAreaView
+              style={{ flex: 1, backgroundColor: "#F8F9FA" }}
+              edges={[]}
+            >
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: "#F8F9FA" },
+                }}
+              />
 
-            <StatusBar
-              style="dark"
-              translucent={true}
-              backgroundColor="transparent"
-            />
-          </SafeAreaView>
+              <StatusBar
+                style="dark"
+                translucent={true}
+                backgroundColor="transparent"
+              />
+            </SafeAreaView>
+          </SubscriptionProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </ThemeProvider>

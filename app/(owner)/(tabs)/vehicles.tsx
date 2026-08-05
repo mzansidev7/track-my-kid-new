@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 import Notification from "../../../components/Notification";
-import { BASE_URL, resolveWorkingBaseUrl } from "../../../url";
+import { resolveWorkingBaseUrl } from "../../../url";
 
 interface Vehicle {
   id: string;
@@ -50,7 +50,6 @@ interface Vehicle {
 export default function Vehicles({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);
   const router = useRouter();
-  const API_BASE_URL = BASE_URL;
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
@@ -96,7 +95,7 @@ export default function Vehicles({ setActiveButton }: any) {
     } finally {
       setLoadingVehicles(false);
     }
-  }, [user?.userData?.id, user?.token, API_BASE_URL]);
+  }, [user?.userData?.id, user?.token]);
 
   useFocusEffect(
     useCallback(() => {

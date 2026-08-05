@@ -15,15 +15,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import Notification from "../../components/Notification";
-import { BASE_URL } from "../../url";
+import { resolveWorkingBaseUrl } from "../../url";
 
 export default function AddVehicle({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);
   const router = useRouter();
-  const API_BASE_URL = BASE_URL;
 
   const [notification, setNotification] = useState<{
     visible: boolean;
@@ -153,7 +152,8 @@ export default function AddVehicle({ setActiveButton }: any) {
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/owner/vehicles`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/vehicles`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${user?.token}`,

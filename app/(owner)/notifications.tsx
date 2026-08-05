@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useOwnerProfile } from "../../ownerHelpers/hooks/useOwnerProfile";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 
 type NotificationRow = {

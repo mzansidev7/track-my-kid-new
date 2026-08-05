@@ -3,9 +3,12 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   getUserFromAsyncStorage,
   normalizeRole,
-} from "../asyncStorage/authStore";
-import { clearAuthToken, setAuthToken } from "../supabaseConfig/supabaseConfig";
-import { BASE_URL, resolveWorkingBaseUrl } from "../url";
+} from "../../asyncStorage/authStore";
+import {
+  clearAuthToken,
+  setAuthToken,
+} from "../../supabaseConfig/supabaseConfig";
+import { BASE_URL, resolveWorkingBaseUrl } from "../../url";
 
 const OWNER_DRIVER_MODE_KEY = "owner_driver_mode";
 

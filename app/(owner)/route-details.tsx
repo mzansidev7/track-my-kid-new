@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 
 interface RouteDetails {

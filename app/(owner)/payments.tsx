@@ -10,8 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { BASE_URL } from "../../url";
-import { AuthContext } from "../../authContext/auth-context";
+import { resolveWorkingBaseUrl } from "../../url";
+import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import Notification from "../../components/Notification";
 
@@ -43,11 +43,13 @@ export default function OwnerPayments() {
     if (!user?.token) return;
     setLoading(true);
     try {
+      const baseUrl = await resolveWorkingBaseUrl();
+
       const [profileRes, historyRes] = await Promise.all([
-        fetch(`${BASE_URL}/owner/profile`, {
+        fetch(`${baseUrl}/owner/profile`, {
           headers: { Authorization: `Bearer ${user.token}` },
         }),
-        fetch(`${BASE_URL}/owner/payments/history`, {
+        fetch(`${baseUrl}/owner/payments/history`, {
           headers: { Authorization: `Bearer ${user.token}` },
         }),
       ]);
@@ -99,7 +101,8 @@ export default function OwnerPayments() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${BASE_URL}/owner/profile`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const res = await fetch(`${baseUrl}/owner/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

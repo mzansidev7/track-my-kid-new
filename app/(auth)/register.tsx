@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { requestRegistrationLink, userAuth } from "../../functions/auth";
 import { BASE_URL } from "../../url";
+import { useAuth } from "../../context/authContext/auth-context";
 
 import FloatingInput from "../../components/FloatingInput";
 import Notification from "../../components/Notification";
@@ -81,6 +82,7 @@ export default function Register({
   const [scanLoading, setScanLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { refreshUser } = useAuth();
 
   useEffect(() => {
     setFormData({
@@ -276,9 +278,12 @@ export default function Register({
           role: userType,
         });
 
+        await refreshUser();
+
         setNotification({
           visible: true,
-          message: "Account created successfully. Please sign in.",
+          message:
+            "Account created successfully. Redirecting to verification...",
           type: "success",
         });
       }
@@ -436,6 +441,20 @@ export default function Register({
                     />
 
                     <FloatingInput
+                      label="Email address"
+                      value={formData.email}
+                      onChangeText={(t: any) =>
+                        setFormData({ ...formData, email: t })
+                      }
+                      error={errors.email}
+                      leftIcon={
+                        <MaterialIcons name="email" size={20} color="#999" />
+                      }
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+
+                    <FloatingInput
                       label="Phone number"
                       value={formData.phone || ""}
                       onChangeText={(t: any) =>
@@ -508,20 +527,6 @@ export default function Register({
                           />
                         </TouchableOpacity>
                       }
-                    />
-
-                    <FloatingInput
-                      label="Email address"
-                      value={formData.email}
-                      onChangeText={(t: any) =>
-                        setFormData({ ...formData, email: t })
-                      }
-                      error={errors.email}
-                      leftIcon={
-                        <MaterialIcons name="email" size={20} color="#999" />
-                      }
-                      keyboardType="email-address"
-                      autoCapitalize="none"
                     />
                   </>
                 )}

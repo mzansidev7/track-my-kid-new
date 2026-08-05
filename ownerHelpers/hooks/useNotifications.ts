@@ -1,6 +1,6 @@
 import axios from "axios";
 import { useCallback, useContext, useEffect, useState } from "react";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 import { useOwnerProfile } from "./useOwnerProfile";
 

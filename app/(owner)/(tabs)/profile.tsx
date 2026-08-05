@@ -1,12 +1,15 @@
-import { clearUserFromAsyncStorage } from "../../../asyncStorage/authStore";
 import ThemeToggle from "../../../components/ThemeToggle";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext, useState, useEffect } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
+  Image,
   Modal,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Switch,
   Text,
@@ -16,7 +19,7 @@ import {
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 
 const OwnerProfile = () => {
   const router = useRouter();
@@ -28,9 +31,10 @@ const OwnerProfile = () => {
   const [dropOffNotifications, setDropOffNotifications] = useState(true);
   const [delayAlerts, setDelayAlerts] = useState(true);
   const [emergencyAlerts, setEmergencyAlerts] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
+  const androidTopInset =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 
   const { renderHeader } = useOwnerPageHeader({
     title: "Profile & Settings",
@@ -45,41 +49,16 @@ const OwnerProfile = () => {
 
   const confirmLogout = async () => {
     setShowLogoutModal(false);
-    // const result = await logout();
-    const results = await clearUserFromAsyncStorage();
 
-    console;
-    if (results) {
-      console.log("Logout successful, navigating to auth screen");
-      // router.push("/screens/auth");
+    try {
+      await logout();
+    } catch (err) {
+      console.warn("Logout error:", err);
     }
-  };
 
-  const setingProfileHeader = () => (
-    <View style={styles.header}>
-      {profileUser?.name && (
-        <TouchableOpacity
-          style={styles.accountCard}
-          activeOpacity={0.85}
-          onPress={() => router.push("/(owner)/personal-info")}
-        >
-          <View style={styles.accountAvatar}>
-            <Text style={styles.accountAvatarText}>
-              {profileUser?.name?.charAt(0)?.toUpperCase() || "O"}
-            </Text>
-          </View>
-          <View style={styles.accountInfo}>
-            <Text style={styles.accountName}>
-              {profileUser?.name || "Owner"}
-            </Text>
-            {/* <Text style={styles.accountRole}>Parent Account</Text>
-            <Text style={styles.accountSince}>Member since 2024</Text> */}
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#FFF" />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+    console.log("Logout successful, navigating to auth screen");
+    router.replace("/");
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -98,7 +77,7 @@ const OwnerProfile = () => {
           const name = data.subscription?.subscription_plans?.name;
           setCurrentPlanName(name || null);
         }
-      } catch (e) {
+      } catch {
         // ignore
       }
     };
@@ -205,40 +184,48 @@ const OwnerProfile = () => {
     <View style={styles.container}>
       {renderHeader()}
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {profileUser?.name && (
-          <TouchableOpacity
-            style={styles.accountCard}
-            activeOpacity={0.85}
-            // onPress={() => router.push("/(owner)/personal-info")}
-          >
-            <View style={styles.accountAvatar}>
-              <Text style={styles.accountAvatarText}>
-                {profileUser?.name?.charAt(0)?.toUpperCase() || "O"}
-              </Text>
-            </View>
+      <ScrollView
+        contentContainerStyle={[styles.content, styles.scrollContent]}
+      >
+        <View style={styles.accountCard}>
+          {owner?.name ? (
+            <>
+              {owner?.avatar ? (
+                <View style={styles.accountAvatar}>
+                  <Image
+                    source={{ uri: owner.avatar }}
+                    style={{ width: 60, height: 60, borderRadius: 30 }}
+                  />
+                </View>
+              ) : (
+                <View style={styles.accountAvatar}>
+                  <Text style={styles.accountAvatarText}>
+                    {profileUser?.name?.charAt(0)?.toUpperCase() || "O"}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountName}>
+                  {profileUser?.name || "Owner"}
+                </Text>
+                <Text style={styles.accountRole}>Owner&apos;s Account</Text>
+                <Text style={styles.accountSince}>
+                  Member since{" "}
+                  {new Date(profileUser?.created_at).toLocaleDateString(
+                    "en-ZA",
+                    {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    },
+                  )}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#FFF" />
+            </>
+          ) : null}
+        </View>
 
-            <View style={styles.accountInfo}>
-              <Text style={styles.accountName}>
-                {profileUser?.name || "Owner"}
-              </Text>
-              <Text style={styles.accountRole}>Owner&apos;s Account</Text>
-              <Text style={styles.accountSince}>
-                Member since{" "}
-                {new Date(profileUser.created_at).toLocaleDateString("en-ZA", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#FFF" />
-          </TouchableOpacity>
-        )}
-
-        {/* <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 16 }}>
-          {JSON.stringify(profileUser.created_at, null, 2)}
-        </Text> */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Account</Text>
           <TouchableOpacity
@@ -479,6 +466,7 @@ export default OwnerProfile;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F9FA" },
   content: { padding: 16 },
+  scrollContent: { paddingTop: 28 },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,

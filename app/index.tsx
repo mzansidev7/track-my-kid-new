@@ -5,7 +5,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VerifyOTP from "./(auth)/verify-otp";
 
-import { useAuth } from "../authContext/auth-context";
+import { useAuth } from "../context/authContext/auth-context";
 // import ThemeToggle from "../components/ThemeToggle";
 import { useAuthStyles } from "../styles/authStyles";
 import { useTheme } from "../styles/theme";
@@ -29,28 +29,30 @@ export default function Index() {
     const isVerified = userData?.is_verified ?? userData?.isVerified ?? false;
 
     if (!isVerified) {
+      router.replace("/verify-otp");
       return;
     }
 
     switch (role) {
-      // case "driver":
-      //   router.replace("/(driver)/(tabs)");
-      //   break;
-
       case "owner":
         router.replace("/(owner)/(tabs)");
-        break;
+        return;
 
       case "client":
         router.replace("/(client)/(tabs)");
-        break;
+        return;
 
-      // case "school":
-      //   router.replace("/school");
-      //   break;
+      case "driver":
+        router.replace("/(driver)/(tabs)");
+        return;
+
+      case "school":
+        router.replace("/school");
+        return;
 
       default:
-        break;
+        router.replace("/");
+        return;
     }
   }, [loading, user, router]);
 
@@ -102,9 +104,14 @@ export default function Index() {
 
   if (!isVerified) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <VerifyOTP user={userData} />
-      </View>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.text.primary} />
+          <Text style={styles.loadingText}>Redirecting to verification...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 

@@ -306,7 +306,7 @@ const DriversScreen = () => {
               <Text style={styles.emptyBody}>
                 {searchQuery
                   ? `No drivers match "${searchQuery}". Try a different search term.`
-                  : "Add your first driver in the owner dashboard or refresh to load the latest list."}
+                  : "Add your first driver or refresh to load the latest list."}
               </Text>
               {searchQuery ? (
                 <TouchableOpacity

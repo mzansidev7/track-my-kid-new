@@ -11,13 +11,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import Notification from "../../components/Notification";
 import {
   subscribeToDriversListUpdates,
   unsubscribeFromRealtime,
 } from "../../store/subscriptions/driversRealtime";
-import { BASE_URL } from "../../url";
+import { resolveWorkingBaseUrl } from "../../url";
 
 interface LinkedClient {
   id: string;
@@ -72,7 +72,9 @@ export default function LinkedClients({ setActiveButton }: any) {
   const fetchLinkedClients = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/owner/linked-clients`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+
+      const response = await fetch(`${baseUrl}/owner/linked-clients`, {
         headers: {
           Authorization: `Bearer ${user?.token}`,
         },

@@ -12,16 +12,16 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../authContext/auth-context";
+import { useAuth } from "../../context/authContext/auth-context";
 import Notification from "../../components/Notification";
 import { resendOtp, verifyOtp } from "../../functions/auth";
 
-export default function VerifyOTP({ user }: any) {
+export default function VerifyOTP() {
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { refreshUser, user } = useAuth();
 
-  const email = user?.email || "";
-  const name = user?.name || "";
+  const email = user?.userData?.email || "";
+  const name = user?.userData?.name || "";
 
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +79,7 @@ export default function VerifyOTP({ user }: any) {
   // 🔐 VERIFY OTP
   const handleVerifyOTP = async () => {
     const code = otp.join("");
-    const user_id = user?.id;
+    const user_id = user?.userData?.id;
 
     setNotification({ visible: false, message: "", type: "success" });
 
@@ -114,6 +114,7 @@ export default function VerifyOTP({ user }: any) {
             type: "success",
           });
           await refreshUser();
+          router.replace("/");
           break;
         case "INVALID_OTP":
           setNotification({
@@ -162,8 +163,10 @@ export default function VerifyOTP({ user }: any) {
     setResendLoading(true);
     setNotification({ visible: false, message: "", type: "success" });
 
+    const userId = user?.userData?.id || user?.id;
+
     try {
-      const result = await resendOtp(user?.id);
+      const result = await resendOtp(userId);
 
       switch (result?.message) {
         case "OTP_RESENT":

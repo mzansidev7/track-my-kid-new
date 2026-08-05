@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useRoutes } from "../../../ownerHelpers/hooks/useRoutes";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 
 const Routes = () => {

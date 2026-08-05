@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 import Notification from "../../../components/Notification";
 import { clearConversationsCache } from "../../../store/asyncStorage/messages.asyncStore";
 import {

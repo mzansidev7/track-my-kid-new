@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../../styles/theme";
-import { AuthContext } from "../../../../authContext/auth-context";
+import { AuthContext } from "../../../../context/authContext/auth-context";
 import { BASE_URL } from "../../../../url";
 import {
   subscribeToClientChildrenUpdates,

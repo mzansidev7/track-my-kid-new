@@ -23,6 +23,7 @@ import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
 import { useOwnerVehicles } from "../../../ownerHelpers/hooks/useOwnerVehicles";
 import { useRoutes } from "../../../ownerHelpers/hooks/useRoutes";
 import { useOwnerStyles } from "../../../ownerHelpers/styles/ownerStyles";
+import { useSubscription } from "@/context/subscriptionContext/SubscriptionContext";
 
 type RouteStatus = {
   text: string;
@@ -74,6 +75,7 @@ export default function Home({ user }: any) {
   const styles = useOwnerStyles();
   const { colors, shadows } = useTheme();
   const insets = useSafeAreaInsets();
+  const { subscription } = useSubscription();
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [profileNotice, setProfileNotice] = useState({
     visible: false,
@@ -93,6 +95,8 @@ export default function Home({ user }: any) {
     const hasDriver = route.driver_id && route.drivers;
     return hasVehicle && hasDriver;
   });
+
+  console.log({ subscription });
 
   useFocusEffect(
     useCallback(() => {

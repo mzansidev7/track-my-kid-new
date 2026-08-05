@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../../../../styles/theme";
-import { AuthContext } from "../../../../authContext/auth-context";
+import { AuthContext } from "../../../../context/authContext/auth-context";
 import LocationPicker from "../../../../components/LocationPicker.native";
 import { BASE_URL } from "../../../../url";
 import * as Location from "expo-location";

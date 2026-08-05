@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  ImageBackground,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,7 @@ import {
 } from "react-native";
 import { useOwnerProfile } from "../../ownerHelpers/hooks/useOwnerProfile";
 import { updateUser } from "../../asyncStorage/authStore";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import Notification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
 
@@ -95,6 +96,57 @@ const PersonalInfo = () => {
       }
     }
   }, [owner, profileUser]);
+
+  const handlePickCompanyLogo = async () => {
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setNotification({
+          visible: true,
+          message: "Image library permission is required.",
+          type: "error",
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setSaving(true);
+        try {
+          const logoUrl = await uploadCompanyLogo(uri);
+          setNotification({
+            visible: true,
+            message: "Company logo uploaded successfully.",
+            type: "success",
+          });
+          await refreshOwner();
+          return logoUrl;
+        } catch (err: any) {
+          setNotification({
+            visible: true,
+            message: err.message || "Unable to upload company logo.",
+            type: "error",
+          });
+        } finally {
+          setSaving(false);
+        }
+      }
+    } catch (err: any) {
+      setNotification({
+        visible: true,
+        message: err.message || "Unable to pick company logo.",
+        type: "error",
+      });
+    }
+  };
 
   const handlePickAvatar = async () => {
     try {
@@ -182,6 +234,52 @@ const PersonalInfo = () => {
     setSelectedAvatarUri(null);
 
     return avatarUrl;
+  };
+
+  const uploadCompanyLogo = async (uri: string) => {
+    const fileName = uri.split("/").pop() || `company-logo-${Date.now()}.jpg`;
+    const ext = fileName.split(".").pop()?.toLowerCase() || "jpg";
+    const contentType =
+      ext === "png"
+        ? "image/png"
+        : ext === "gif"
+          ? "image/gif"
+          : ext === "webp"
+            ? "image/webp"
+            : "image/jpeg";
+
+    const formData = new FormData();
+
+    if (Platform.OS === "web") {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      formData.append("avatar", blob, fileName);
+    } else {
+      formData.append("avatar", {
+        uri,
+        name: fileName,
+        type: contentType,
+      } as any);
+    }
+
+    const baseUrl = await resolveWorkingBaseUrl();
+    const response = await fetch(`${baseUrl}/owner/company-avatar`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${user?.token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(
+        data.error || data.message || "Failed to upload company logo.",
+      );
+    }
+
+    const newLogo = data.avatar;
+    return newLogo?.avatar_url || newLogo?.url || uri;
   };
 
   const handleSaveProfile = async () => {
@@ -373,19 +471,93 @@ const PersonalInfo = () => {
               ) : null}
             </View>
           </View>
-
-          <View style={styles.statusRow}>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>
-                {owner?.status?.toUpperCase() || "UNKNOWN"}
-              </Text>
-            </View>
-            {profileUser?.is_verified ? (
-              <View style={styles.verifiedBadge}>
+          <View style={[styles.statusRow]}>
+            {user?.userData?.is_verified ? (
+              <View
+                style={[
+                  styles.verifiedBadge,
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                  },
+                ]}
+              >
+                <MaterialIcons name="verified" size={16} color="#0369A1" />
                 <Text style={styles.verifiedText}>Verified</Text>
               </View>
             ) : null}
           </View>
+          {(owner?.company_name || owner?.company_avatar) && (
+            <>
+              {owner?.company_name ? (
+                <View
+                  style={[
+                    styles.verifiedBadge,
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginTop: 10,
+                      marginBottom: 10,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="business" size={16} color="#4A90E2" />
+                  <Text style={styles.verifiedText}>{owner.company_name}</Text>
+                </View>
+              ) : null}
+              {owner?.address ? (
+                <View
+                  style={[
+                    styles.verifiedBadge,
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      marginBottom: 10,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="place" size={16} color="#4A90E2" />
+                  <Text style={styles.verifiedText}>{owner.address}</Text>
+                </View>
+              ) : null}
+              <View>
+                {owner?.company_avatar ? (
+                  <Image
+                    source={{ uri: owner.company_avatar }}
+                    style={styles.companyAvatar}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.verifiedBadge,
+                      {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        borderWidth: 1,
+                        borderColor: "#4A90E2",
+                        backgroundColor: "#EFF6FF",
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        marginBottom: 10,
+                      },
+                    ]}
+                    onPress={handlePickCompanyLogo}
+                  >
+                    <MaterialIcons
+                      name="add-business"
+                      size={16}
+                      color="#4A90E2"
+                    />
+                    <Text style={styles.verifiedText}>Add Company Logo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
 
           <View style={styles.summaryRow}>
             <View style={styles.summaryCard}>
@@ -407,93 +579,113 @@ const PersonalInfo = () => {
         </View>
 
         <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Account Details</Text>
-            <Text style={styles.cardSubtitle}>
-              Update your name and phone number so customers can reach you.
-            </Text>
-          </View>
+          {isEditing && (
+            <>
+              <View
+                style={[
+                  styles.cardHeader,
+                  { flexDirection: "row", justifyContent: "space-between" },
+                ]}
+              >
+                <Text style={styles.cardTitle}>Account Details </Text>
+                <TouchableOpacity onPress={setIsEditing.bind(null, false)}>
+                  <MaterialIcons name="close" size={30} color="red" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.cardSubtitle}>
+                Update your name and phone number so customers can reach you.
+              </Text>
+              {/* Create a devider */}
+              <View style={styles.divider} />
 
-          <Text style={styles.fieldLabel}>Full Name</Text>
-          <TextInput
-            style={[
-              styles.input,
-              !isEditing && styles.readOnlyInput,
-              errors.name && styles.inputError,
-            ]}
-            value={formData.name}
-            editable={isEditing}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-            placeholder="Enter your full name"
-            placeholderTextColor="#9CA3AF"
-            textContentType="name"
-          />
-          {errors.name ? (
-            <Text style={styles.errorText}>{errors.name}</Text>
-          ) : null}
+              <Text style={styles.fieldLabel}>Full Name</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  !isEditing && styles.readOnlyInput,
+                  errors.name && styles.inputError,
+                ]}
+                value={formData.name}
+                editable={isEditing}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, name: text })
+                }
+                placeholder="Enter your full name"
+                placeholderTextColor="#9CA3AF"
+                textContentType="name"
+              />
+              {errors.name ? (
+                <Text style={styles.errorText}>{errors.name}</Text>
+              ) : null}
 
-          <Text style={styles.fieldLabel}>Phone Number</Text>
-          <TextInput
-            style={[
-              styles.input,
-              !isEditing && styles.readOnlyInput,
-              errors.phone && styles.inputError,
-            ]}
-            value={formData.phone}
-            editable={isEditing}
-            onChangeText={(text) => setFormData({ ...formData, phone: text })}
-            placeholder="Enter your phone number"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="phone-pad"
-            textContentType="telephoneNumber"
-          />
-          {errors.phone ? (
-            <Text style={styles.errorText}>{errors.phone}</Text>
-          ) : null}
+              <Text style={styles.fieldLabel}>Phone Number</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  !isEditing && styles.readOnlyInput,
+                  errors.phone && styles.inputError,
+                ]}
+                value={formData.phone}
+                editable={isEditing}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, phone: text })
+                }
+                placeholder="Enter your phone number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+              />
+              {errors.phone ? (
+                <Text style={styles.errorText}>{errors.phone}</Text>
+              ) : null}
 
-          <Text style={styles.fieldLabel}>Company Name</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.readOnlyInput]}
-            value={formData.company_name}
-            editable={isEditing}
-            onChangeText={(text) =>
-              setFormData({ ...formData, company_name: text })
-            }
-            placeholder="Enter your company name"
-            placeholderTextColor="#9CA3AF"
-          />
+              <Text style={styles.fieldLabel}>Company Name</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.readOnlyInput]}
+                value={formData.company_name}
+                editable={isEditing}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, company_name: text })
+                }
+                placeholder="Enter your company name"
+                placeholderTextColor="#9CA3AF"
+              />
 
-          <Text style={styles.fieldLabel}>Identity Number</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.readOnlyInput]}
-            value={formData.identity_number}
-            editable={isEditing}
-            onChangeText={(text) =>
-              setFormData({ ...formData, identity_number: text })
-            }
-            placeholder="Enter your identity number"
-            placeholderTextColor="#9CA3AF"
-          />
+              <Text style={styles.fieldLabel}>Identity Number</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.readOnlyInput]}
+                value={formData.identity_number}
+                editable={isEditing}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, identity_number: text })
+                }
+                placeholder="Enter your identity number"
+                placeholderTextColor="#9CA3AF"
+              />
 
-          <Text style={styles.fieldLabel}>Business Address</Text>
-          <TextInput
-            style={[styles.input, !isEditing && styles.readOnlyInput]}
-            value={formData.address}
-            editable={isEditing}
-            onChangeText={(text) => setFormData({ ...formData, address: text })}
-            placeholder="Enter your business address"
-            placeholderTextColor="#9CA3AF"
-            multiline
-            numberOfLines={3}
-          />
+              <Text style={styles.fieldLabel}>Business Address</Text>
+              <TextInput
+                style={[styles.input, !isEditing && styles.readOnlyInput]}
+                value={formData.address}
+                editable={isEditing}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, address: text })
+                }
+                placeholder="Enter your business address"
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={3}
+              />
 
-          <Text style={styles.fieldLabel}>Email Address</Text>
-          <TextInput
-            style={[styles.input, styles.readOnlyInput]}
-            value={formData.email}
-            editable={false}
-            placeholder="Email cannot be changed"
-          />
+              <Text style={styles.fieldLabel}>Email Address</Text>
+              <TextInput
+                style={[styles.input, styles.readOnlyInput]}
+                value={formData.email}
+                editable={false}
+                placeholder="Email cannot be changed"
+              />
+            </>
+          )}
 
           <View style={styles.buttonRow}>
             <TouchableOpacity
@@ -573,9 +765,9 @@ const styles = StyleSheet.create({
   },
 
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: "#4A90E2",
     justifyContent: "center",
     alignItems: "center",
@@ -599,8 +791,8 @@ const styles = StyleSheet.create({
   },
 
   avatarImage: {
-    width: 64,
-    height: 64,
+    width: 120,
+    height: 120,
     resizeMode: "cover",
   },
 
@@ -668,6 +860,11 @@ const styles = StyleSheet.create({
     color: "#0369A1",
     fontWeight: "700",
     fontSize: 12,
+  },
+  companyAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
   },
 
   summaryRow: {
@@ -825,6 +1022,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: "#666",
     fontSize: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 20,
   },
 });
 

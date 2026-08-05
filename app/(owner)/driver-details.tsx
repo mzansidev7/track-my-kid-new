@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { clearOwnerCache } from "../../asyncStorage/ownerCache";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import Notification from "../../components/Notification";
 import { subscribeToDriverProfileUpdates } from "../../store/subscriptions/driversRealtime";
 import { resolveWorkingBaseUrl } from "../../url";

@@ -11,7 +11,7 @@ import {
   NativeSyntheticEvent,
   ScrollView,
 } from "react-native";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 import { useDrivers } from "./useDrivers";
 import { useOwnerProfile } from "./useOwnerProfile";

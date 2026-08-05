@@ -3,7 +3,7 @@ import {
   loadOwnerRoutes,
   saveOwnerRoutes,
 } from "../../asyncStorage/ownerCache";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import {
   subscribeToRoutesListUpdates,
   unsubscribeFromRoutesRealtime,

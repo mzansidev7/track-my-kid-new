@@ -26,7 +26,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 import Notification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
 

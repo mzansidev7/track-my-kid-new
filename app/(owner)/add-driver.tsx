@@ -12,16 +12,15 @@ import {
 } from "react-native";
 import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
 import { clearOwnerCache } from "../../asyncStorage/ownerCache";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import Notification from "../../components/Notification";
-import { BASE_URL } from "../../url";
+import { resolveWorkingBaseUrl } from "../../url";
 
 const AddDriver = ({ setActiveButton }: any) => {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   const params = useLocalSearchParams();
-  const API_BASE_URL = BASE_URL;
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -61,7 +60,8 @@ const AddDriver = ({ setActiveButton }: any) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/owner/vehicles`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/vehicles`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -145,10 +145,8 @@ const AddDriver = ({ setActiveButton }: any) => {
         body: JSON.stringify(driverPayload),
       };
 
-      const response = await fetch(
-        `${API_BASE_URL}/owner/drivers`,
-        requestOptions,
-      );
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/drivers`, requestOptions);
       const data = await response.json();
 
       if (!response.ok) {

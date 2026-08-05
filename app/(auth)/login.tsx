@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../authContext/auth-context";
+import { useAuth } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import Notification from "../../components/Notification";
 import { loginUser } from "../../functions/auth";

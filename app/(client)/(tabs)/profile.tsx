@@ -11,7 +11,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../../styles/theme";
-import { AuthContext } from "../../../authContext/auth-context";
+import { AuthContext } from "../../../context/authContext/auth-context";
 import { useClientProfile } from "../../../clientHelpers/hooks/useClientProfile";
 import { ClientHeader } from "../../../components/ClientHeader";
 

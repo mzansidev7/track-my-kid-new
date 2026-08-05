@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -12,13 +11,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { AuthContext } from "../../authContext/auth-context";
+import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import LocationPicker from "../../components/LocationPicker";
 import Notification from "../../components/Notification";
 import TimePicker from "../../components/TimePicker";
 import { setDepartureTimePreference } from "../../store/asyncStorage/timePreferences.asyncStore";
-import { BASE_URL } from "../../url";
+import { resolveWorkingBaseUrl } from "../../url";
 
 const timeToMinutes = (value: string) => {
   const m = String(value || "")
@@ -335,7 +334,8 @@ const CreateRoutes = ({ setActiveButton }: any) => {
   const fetchDrivers = async () => {
     if (!user?.token) return;
     try {
-      const response = await fetch(`${BASE_URL}/owner/drivers`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/drivers`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -365,7 +365,9 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     if (!user?.token) return;
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/owner/vehicles`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+
+      const response = await fetch(`${baseUrl}/owner/vehicles`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -589,8 +591,9 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       requestBody.pickup_end_time = pickupEndTime.trim();
       requestBody.dropoff_start_time = dropoffStartTime.trim();
       requestBody.dropoff_end_time = dropoffEndTime.trim();
+      const baseUrl = await resolveWorkingBaseUrl();
 
-      const response = await fetch(`${BASE_URL}/owner/routes`, {
+      const response = await fetch(`${baseUrl}/owner/routes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

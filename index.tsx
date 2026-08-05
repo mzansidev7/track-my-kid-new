@@ -5,7 +5,7 @@ import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import VerifyOTP from "./app/(auth)/verify-otp";
 import WelcomeScreen from "./app/(auth)/home";
-import { useAuth } from "./authContext/auth-context";
+import { useAuth } from "./context/authContext/auth-context";
 import { useAuthStyles } from "./styles/authStyles";
 import { useTheme } from "./styles/theme";
 
