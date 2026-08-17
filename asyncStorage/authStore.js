@@ -18,6 +18,10 @@ export const normalizeRole = (role) => {
     return "client";
   }
 
+  if (normalized === "administrator" || normalized === "admin") {
+    return "admin";
+  }
+
   return normalized;
 };
 

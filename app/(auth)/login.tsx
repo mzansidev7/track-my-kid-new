@@ -18,7 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { loginUser } from "../../functions/auth";
 import { useTheme } from "../../styles/theme";
 import { BASE_URL } from "../../url";
@@ -68,7 +68,7 @@ export default function Login({
       await refreshUser();
       setVisible(false);
     } catch (error: any) {
-      console.error("Login error:", error);
+      // console.error("Login error:", error);
       setNotification({
         visible: true,
         message:
@@ -130,7 +130,7 @@ export default function Login({
     <SafeAreaView
       style={[loginStyles.container, { backgroundColor: colors.background }]}
     >
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}

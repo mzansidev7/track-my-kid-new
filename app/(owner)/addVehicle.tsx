@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
 
 export default function AddVehicle({ setActiveButton }: any) {
@@ -198,7 +198,7 @@ export default function AddVehicle({ setActiveButton }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}

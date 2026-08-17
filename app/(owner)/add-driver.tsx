@@ -14,7 +14,7 @@ import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader"
 import { clearOwnerCache } from "../../asyncStorage/ownerCache";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
 
 const AddDriver = ({ setActiveButton }: any) => {
@@ -226,7 +226,7 @@ const AddDriver = ({ setActiveButton }: any) => {
 
   return (
     <View style={styles.container}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}

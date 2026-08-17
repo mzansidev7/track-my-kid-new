@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/authContext/auth-context";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { resendOtp, verifyOtp } from "../../functions/auth";
 
 export default function VerifyOTP() {
@@ -229,7 +229,7 @@ export default function VerifyOTP() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}

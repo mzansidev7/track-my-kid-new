@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -17,7 +16,7 @@ import {
 } from "react-native";
 import { clearOwnerCache } from "../../asyncStorage/ownerCache";
 import { AuthContext } from "../../context/authContext/auth-context";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { subscribeToDriverProfileUpdates } from "../../store/subscriptions/driversRealtime";
 import { resolveWorkingBaseUrl } from "../../url";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
@@ -89,6 +88,7 @@ const DriverDetails = ({
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [availableVehicles, setAvailableVehicles] = useState<any[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
   // Edit driver state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState("");
@@ -188,26 +188,37 @@ const DriverDetails = ({
     setShowEditModal(true);
   };
 
+  const isOwnerDriverProfile = Boolean(
+    (driver as any)?.is_owner_driver ||
+      (driver as any)?.user_id === (user as any)?.userData?.id ||
+      (driver as any)?.userId === (user as any)?.userData?.id ||
+      ((driver as any)?.email || "").toLowerCase() ===
+        ((user as any)?.userData?.email || "").toLowerCase(),
+  );
+
   const handleRemoveDriver = () => {
-    Alert.alert(
-      "Remove Driver",
-      "Are you sure you want to remove this driver? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setRemovingDriver(true);
-            try {
-              await removeDriver();
-            } finally {
-              setRemovingDriver(false);
-            }
-          },
-        },
-      ],
-    );
+    if (isOwnerDriverProfile) {
+      setNotification({
+        visible: true,
+        message: "The owner driver profile cannot be removed.",
+        type: "warning",
+      });
+      return;
+    }
+
+    setShowRemoveModal(true);
+  };
+
+  const confirmRemoveDriver = async () => {
+    if (!driver || isOwnerDriverProfile) return;
+
+    setShowRemoveModal(false);
+    setRemovingDriver(true);
+    try {
+      await removeDriver();
+    } finally {
+      setRemovingDriver(false);
+    }
   };
 
   const removeDriver = async () => {
@@ -569,7 +580,7 @@ const DriverDetails = ({
 
   return (
     <View style={styles.container}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}
@@ -773,6 +784,7 @@ const DriverDetails = ({
           <TouchableOpacity
             style={[
               styles.removeButton,
+              isOwnerDriverProfile && styles.disabledActionButton,
               {
                 flexDirection: "row",
                 alignItems: "center",
@@ -780,17 +792,70 @@ const DriverDetails = ({
               },
             ]}
             onPress={handleRemoveDriver}
+            disabled={isOwnerDriverProfile}
           >
             <MaterialCommunityIcons
-              name="delete"
+              name={isOwnerDriverProfile ? "account-check" : "delete"}
               size={20}
               color="#FFF"
               style={{ marginRight: 5 }}
             />
-            <Text style={styles.removeButtonText}>Remove Driver</Text>
+            <Text style={styles.removeButtonText}>
+              {isOwnerDriverProfile ? "Owner Driver" : "Remove Driver"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Remove Driver Modal */}
+      <Modal
+        visible={showRemoveModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowRemoveModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalCard}>
+            <View style={styles.confirmIconWrap}>
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={32}
+                color="#DC3545"
+              />
+            </View>
+
+            <Text style={styles.confirmTitle}>Remove Driver</Text>
+            <Text style={styles.confirmText}>
+              Are you sure you want to remove {driver?.name || "this driver"}?
+              This action cannot be undone.
+            </Text>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.cancelConfirmButton}
+                onPress={() => setShowRemoveModal(false)}
+              >
+                <Text style={styles.cancelConfirmText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmRemoveButton,
+                  removingDriver && styles.buttonDisabled,
+                ]}
+                onPress={confirmRemoveDriver}
+                disabled={removingDriver}
+              >
+                {removingDriver ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.confirmRemoveText}>Remove</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Vehicle Assignment Modal */}
       <Modal
@@ -1192,12 +1257,82 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  disabledActionButton: {
+    backgroundColor: "#9CA3AF",
+    opacity: 0.9,
+  },
 
   // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  confirmModalCard: {
+    width: "100%",
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  confirmIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FDECEC",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  confirmTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 8,
+  },
+  confirmText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#4B5563",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  cancelConfirmButton: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  cancelConfirmText: {
+    color: "#374151",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  confirmRemoveButton: {
+    flex: 1,
+    backgroundColor: "#DC3545",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  confirmRemoveText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
   modalContent: {
     backgroundColor: "#FFF",

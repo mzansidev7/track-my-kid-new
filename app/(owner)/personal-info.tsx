@@ -17,7 +17,7 @@ import {
 import { useOwnerProfile } from "../../ownerHelpers/hooks/useOwnerProfile";
 import { updateUser } from "../../asyncStorage/authStore";
 import { AuthContext } from "../../context/authContext/auth-context";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
 
 const normalizeAddressValue = (value: any) => {
@@ -423,7 +423,7 @@ const PersonalInfo = () => {
     <View style={styles.container}>
       {setingProfileHeader()}
 
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}
@@ -431,48 +431,119 @@ const PersonalInfo = () => {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.profileCard}>
-          <View style={styles.avatarSection}>
-            <View style={styles.avatarCircle}>
-              {selectedAvatarUri || avatarUri ? (
-                <Image
-                  source={{ uri: selectedAvatarUri || avatarUri || undefined }}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <Text style={styles.avatarInitials}>
-                  {(profileUser?.name || "D")[0]?.toUpperCase()}
+        {owner?.company_avatar ? (
+          <ImageBackground
+            source={{ uri: owner.company_avatar }}
+            style={styles.profileCard}
+            imageStyle={styles.profileCardBackground}
+          >
+            <View style={styles.avatarSection}>
+              <View style={styles.avatarCircle}>
+                {selectedAvatarUri || avatarUri ? (
+                  <Image
+                    source={{
+                      uri: selectedAvatarUri || avatarUri || undefined,
+                    }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>
+                    {(profileUser?.name || "D")[0]?.toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.profileText}>
+                <Text style={styles.profileName}>
+                  {profileUser?.name
+                    ? profileUser.name.charAt(0).toUpperCase() +
+                      profileUser.name.slice(1)
+                    : "Unknown"}
                 </Text>
-              )}
+                <Text style={styles.profileDetail}>
+                  {profileUser?.email || "No email"}
+                </Text>
+                <Text style={styles.profileDetail}>
+                  {profileUser?.phone || "No phone"}
+                </Text>
+                <TouchableOpacity
+                  style={styles.avatarButton}
+                  onPress={handlePickAvatar}
+                >
+                  <Text style={styles.avatarButtonText}>Change avatar</Text>
+                </TouchableOpacity>
+                {selectedAvatarUri ? (
+                  <Text style={styles.avatarHint}>
+                    New avatar selected. Tap Save changes to upload.
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            <View style={styles.profileText}>
-              <Text style={styles.profileName}>
-                {profileUser?.name
-                  ? profileUser.name.charAt(0).toUpperCase() +
-                    profileUser.name.slice(1)
-                  : "Unknown"}
-              </Text>
-              <Text style={styles.profileDetail}>
-                {profileUser?.email || "No email"}
-              </Text>
-              <Text style={styles.profileDetail}>
-                {profileUser?.phone || "No phone"}
-              </Text>
-              <TouchableOpacity
-                style={styles.avatarButton}
-                onPress={handlePickAvatar}
-              >
-                <Text style={styles.avatarButtonText}>Change avatar</Text>
-              </TouchableOpacity>
-              {selectedAvatarUri ? (
-                <Text style={styles.avatarHint}>
-                  New avatar selected. Tap Save changes to upload.
+          </ImageBackground>
+        ) : (
+          <View style={styles.profileCard}>
+            <View style={styles.avatarSection}>
+              <View style={styles.avatarCircle}>
+                {selectedAvatarUri || avatarUri ? (
+                  <Image
+                    source={{
+                      uri: selectedAvatarUri || avatarUri || undefined,
+                    }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>
+                    {(profileUser?.name || "D")[0]?.toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.profileText}>
+                <Text style={styles.profileName}>
+                  {profileUser?.name
+                    ? profileUser.name.charAt(0).toUpperCase() +
+                      profileUser.name.slice(1)
+                    : "Unknown"}
                 </Text>
-              ) : null}
+                <Text style={styles.profileDetail}>
+                  {profileUser?.email || "No email"}
+                </Text>
+                <Text style={styles.profileDetail}>
+                  {profileUser?.phone || "No phone"}
+                </Text>
+                <TouchableOpacity
+                  style={styles.avatarButton}
+                  onPress={handlePickAvatar}
+                >
+                  <Text style={styles.avatarButtonText}>Change avatar</Text>
+                </TouchableOpacity>
+                {selectedAvatarUri ? (
+                  <Text style={styles.avatarHint}>
+                    New avatar selected. Tap Save changes to upload.
+                  </Text>
+                ) : null}
+              </View>
             </View>
           </View>
-          <View style={[styles.statusRow]}>
-            {user?.userData?.is_verified ? (
+        )}
+        <View style={[styles.statusRow]}>
+          {user?.userData?.is_verified ? (
+            <View
+              style={[
+                styles.verifiedBadge,
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                },
+              ]}
+            >
+              <MaterialIcons name="verified" size={16} color="#0369A1" />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
+          ) : null}
+        </View>
+        {(owner?.company_name || owner?.company_avatar) && (
+          <>
+            {owner?.company_name ? (
               <View
                 style={[
                   styles.verifiedBadge,
@@ -480,101 +551,82 @@ const PersonalInfo = () => {
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 4,
+                    marginTop: 10,
+                    marginBottom: 10,
                   },
                 ]}
               >
-                <MaterialIcons name="verified" size={16} color="#0369A1" />
-                <Text style={styles.verifiedText}>Verified</Text>
+                <MaterialIcons name="business" size={16} color="#4A90E2" />
+                <Text style={styles.verifiedText}>{owner.company_name}</Text>
               </View>
             ) : null}
-          </View>
-          {(owner?.company_name || owner?.company_avatar) && (
-            <>
-              {owner?.company_name ? (
-                <View
-                  style={[
-                    styles.verifiedBadge,
-                    {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      marginTop: 10,
-                      marginBottom: 10,
-                    },
-                  ]}
-                >
-                  <MaterialIcons name="business" size={16} color="#4A90E2" />
-                  <Text style={styles.verifiedText}>{owner.company_name}</Text>
-                </View>
-              ) : null}
-              {owner?.address ? (
-                <View
-                  style={[
-                    styles.verifiedBadge,
-                    {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      marginBottom: 10,
-                    },
-                  ]}
-                >
-                  <MaterialIcons name="place" size={16} color="#4A90E2" />
-                  <Text style={styles.verifiedText}>{owner.address}</Text>
-                </View>
-              ) : null}
-              <View>
-                {owner?.company_avatar ? (
-                  <Image
-                    source={{ uri: owner.company_avatar }}
-                    style={styles.companyAvatar}
-                  />
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.verifiedBadge,
-                      {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        borderWidth: 1,
-                        borderColor: "#4A90E2",
-                        backgroundColor: "#EFF6FF",
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        marginBottom: 10,
-                      },
-                    ]}
-                    onPress={handlePickCompanyLogo}
-                  >
-                    <MaterialIcons
-                      name="add-business"
-                      size={16}
-                      color="#4A90E2"
-                    />
-                    <Text style={styles.verifiedText}>Add Company Logo</Text>
-                  </TouchableOpacity>
-                )}
+            {owner?.address ? (
+              <View
+                style={[
+                  styles.verifiedBadge,
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    marginBottom: 10,
+                  },
+                ]}
+              >
+                <MaterialIcons name="place" size={16} color="#4A90E2" />
+                <Text style={styles.verifiedText}>{owner.address}</Text>
               </View>
-            </>
-          )}
+            ) : null}
+            <View>
+              {owner?.company_avatar ? (
+                <Image
+                  source={{ uri: owner.company_avatar }}
+                  style={styles.companyAvatar}
+                />
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.verifiedBadge,
+                    {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      borderWidth: 1,
+                      borderColor: "#4A90E2",
+                      backgroundColor: "#EFF6FF",
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      marginBottom: 10,
+                    },
+                  ]}
+                  onPress={handlePickCompanyLogo}
+                >
+                  <MaterialIcons
+                    name="add-business"
+                    size={16}
+                    color="#4A90E2"
+                  />
+                  <Text style={styles.verifiedText}>Add Company Logo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        )}
 
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Role</Text>
-              <Text style={styles.summaryValue}>
-                {(profileUser?.role || "Owner").charAt(0).toUpperCase() +
-                  (profileUser?.role || "Owner").slice(1)}
-              </Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Joined</Text>
-              <Text style={styles.summaryValue}>
-                {owner?.created_at
-                  ? new Date(owner.created_at).toLocaleDateString()
-                  : "-"}
-              </Text>
-            </View>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Role</Text>
+            <Text style={styles.summaryValue}>
+              {(profileUser?.role || "Owner").charAt(0).toUpperCase() +
+                (profileUser?.role || "Owner").slice(1)}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Joined</Text>
+            <Text style={styles.summaryValue}>
+              {owner?.created_at
+                ? new Date(owner.created_at).toLocaleDateString()
+                : "-"}
+            </Text>
           </View>
         </View>
 
@@ -756,6 +808,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 4,
+    overflow: "hidden",
+  },
+  profileCardBackground: {
+    borderRadius: 16,
+    opacity: 0.18,
   },
 
   avatarSection: {

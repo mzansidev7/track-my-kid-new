@@ -26,14 +26,14 @@ const WelcomeScreen = () => {
 
   const styles = useWelcomeScreenStyles();
   const [userType, setUserType] = useState<
-    "client" | "owner" | "driver" | "school" | null
+    "client" | "owner" | "driver" | "school" | "admin" | null
   >(null);
 
   const [currentStep, setCurrentStep] = useState<"welcome" | "selectRole">(
     "welcome",
   );
   const [selectedRole, setSelectedRole] = useState<
-    "client" | "owner" | "driver" | "school" | null
+    "client" | "owner" | "driver" | "school" | "admin" | null
   >(null);
   const [visible, setVisible] = useState(false);
   const [signupVisible, setSignupVisible] = useState(false);
@@ -66,6 +66,13 @@ const WelcomeScreen = () => {
       description: "I manage students and transport from the school side.",
       icon: require("@/assets/images/school.jpeg"),
       background: "#6366F1",
+    },
+    {
+      role: "admin" as const,
+      title: "Admin",
+      description: "I oversee dashboard activity and support operations.",
+      icon: require("@/assets/images/owner.png"),
+      background: "#0F766E",
     },
   ];
 

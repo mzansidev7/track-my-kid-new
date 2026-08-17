@@ -21,7 +21,7 @@ import {
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
-import Notification from "../../../components/Notification";
+import AppNotification from "../../../components/Notification";
 import { clearConversationsCache } from "../../../store/asyncStorage/messages.asyncStore";
 import {
   ConversationData,
@@ -541,7 +541,7 @@ export default function Messages({ setActiveButton }: any) {
 
   return (
     <View style={styles.container}>
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}

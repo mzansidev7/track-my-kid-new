@@ -15,6 +15,7 @@ type Props = {
   topics: HelpTopicItem[];
   supportTelUrl: string;
   onTopicPress?: (action: string) => void;
+  onSupportAction?: (action: "call" | "email" | "chat" | "ticket") => void;
 };
 
 export function HelpSupportContent({
@@ -22,6 +23,7 @@ export function HelpSupportContent({
   topics,
   supportTelUrl,
   onTopicPress,
+  onSupportAction,
 }: Props) {
   const contactMethods = useMemo(
     () => [
@@ -29,22 +31,32 @@ export function HelpSupportContent({
         title: "Call Support",
         description: "Speak directly with our support team",
         icon: "📞",
-        action: () => Linking.openURL(supportTelUrl),
+        action: () =>
+          onSupportAction ? onSupportAction("call") : Linking.openURL(supportTelUrl),
       },
       {
         title: "Email Support",
         description: "Send us an email for detailed assistance",
         icon: "📧",
-        action: () => Linking.openURL("mailto:support@trackmykid.com"),
+        action: () =>
+          onSupportAction ? onSupportAction("email") : Linking.openURL("mailto:support@trackmykid.com"),
       },
       {
         title: "Live Chat",
         description: "Chat with support agents online",
         icon: "💬",
-        action: () => Linking.openURL("https://trackmykid.com/chat"),
+        action: () =>
+          onSupportAction ? onSupportAction("chat") : Linking.openURL("https://trackmykid.com/chat"),
+      },
+      {
+        title: "Lodge a Ticket",
+        description: "Help us improve our app",
+        icon: "📝",
+        action: () =>
+          onSupportAction ? onSupportAction("ticket") : Linking.openURL("mailto:support@trackmykid.com?subject=Lodge%20a%20Ticket"),
       },
     ],
-    [supportTelUrl],
+    [onSupportAction, supportTelUrl],
   );
 
   const handleTopic = (action: string) => {

@@ -13,9 +13,14 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
+import CustomMap from "../../components/map";
 import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
+import {
+  getAllDepartureTimePreferences,
+  TimePreference,
+} from "../../store/asyncStorage/timePreferences.asyncStore";
 
 interface RouteDetails {
   id: string;
@@ -24,6 +29,7 @@ interface RouteDetails {
   vehicle_id: string;
   per_child_amount_cents: number;
   departure_time: string;
+  time_scope?: string | null;
   pickup_start_time: string;
   pickup_end_time: string;
   dropoff_start_time: string;
@@ -133,6 +139,8 @@ const RouteDetailsScreen = () => {
   const [mapFullScreen, setMapFullScreen] = useState(false);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
+  // no static image state needed when using interactive preview
+  const [timePrefs, setTimePrefs] = useState<TimePreference[]>([]);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -202,6 +210,19 @@ const RouteDetailsScreen = () => {
 
     fetchRouteDetails();
   }, [fetchRouteDetails, routeId, user?.token]);
+
+  useEffect(() => {
+    const loadPrefs = async () => {
+      try {
+        const prefs = await getAllDepartureTimePreferences(user?.token);
+        setTimePrefs(prefs || []);
+      } catch (err) {
+        console.warn("Failed to load time prefs:", err);
+      }
+    };
+
+    if (user?.token) loadPrefs();
+  }, [user?.token]);
 
   const fetchDrivers = useCallback(async () => {
     if (!user?.token) return;
@@ -470,6 +491,57 @@ const RouteDetailsScreen = () => {
     return `R${(cents / 100).toFixed(2)}`;
   };
 
+  const getTimeOnly = (value: string | null | undefined) => {
+    if (!value) return null;
+    const normalized = String(value).trim();
+    const timeOnlyMatch = normalized.match(/(\d{1,2}:\d{2})(?::\d{2})?$/);
+    if (timeOnlyMatch) return timeOnlyMatch[1];
+    try {
+      const d = new Date(normalized);
+      if (isNaN(d.getTime())) return null;
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${hh}:${mm}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const formatPreferenceScope = (scope?: string | null) => {
+    if (!scope) return null;
+    return scope.charAt(0).toUpperCase() + scope.slice(1);
+  };
+
+  const getPreferenceScopeForTime = (
+    value: string | null | undefined,
+    routeId?: string | number | null,
+    routeScope?: string | null,
+  ) => {
+    const scopeFromRoute = routeScope?.trim();
+    if (scopeFromRoute) return scopeFromRoute;
+
+    const normalizedRouteId = routeId != null ? String(routeId).trim() : "";
+    const timeOnly = getTimeOnly(value);
+    if (!timeOnly && !normalizedRouteId) return null;
+    const today = new Date().toISOString().split("T")[0];
+
+    if (normalizedRouteId) {
+      const byRoute = timePrefs.find(
+        (p) =>
+          String(p.routeId ?? "") === normalizedRouteId &&
+          (!p.expiryDate || p.expiryDate >= today),
+      );
+      if (byRoute) return byRoute.scope;
+    }
+
+    if (!timeOnly) return null;
+
+    const pref = timePrefs.find(
+      (p) => p.time === timeOnly && (!p.expiryDate || p.expiryDate >= today),
+    );
+    return pref ? pref.scope : null;
+  };
+
   const getStopCoordinate = (stop: RouteDetails["route_stops"][number]) => {
     if (
       typeof stop?.latitude === "number" &&
@@ -518,11 +590,11 @@ const RouteDetailsScreen = () => {
   const getMapMarkers = () => {
     if (!route) return [];
 
-    const markers: Array<{
+    const markers: {
       coordinate: { latitude: number; longitude: number };
       title: string;
       pinColor: string;
-    }> = [];
+    }[] = [];
 
     if (route.start_latitude && route.start_longitude) {
       markers.push({
@@ -595,29 +667,42 @@ const RouteDetailsScreen = () => {
     };
   };
 
+  const routePreferenceScope = getPreferenceScopeForTime(
+    route?.departure_time,
+    route?.id,
+    route?.time_scope || (route as any)?.raw?.time_scope || (route as any)?.raw?.timeScope,
+  );
+
   const renderMapContent = (isFullScreen: boolean = false) => {
     if (!route) return null;
     const region = getRoutePreviewRegion();
     if (!region) return null;
 
     const mapMarkers = getMapMarkers();
+    const coords = mapMarkers.map((m) => m.coordinate);
+    const origin = coords.length > 0 ? coords[0] : null;
+    const destination = coords.length > 1 ? coords[coords.length - 1] : null;
 
+    if (isFullScreen) {
+      return (
+        <CustomMap
+          markers={mapMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+          origin={origin}
+          destination={destination}
+          style={styles.mapFullScreen}
+          centerOnUser={true}
+        />
+      );
+    }
+
+    // Use interactive CustomMap for non-fullscreen preview for consistency
     return (
-      <MapView
-        style={isFullScreen ? styles.mapFullScreen : styles.mapPreview}
-        region={region}
-        scrollEnabled={isFullScreen}
-        zoomEnabled={isFullScreen}
-      >
-        {mapMarkers.map((marker, index) => (
-          <Marker
-            key={`${marker.title}-${index}`}
-            coordinate={marker.coordinate}
-            title={marker.title}
-            pinColor={marker.pinColor}
-          />
-        ))}
-      </MapView>
+      <CustomMap
+        markers={mapMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+        origin={origin}
+        destination={destination}
+        style={styles.mapPreview}
+      />
     );
   };
 
@@ -799,6 +884,17 @@ const RouteDetailsScreen = () => {
                   </View>
                 </View>
               )}
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Departure time</Text>
+              <View>
+                <Text style={styles.infoValue}>{formatTime(route.departure_time)}</Text>
+                {routePreferenceScope ? (
+                  <Text style={styles.infoSubValue}>
+                    {formatPreferenceScope(routePreferenceScope)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Vehicle</Text>
@@ -1875,6 +1971,7 @@ const styles = StyleSheet.create({
   mapFullScreen: {
     flex: 1,
     width: "100%",
+    height: "100%",
     backgroundColor: "#E5E7EB",
   },
   mapFullScreenButton: {

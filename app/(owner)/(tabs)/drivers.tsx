@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,8 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
 
@@ -36,6 +35,12 @@ const DriversScreen = () => {
     setModalVisible(false);
     setSelectedDriver(null);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshDrivers(true);
+    }, [refreshDrivers]),
+  );
 
   useEffect(() => {
     refreshDrivers(true);

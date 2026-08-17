@@ -20,6 +20,7 @@ export interface TimePreference {
   scope: TimeScope;
   setDate: string;
   expiryDate?: string;
+  routeId?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -122,6 +123,7 @@ export const setDepartureTimePreference = async (
   time: string,
   scope: TimeScope,
   token?: string,
+  routeId?: string,
 ): Promise<void> => {
   try {
     const preference: TimePreference = {
@@ -129,6 +131,7 @@ export const setDepartureTimePreference = async (
       scope,
       setDate: getTodayDate(),
       expiryDate: getExpiryDate(scope),
+      routeId: routeId || undefined,
     };
 
     const existing = await getAllDepartureTimePreferences();
@@ -139,17 +142,22 @@ export const setDepartureTimePreference = async (
 
     if (token) {
       try {
+        const bodyPayload: Record<string, any> = { time_value: time, scope };
+        if (routeId) bodyPayload.route_id = routeId;
+
         const response = await fetch(`${BASE_URL}/owner/time-preferences`, {
           method: "POST",
           headers: getAuthHeaders(token),
-          body: JSON.stringify({
-            time_value: time,
-            scope,
-          }),
+          body: JSON.stringify(bodyPayload),
         });
 
         if (!response.ok) {
-          console.warn("⚠️ Failed to sync time preference");
+          const text = await response.text().catch(() => null);
+          console.warn("⚠️ Failed to sync time preference", {
+            status: response.status,
+            statusText: response.statusText,
+            body: text,
+          });
         }
       } catch (err) {
         console.warn("⚠️ Backend sync failed:", err);
@@ -241,6 +249,7 @@ export const getAllDepartureTimePreferences = async (
             scope: pref.scope,
             setDate: pref.set_date,
             expiryDate: pref.expiry_date,
+            routeId: pref.route_id,
           }));
 
           await AsyncStorage.setItem(

@@ -7,13 +7,7 @@ interface NotificationProps {
   visible: boolean;
   onHide: () => void;
 }
-
-export default function Notification({
-  message,
-  type,
-  visible,
-  onHide,
-}: NotificationProps) {
+const AppNotification: React.FC<NotificationProps> = ({ message, type, visible, onHide }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(-100));
 
@@ -102,7 +96,9 @@ export default function Notification({
       <Text style={styles.message}>{message}</Text>
     </Animated.View>
   );
-}
+};
+
+export default AppNotification;
 
 const styles = StyleSheet.create({
   container: {

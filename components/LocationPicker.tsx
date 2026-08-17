@@ -13,6 +13,11 @@ import {
   View,
 } from "react-native";
 
+interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
 interface LocationPickerProps {
   title: string;
   selectedLocation: string;
@@ -21,6 +26,8 @@ interface LocationPickerProps {
     coordinates: { latitude: number; longitude: number },
   ) => void;
   placeholder?: string;
+  // optional initial coordinates (used by native version); accepted here for type compatibility
+  initialCoordinates?: Coordinates | null;
 }
 
 function parseCoord(raw: string): number | null {
@@ -33,6 +40,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   selectedLocation,
   onLocationSelect,
   placeholder = "Enter latitude and longitude, then apply",
+  initialCoordinates = null,
 }) => {
   const [latInput, setLatInput] = useState("");
   const [lngInput, setLngInput] = useState("");
@@ -50,6 +58,14 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       }
     })();
   }, []);
+
+  // If initial coordinates provided (from native usage), prefill inputs
+  useEffect(() => {
+    if (initialCoordinates) {
+      setLatInput(String(initialCoordinates.latitude));
+      setLngInput(String(initialCoordinates.longitude));
+    }
+  }, [initialCoordinates]);
 
   const applyCoordinates = (latitude: number, longitude: number) => {
     fetch(

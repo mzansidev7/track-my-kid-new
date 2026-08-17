@@ -1,5 +1,7 @@
+
+import React from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,6 +16,8 @@ import WelcomeScreen from "./(auth)/home";
 export default function Index() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const segments = useSegments();
+  const redirectKeyRef = React.useRef<string | null>(null);
 
   const { colors, isDark } = useTheme();
   const styles = useAuthStyles();
@@ -22,39 +26,68 @@ export default function Index() {
     if (loading) return;
 
     if (!user || !user.userData) {
+      redirectKeyRef.current = null;
       return;
     }
 
     const { role, userData } = user;
     const isVerified = userData?.is_verified ?? userData?.isVerified ?? false;
+    const currentRoot = segments[0];
+    const isInsideGroupedRoute =
+      typeof currentRoot === "string" && currentRoot.startsWith("(");
 
     if (!isVerified) {
-      router.replace("/verify-otp");
+      if (currentRoot !== "verify-otp") {
+        const redirectKey = `verify:${userData?.id ?? "guest"}`;
+        if (redirectKeyRef.current !== redirectKey) {
+          redirectKeyRef.current = redirectKey;
+          router.replace("/verify-otp");
+        }
+      }
       return;
     }
 
+    if (isInsideGroupedRoute) {
+      redirectKeyRef.current = null;
+      return;
+    }
+
+    const userKey = `${userData?.id ?? "guest"}:${role ?? "unknown"}`;
+    let targetRoute = "/";
+
     switch (role) {
       case "owner":
-        router.replace("/(owner)/(tabs)");
-        return;
+        targetRoute = "/(owner)/(tabs)";
+        break;
 
       case "client":
-        router.replace("/(client)/(tabs)");
-        return;
+        targetRoute = "/(client)/(tabs)";
+        break;
 
       case "driver":
-        router.replace("/(driver)/(tabs)");
-        return;
+        targetRoute = "/(driver)/(tabs)";
+        break;
 
       case "school":
-        router.replace("/school");
-        return;
+        targetRoute = "/";
+        break;
+
+      case "admin":
+        targetRoute = "/(admin)";
+        break;
 
       default:
-        router.replace("/");
-        return;
+        targetRoute = "/";
+        break;
     }
-  }, [loading, user, router]);
+
+    if (redirectKeyRef.current === userKey) {
+      return;
+    }
+
+    redirectKeyRef.current = userKey;
+    router.replace(targetRoute as any);
+  }, [loading, user, router, segments]);
 
   if (loading) {
     return (

@@ -135,3 +135,11 @@ export const DEBUG_API_CONFIG = {
   isDev: __DEV__,
   candidates: API_BASE_URL_CANDIDATES,
 };
+
+// Geoapify API key (EXPO_PUBLIC_ prefix so it's safe to embed in the app)
+export const GEOAPIFY_API_KEY =
+  process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY || extra.EXPO_PUBLIC_GEOAPIFY_API_KEY || "";
+
+// Google Maps API key (EXPO_PUBLIC_ so it can be embedded safely)
+export const GOOGLE_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_API_KEY || extra.EXPO_PUBLIC_GOOGLE_API_KEY || "";

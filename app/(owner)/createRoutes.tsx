@@ -1,7 +1,7 @@
 import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -10,13 +10,20 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
-import LocationPicker from "../../components/LocationPicker";
-import Notification from "../../components/Notification";
+import GooglePlacesAutoComplete from "../../components/GooglePlacesAutoComplete";
+import Map from "../../components/map";
+import AppNotification from "../../components/Notification";
 import TimePicker from "../../components/TimePicker";
-import { setDepartureTimePreference } from "../../store/asyncStorage/timePreferences.asyncStore";
+import {
+  setDepartureTimePreference,
+  getDepartureTimePreference,
+  getAllDepartureTimePreferences,
+  TimeScope,
+} from "../../store/asyncStorage/timePreferences.asyncStore";
 import { resolveWorkingBaseUrl } from "../../url";
 
 const timeToMinutes = (value: string) => {
@@ -46,16 +53,17 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     subtitle: "Plan a new route for your fleet",
     onBackPress: routePage,
   });
-  const [routeName, setRouteName] = useState("");
+  const [routeName, setRouteName] = useState("Route");
   const [departureTime, setDepartureTime] = useState("05:00");
+  const [timeScope, setTimeScope] = useState<TimeScope>("year");
   const [pickupStartTime, setPickupStartTime] = useState("06:00");
   const [pickupEndTime, setPickupEndTime] = useState("07:30");
   const [dropoffStartTime, setDropoffStartTime] = useState("13:00");
   const [dropoffEndTime, setDropoffEndTime] = useState("16:30");
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
-  const [routePriceCents, setRoutePriceCents] = useState("");
+  const [routePriceCents, setRoutePriceCents] = useState("200");
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<any[]>([]);
+  // vehicles list not stored in this component (fetched when needed)
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showDriverPicker, setShowDriverPicker] = useState(false);
@@ -70,6 +78,12 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     longitude: null as number | null,
     name: "",
   });
+  const [showMapPicker, setShowMapPicker] = useState<boolean>(false);
+  // snapPoints removed (no bottom sheet) — kept for potential future use
+  const [mapFocus, setMapFocus] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const stepLabels = [
     "Route details",
@@ -141,6 +155,36 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               minHour="05"
               maxHour="08"
             />
+
+            <View style={styles.timeScopeContainer}>
+              <Text style={styles.scopeLabel}>Save as preference</Text>
+              {(["today", "week", "month", "year"] as TimeScope[]).map(
+                (scope) => (
+                  <TouchableOpacity
+                    key={scope}
+                    style={styles.scopeOption}
+                    onPress={() => setTimeScope(scope)}
+                  >
+                    <View
+                      style={[
+                        styles.radioButton,
+                        timeScope === scope && styles.radioButtonSelected,
+                      ]}
+                    >
+                      {timeScope === scope && (
+                        <View style={styles.radioButtonInner} />
+                      )}
+                    </View>
+                    <Text style={styles.scopeOptionText}>
+                      {scope.charAt(0).toUpperCase() + scope.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+              <Text style={styles.defaultTimeInfo}>
+                Preference will be saved when you click Next or Create.
+              </Text>
+            </View>
           </>
         );
       case 2:
@@ -209,42 +253,161 @@ const CreateRoutes = ({ setActiveButton }: any) => {
           <>
             <Text style={styles.stepTitle}>Locations</Text>
             <Text style={styles.labelSubtext}>
-              Select the pickup and dropoff coordinates for this route.
+              Select the start and stop coordinates for this route.
             </Text>
-            <LocationPicker
-              title="Pickup Location"
-              selectedLocation={pickupLocation.name}
-              onLocationSelect={(name: string, coords: any) =>
-                setPickupLocation({
-                  name,
-                  latitude: coords.latitude,
-                  longitude: coords.longitude,
-                })
-              }
-              placeholder="Tap to set pickup location"
-            />
-            {pickupLocation.name ? (
-              <Text style={styles.selectedLocationText}>
-                ✓ {pickupLocation.name}
+            <TouchableOpacity
+  style={styles.selectorButton}
+  onPress={() => setShowMapPicker(true)}
+  activeOpacity={0.8}
+>
+  <View style={selectLocationButtonStyles.selectorIconContainer}>
+    <MaterialIcons
+      name="route"
+      size={22}
+      color="#4A90E2"
+    />
+  </View>
+
+  <View style={selectLocationButtonStyles.selectorContent}>
+    {!pickupLocation.name && !dropoffLocation.name ? (
+      <>
+        <Text style={selectLocationButtonStyles.selectorTitle}>
+          Select route locations
+        </Text>
+
+        <Text style={selectLocationButtonStyles.selectorPlaceholderText}>
+          Choose a start and stop location
+        </Text>
+      </>
+    ) : (
+      <>
+        {pickupLocation.name && (
+          <View style={selectLocationButtonStyles.selectorLocationRow}>
+            <View style={selectLocationButtonStyles.startDot} />
+
+            <View style={selectLocationButtonStyles.selectorTextContainer}>
+              <Text style={selectLocationButtonStyles.selectorLabel}>
+                START
               </Text>
-            ) : null}
-            <LocationPicker
-              title="Dropoff Location"
-              selectedLocation={dropoffLocation.name}
-              onLocationSelect={(name: string, coords: any) =>
-                setDropoffLocation({
-                  name,
-                  latitude: coords.latitude,
-                  longitude: coords.longitude,
-                })
-              }
-              placeholder="Tap to set dropoff location"
-            />
-            {dropoffLocation.name ? (
-              <Text style={styles.selectedLocationText}>
-                ✓ {dropoffLocation.name}
+
+              <Text
+                style={selectLocationButtonStyles.selectorLocationText}
+                numberOfLines={1}
+              >
+                {pickupLocation.name}
               </Text>
-            ) : null}
+            </View>
+          </View>
+        )}
+
+        {pickupLocation.name && dropoffLocation.name && (
+          <View style={selectLocationButtonStyles.selectorConnector} />
+        )}
+
+        {dropoffLocation.name && (
+          <View style={selectLocationButtonStyles.selectorLocationRow}>
+            <View style={selectLocationButtonStyles.stopDot} />
+
+            <View style={selectLocationButtonStyles.selectorTextContainer}>
+              <Text style={selectLocationButtonStyles.selectorLabel}>
+                STOP
+              </Text>
+
+              <Text
+                style={selectLocationButtonStyles.selectorLocationText}
+                numberOfLines={1}
+              >
+                {dropoffLocation.name}
+              </Text>
+            </View>
+          </View>
+        )}
+      </>
+    )}
+  </View>
+
+  <MaterialIcons
+    name="chevron-right"
+    size={24}
+    color="#9CA3AF"
+  />
+</TouchableOpacity>
+
+            {(pickupLocation.name || dropoffLocation.name) && (
+              <View style={selectedLocationStyles.selectedLocationsCard}>
+                <View style={selectedLocationStyles.selectedHeader}>
+                  <Text style={selectedLocationStyles.selectedHeaderTitle}>
+                    Selected Locations
+                  </Text>
+
+                  <MaterialIcons
+                    name="check-circle"
+                    size={18}
+                    color="#22C55E"
+                  />
+                </View>
+
+                {pickupLocation.name && (
+                  <View style={selectedLocationStyles.locationRow}>
+                    <View style={selectedLocationStyles.pickupIndicator}>
+                      <MaterialIcons
+                        name="radio-button-checked"
+                        size={12}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View style={selectedLocationStyles.locationContent}>
+                      <Text style={selectedLocationStyles.locationType}>
+                        START
+                      </Text>
+
+                      <Text
+                        style={selectedLocationStyles.locationAddress}
+                        numberOfLines={2}
+                      >
+                        {pickupLocation.name}
+                      </Text>
+                    </View>
+
+                    <MaterialIcons name="check" size={20} color="#22C55E" />
+                  </View>
+                )}
+
+                {pickupLocation.name && dropoffLocation.name && (
+                  <View style={selectedLocationStyles.locationConnector}>
+                    <View style={selectedLocationStyles.connectorLine} />
+                  </View>
+                )}
+
+                {dropoffLocation.name && (
+                  <View style={selectedLocationStyles.locationRow}>
+                    <View style={selectedLocationStyles.dropoffIndicator}>
+                      <MaterialIcons
+                        name="location-on"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View style={selectedLocationStyles.locationContent}>
+                      <Text style={selectedLocationStyles.locationType}>
+                        STOP
+                      </Text>
+
+                      <Text
+                        style={selectedLocationStyles.locationAddress}
+                        numberOfLines={2}
+                      >
+                        {dropoffLocation.name}
+                      </Text>
+                    </View>
+
+                    <MaterialIcons name="check" size={20} color="#22C55E" />
+                  </View>
+                )}
+              </View>
+            )}
           </>
         );
       case 5:
@@ -324,14 +487,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     type: "success",
   });
 
-  useEffect(() => {
-    if (user?.token) {
-      fetchDrivers();
-      fetchVehicles();
-    }
-  }, [user?.token]);
-
-  const fetchDrivers = async () => {
+  const fetchDrivers = React.useCallback(async () => {
     if (!user?.token) return;
     try {
       const baseUrl = await resolveWorkingBaseUrl();
@@ -353,15 +509,16 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         });
       }
     } catch (err) {
+      console.warn("Error fetching drivers:", err);
       setNotification({
         visible: true,
         message: "Network error while loading drivers.",
         type: "error",
       });
     }
-  };
+  }, [user?.token]);
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = React.useCallback(async () => {
     if (!user?.token) return;
     setLoading(true);
     try {
@@ -376,7 +533,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       });
       const data = await response.json();
       if (response.ok) {
-        setVehicles(data || []);
+        // vehicles stored elsewhere; no-op here
       } else {
         setNotification({
           visible: true,
@@ -385,6 +542,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         });
       }
     } catch (err) {
+      console.warn("Error fetching vehicles:", err);
       setNotification({
         visible: true,
         message: "Network error while loading vehicles.",
@@ -393,7 +551,54 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (user?.token) {
+      fetchDrivers();
+      fetchVehicles();
+    }
+  }, [user?.token, fetchDrivers, fetchVehicles]);
+
+  const [pickupConfirmed, setPickupConfirmed] = useState(false);
+
+  // Animated sheet value (0 = hidden, 1 = visible)
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(sheetAnim, {
+      toValue: showMapPicker ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [showMapPicker, sheetAnim]);
+
+  // Prefill departure time and scope from stored preferences (local or backend)
+  useEffect(() => {
+    const loadPreference = async () => {
+      try {
+        const prefTime = await getDepartureTimePreference(user?.token);
+        if (prefTime) setDepartureTime(prefTime);
+
+        const prefs = await getAllDepartureTimePreferences(user?.token);
+        if (prefs && prefs.length > 0) {
+          const today = new Date().toISOString().split("T")[0];
+          const priority: TimeScope[] = ["today", "week", "month", "year"];
+          for (const scope of priority) {
+            const p = prefs.find((x) => x.scope === scope);
+            if (p && (!p.expiryDate || p.expiryDate >= today)) {
+              setTimeScope(p.scope as TimeScope);
+              break;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Error loading preferences:", err);
+      }
+    };
+
+    loadPreference();
+  }, [user?.token]);
 
   const isDriverActive = (driver: any) =>
     String(driver?.status || "active").toLowerCase() === "active";
@@ -591,8 +796,17 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       requestBody.pickup_end_time = pickupEndTime.trim();
       requestBody.dropoff_start_time = dropoffStartTime.trim();
       requestBody.dropoff_end_time = dropoffEndTime.trim();
+      // Include time preference in the create-route request so the server
+      // can persist `owner_time_preferences` in the same transaction.
+      requestBody.time_scope = timeScope;
+      requestBody.time_value = departureTime.trim();
       const baseUrl = await resolveWorkingBaseUrl();
 
+      console.log("[createRoutes] creating route", {
+        baseUrl,
+        tokenPresent: !!user?.token,
+        requestBody,
+      });
       const response = await fetch(`${baseUrl}/owner/routes`, {
         method: "POST",
         headers: {
@@ -602,11 +816,20 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         body: JSON.stringify(requestBody),
       });
       const data = await response.json();
+      console.log("[createRoutes] create route response", {
+        status: response.status,
+        data,
+      });
 
       if (!response.ok) {
-        throw new Error(
-          data.error || data.message || "Failed to create route.",
-        );
+        setNotification({
+          visible: true,
+          message: data.error || data.message || "Failed to create route.",
+          type: "error",
+        });
+        setSubmitting(false);
+        // Stop here on server error
+        return;
       }
 
       const stopsCount =
@@ -619,20 +842,31 @@ const CreateRoutes = ({ setActiveButton }: any) => {
             : "Route created successfully.",
         type: "success",
       });
-      // Save time preference
+      // Save time preference and associate it with the created route
+      const createdRouteId = data?.route?.id || null;
       if (departureTime.trim()) {
-        await setDepartureTimePreference(
+        // Fire-and-forget preference sync so UI isn't blocked if backend is slow
+        setDepartureTimePreference(
           departureTime.trim(),
-          "year",
+          timeScope,
           user?.token,
-        );
+          createdRouteId || undefined,
+        )
+          .then(() => console.log("[createRoutes] preference sync complete"))
+          .catch((err) =>
+            console.warn("[createRoutes] preference sync failed", err),
+          );
       }
+
       setRouteName("");
       setRoutePriceCents("");
       setDepartureTime("05:00");
       setSelectedDrivers([]);
       setPickupLocation({ latitude: null, longitude: null, name: "" });
       setDropoffLocation({ latitude: null, longitude: null, name: "" });
+      setSubmitting(false);
+
+      console.log("[createRoutes] navigation to /routes");
       router.push("/routes");
     } catch (err: any) {
       setNotification({
@@ -645,9 +879,67 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     }
   };
 
+  const handleNext = async () => {
+    if (currentStep < stepLabels.length) {
+      // Advance immediately (don't block UI on save)
+      if (currentStep === 1) {
+        // Validate route name and price before advancing
+        const normalizedPrice = normalizePriceInput(routePriceCents);
+        const parsedPrice = parseFloat(normalizedPrice || "0");
+        const isRouteNameValid = routeName.trim() !== "";
+
+        if (
+          !isRouteNameValid ||
+          routePriceCents.trim() === "" ||
+          isNaN(parsedPrice) ||
+          parsedPrice < 0
+        ) {
+          setNotification({
+            visible: true,
+            message:
+              "Please enter a valid route name and non-negative price before proceeding.",
+            type: "error",
+          });
+          return;
+        }
+
+        setCurrentStep((s) => s + 1);
+
+        if (departureTime.trim()) {
+          // Fire-and-forget preference save; report result when done
+          setDepartureTimePreference(
+            departureTime.trim(),
+            timeScope,
+            user?.token,
+          )
+            .then(() => {
+              setNotification({
+                visible: true,
+                message: `Saved ${departureTime.trim()} (${timeScope})`,
+                type: "success",
+              });
+            })
+            .catch((err: any) => {
+              setNotification({
+                visible: true,
+                message: err?.message || "Failed to save time preference.",
+                type: "warning",
+              });
+            });
+        }
+
+        return;
+      }
+
+      setCurrentStep((s) => s + 1);
+    } else {
+      await handleCreateRoute();
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}
@@ -705,12 +997,12 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                         ]
                       : styles.stepperNavButton
                   }
-                  onPress={
-                    currentStep < stepLabels.length
-                      ? () => setCurrentStep(currentStep + 1)
-                      : handleCreateRoute
+                  onPress={handleNext}
+                  disabled={
+                    (currentStep === 1
+                      ? false
+                      : stepActionDisabled(currentStep)) || submitting
                   }
-                  disabled={stepActionDisabled(currentStep) || submitting}
                 >
                   {submitting && currentStep === stepLabels.length ? (
                     <ActivityIndicator color="#FFF" />
@@ -836,6 +1128,396 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               </View>
             </View>
           </Modal>
+          {showMapPicker && (
+            <View style={locationPickerStyles.fullscreenOverlay}>
+              {/* MAP */}
+              <View style={locationPickerStyles.mapContainer}>
+                <Map
+                  style={locationPickerStyles.fullscreenMap}
+                  markers={[
+                    ...(pickupLocation.latitude != null &&
+                    pickupLocation.longitude != null
+                      ? [
+                          {
+                            latitude: pickupLocation.latitude,
+                            longitude: pickupLocation.longitude,
+                            title: "Pickup",
+                            type: "pickup" as const,
+                          },
+                        ]
+                      : []),
+
+                    ...(dropoffLocation.latitude != null &&
+                    dropoffLocation.longitude != null
+                      ? [
+                          {
+                            latitude: dropoffLocation.latitude,
+                            longitude: dropoffLocation.longitude,
+                            title: "Dropoff",
+                            type: "dropoff" as const,
+                          },
+                        ]
+                      : []),
+                  ]}
+                  origin={
+                    pickupLocation.latitude != null &&
+                    pickupLocation.longitude != null
+                      ? {
+                          latitude: pickupLocation.latitude,
+                          longitude: pickupLocation.longitude,
+                        }
+                      : null
+                  }
+                  destination={
+                    dropoffLocation.latitude != null &&
+                    dropoffLocation.longitude != null
+                      ? {
+                          latitude: dropoffLocation.latitude,
+                          longitude: dropoffLocation.longitude,
+                        }
+                      : null
+                  }
+                  centerOnUser={true}
+                  focus={mapFocus}
+                />
+
+                {/* Close button */}
+                <TouchableOpacity
+                  style={locationPickerStyles.closeMapButton}
+                  onPress={() => {
+                    setShowMapPicker(false);
+                    setPickupConfirmed(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="close" size={24} color="#222" />
+                </TouchableOpacity>
+
+                {/* Current location button */}
+                <TouchableOpacity
+                  style={locationPickerStyles.myLocationButton}
+                  onPress={() => {
+                    // Your existing current-location logic
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="my-location" size={22} color="#4A90E2" />
+                </TouchableOpacity>
+              </View>
+
+              {/* BOTTOM PANEL */}
+              <View style={locationPickerStyles.locationPanel}>
+                {/* Drag indicator */}
+                <View style={locationPickerStyles.dragIndicator} />
+
+                {/* Header */}
+                <View style={locationPickerStyles.panelHeader}>
+                  <View>
+                    <Text style={locationPickerStyles.sheetTitle}>
+                      Select locations
+                    </Text>
+                    <Text style={locationPickerStyles.sheetSubtitle}>
+                      Set the pickup and drop-off points for this route
+                    </Text>
+                  </View>
+
+                  <View style={locationPickerStyles.routeIcon}>
+                    <MaterialIcons name="alt-route" size={22} color="#4A90E2" />
+                  </View>
+                </View>
+
+                {/* PICKUP */}
+                <View style={locationPickerStyles.locationSection}>
+                  <View style={locationPickerStyles.locationIconColumn}>
+                    <View
+                      style={[
+                        locationPickerStyles.locationDot,
+                        locationPickerStyles.pickupDot,
+                      ]}
+                    >
+                      <MaterialIcons
+                        name="radio-button-checked"
+                        size={12}
+                        color="#fff"
+                      />
+                    </View>
+
+                    {!pickupConfirmed && (
+                      <View style={locationPickerStyles.locationLine} />
+                    )}
+                  </View>
+
+                  <View style={locationPickerStyles.locationInputContainer}>
+                    <Text style={locationPickerStyles.inputLabel}>
+                      Pickup location
+                    </Text>
+
+                    <View style={locationPickerStyles.inputWrapper}>
+                      <GooglePlacesAutoComplete
+                        value={pickupLocation.name}
+                        placeholder="Search pickup location"
+                        debounce={400}
+                        onSelect={(address, coords) => {
+                          if (!address || !address.trim()) {
+                            setPickupLocation({
+                              name: "",
+                              latitude: null,
+                              longitude: null,
+                            });
+                            setMapFocus(null);
+                            return;
+                          }
+
+                          if (coords) {
+                            setPickupLocation({
+                              name: address,
+                              latitude: coords.latitude,
+                              longitude: coords.longitude,
+                            });
+
+                            setMapFocus({
+                              latitude: coords.latitude,
+                              longitude: coords.longitude,
+                            });
+                          } else {
+                            setPickupLocation({
+                              name: address,
+                              latitude: null,
+                              longitude: null,
+                            });
+                            setMapFocus(null);
+                          }
+                        }}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* PICKUP ACTION */}
+                {!pickupConfirmed ? (
+                  <View style={locationPickerStyles.actionRow}>
+                    <TouchableOpacity
+                      style={[
+                        locationPickerStyles.primaryButton,
+                        !pickupLocation.name &&
+                          locationPickerStyles.disabledButton,
+                      ]}
+                      disabled={!pickupLocation.name}
+                      onPress={() => setPickupConfirmed(true)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="check" size={20} color="#fff" />
+
+                      <Text style={locationPickerStyles.primaryButtonText}>
+                        Confirm pickup
+                      </Text>
+                    </TouchableOpacity>
+
+                    {pickupLocation.name ? (
+                      <TouchableOpacity
+                        style={locationPickerStyles.secondaryButton}
+                        onPress={() => {
+                          setPickupLocation({
+                            name: "",
+                            latitude: null,
+                            longitude: null,
+                          });
+                          setMapFocus(null);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="close" size={18} color="#666" />
+
+                        <Text style={locationPickerStyles.secondaryButtonText}>
+                          Clear
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : (
+                  <>
+                    {/* DROPOFF */}
+                    <View style={locationPickerStyles.locationSection}>
+                      <View style={locationPickerStyles.locationIconColumn}>
+                        <View
+                          style={[
+                            locationPickerStyles.locationDot,
+                            locationPickerStyles.dropoffDot,
+                          ]}
+                        >
+                          <MaterialIcons
+                            name="location-on"
+                            size={14}
+                            color="#fff"
+                          />
+                        </View>
+                      </View>
+
+                      <View style={locationPickerStyles.locationInputContainer}>
+                        <Text style={locationPickerStyles.inputLabel}>
+                          Drop-off location
+                        </Text>
+
+                        <View style={locationPickerStyles.inputWrapper}>
+                          <GooglePlacesAutoComplete
+                            value={dropoffLocation.name}
+                            placeholder="Search drop-off location"
+                            debounce={400}
+                            onSelect={(address, coords) => {
+                              if (!address || !address.trim()) {
+                                setDropoffLocation({
+                                  name: "",
+                                  latitude: null,
+                                  longitude: null,
+                                });
+                                setMapFocus(null);
+                                return;
+                              }
+
+                              if (coords) {
+                                setDropoffLocation({
+                                  name: address,
+                                  latitude: coords.latitude,
+                                  longitude: coords.longitude,
+                                });
+
+                                setMapFocus({
+                                  latitude: coords.latitude,
+                                  longitude: coords.longitude,
+                                });
+                              } else {
+                                setDropoffLocation({
+                                  name: address,
+                                  latitude: null,
+                                  longitude: null,
+                                });
+                                setMapFocus(null);
+                              }
+                            }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* FINAL ACTIONS */}
+                    <View style={locationPickerStyles.actionRow}>
+                      <TouchableOpacity
+                        style={[
+                          locationPickerStyles.primaryButton,
+                          !dropoffLocation.name &&
+                            locationPickerStyles.disabledButton,
+                        ]}
+                        disabled={!dropoffLocation.name}
+                        onPress={() => {
+                          setShowMapPicker(false);
+                          setPickupConfirmed(false);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons
+                          name="check-circle"
+                          size={20}
+                          color="#fff"
+                        />
+
+                        <Text style={locationPickerStyles.primaryButtonText}>
+                          Use these locations
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={locationPickerStyles.secondaryButton}
+                        onPress={() => {
+                          setPickupConfirmed(false);
+                          setMapFocus(null);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="edit" size={18} color="#666" />
+
+                        <Text style={locationPickerStyles.secondaryButtonText}>
+                          Edit
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {/* SELECTED LOCATIONS */}
+                {(pickupLocation.name || dropoffLocation.name) && (
+                  <View style={locationPickerStyles.selectedContainer}>
+                    <Text style={locationPickerStyles.selectedTitle}>
+                      Selected locations
+                    </Text>
+
+                    {pickupLocation.name && (
+                      <View style={locationPickerStyles.selectedLocation}>
+                        <View
+                          style={[
+                            locationPickerStyles.smallDot,
+                            locationPickerStyles.pickupDot,
+                          ]}
+                        />
+
+                        <View
+                          style={locationPickerStyles.selectedTextContainer}
+                        >
+                          <Text style={locationPickerStyles.selectedType}>
+                            PICKUP
+                          </Text>
+
+                          <Text
+                            style={locationPickerStyles.selectedAddress}
+                            numberOfLines={1}
+                          >
+                            {pickupLocation.name}
+                          </Text>
+                        </View>
+
+                        <MaterialIcons
+                          name="check-circle"
+                          size={20}
+                          color="#22C55E"
+                        />
+                      </View>
+                    )}
+
+                    {dropoffLocation.name && (
+                      <View style={locationPickerStyles.selectedLocation}>
+                        <View
+                          style={[
+                            locationPickerStyles.smallDot,
+                            locationPickerStyles.dropoffDot,
+                          ]}
+                        />
+
+                        <View
+                          style={locationPickerStyles.selectedTextContainer}
+                        >
+                          <Text style={locationPickerStyles.selectedType}>
+                            DROP-OFF
+                          </Text>
+
+                          <Text
+                            style={locationPickerStyles.selectedAddress}
+                            numberOfLines={1}
+                          >
+                            {dropoffLocation.name}
+                          </Text>
+                        </View>
+
+                        <MaterialIcons
+                          name="check-circle"
+                          size={20}
+                          color="#22C55E"
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </>
       )}
     </View>
@@ -844,8 +1526,274 @@ const CreateRoutes = ({ setActiveButton }: any) => {
 
 export default CreateRoutes;
 
+const locationPickerStyles = StyleSheet.create({
+  fullscreenOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 999,
+  },
+
+  mapContainer: {
+    flex: 1,
+    position: "relative",
+  },
+
+  fullscreenMap: {
+    flex: 1,
+  },
+
+  closeMapButton: {
+    position: "absolute",
+    top: 55,
+    left: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+
+  myLocationButton: {
+    position: "absolute",
+    right: 18,
+    bottom: 25,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+
+  locationPanel: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+
+  dragIndicator: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+    alignSelf: "center",
+    marginBottom: 18,
+  },
+
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 22,
+  },
+
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  sheetSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#6B7280",
+  },
+
+  routeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  locationSection: {
+    flexDirection: "row",
+    marginBottom: 14,
+  },
+
+  locationIconColumn: {
+    width: 34,
+    alignItems: "center",
+  },
+
+  locationDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pickupDot: {
+    backgroundColor: "#22C55E",
+  },
+
+  dropoffDot: {
+    backgroundColor: "#EF4444",
+  },
+
+  locationLine: {
+    width: 2,
+    flex: 1,
+    minHeight: 22,
+    backgroundColor: "#D1D5DB",
+    marginVertical: 4,
+  },
+
+  locationInputContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 7,
+  },
+
+  inputWrapper: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    minHeight: 52,
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+
+  primaryButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: "#4A90E2",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  disabledButton: {
+    backgroundColor: "#CBD5E1",
+  },
+
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  secondaryButton: {
+    height: 50,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: "#F3F4F6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  secondaryButtonText: {
+    color: "#4B5563",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  selectedContainer: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 2,
+  },
+
+  selectedTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+
+  selectedLocation: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+
+  smallDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 12,
+  },
+
+  selectedTextContainer: {
+    flex: 1,
+  },
+
+  selectedType: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#9CA3AF",
+    marginBottom: 2,
+  },
+
+  selectedAddress: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+});
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  container: { flex: 1, backgroundColor: "#F4F7FB" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -853,32 +1801,34 @@ const styles = StyleSheet.create({
   },
   content: { padding: 20, paddingBottom: 40 },
   card: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
     padding: 20,
     marginBottom: 20,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 3,
   },
   label: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 8,
-    color: "#333",
+    color: "#1E293B",
   },
   labelSubtext: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 12,
-    fontStyle: "italic",
+    fontSize: 13,
+    color: "#64748B",
+    marginBottom: 14,
+    lineHeight: 20,
   },
   divider: {
     height: 1,
-    backgroundColor: "grey",
-    marginVertical: 20,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 22,
   },
   input: {
     backgroundColor: "#F9F9F9",
@@ -960,15 +1910,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stepTitle: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     marginBottom: 8,
-    color: "#333",
+    color: "#0F172A",
+    letterSpacing: 0.2,
   },
   windowRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 16,
+    gap: 12,
   },
   windowColumn: {
     flex: 1,
@@ -1020,6 +1972,172 @@ const styles = StyleSheet.create({
     color: "#666",
     padding: 14,
     textAlign: "center",
+  },
+  fullscreenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    backgroundColor: "rgba(15, 23, 42, 0.35)",
+    justifyContent: "flex-end",
+  },
+  fullscreenMap: {
+    width: "100%",
+    height: "100%",
+  },
+  bsContent: {
+    padding: 12,
+    backgroundColor: "#fff",
+    flex: 1,
+  },
+  mapTop: {
+    height: "55%",
+    backgroundColor: "#fff",
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderBottomWidth: 0,
+  },
+  overlayBottom: {
+    height: "45%",
+    backgroundColor: "#F8FAFC",
+    padding: 18,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderBottomWidth: 0,
+    elevation: 8,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+  },
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginBottom: 8,
+    color: "#0F172A",
+  },
+  sheetSubtitle: { fontSize: 13, color: "#6B7280", marginBottom: 12 },
+  sheetHandle: {
+    width: 48,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: "#E6EEF8",
+    alignSelf: "center",
+    marginBottom: 10,
+  },
+  inputRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  inputIcon: { width: 40, alignItems: "center", justifyContent: "center" },
+  selectedRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  selectedText: { color: "#333", marginBottom: 4 },
+  inputLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "700",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  selectedChip: {
+    backgroundColor: "#E0F2FE",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  useButton: {
+    flex: 1,
+    marginTop: 16,
+    backgroundColor: "#2563EB",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  useButtonText: { color: "#fff", fontWeight: "800", letterSpacing: 0.2 },
+  confirmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    marginTop: 8,
+    gap: 10,
+  },
+  confirmButton: {
+    backgroundColor: "#10B981",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  confirmButtonDisabled: {
+    backgroundColor: "#A0AEC0",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  confirmButtonText: { color: "#FFF", fontWeight: "700" },
+  clearButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  clearButtonText: { color: "#334155", fontWeight: "700" },
+  useButtonDisabled: {
+    marginTop: 16,
+    backgroundColor: "#A0AEC0",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  inputWrapper: {
+    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  bsButtonsRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  bsDone: {
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E6EEF8",
+  },
+  selectedChipText: {
+    color: "#0F172A",
+    fontSize: 13,
+    fontWeight: "600",
   },
   emptyStateContainer: {
     paddingVertical: 24,
@@ -1137,46 +2255,50 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeScopeContainer: {
-    marginTop: 8,
-    marginBottom: 16,
-    backgroundColor: "#F8F9FA",
-    borderRadius: 8,
-    padding: 12,
+    marginTop: 14,
+    marginBottom: 18,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   scopeLabel: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
+    fontWeight: "700",
+    color: "#1E293B",
+    marginBottom: 10,
   },
   scopeOption: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    paddingVertical: 8,
   },
   radioButton: {
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: "#4A90E2",
+    borderColor: "#C7D2FE",
     borderRadius: 10,
-    marginRight: 8,
+    marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
   },
   radioButtonSelected: {
-    borderColor: "#4A90E2",
+    borderColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
   },
   radioButtonInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#2563EB",
   },
   scopeOptionText: {
     fontSize: 14,
-    color: "#333",
+    color: "#1E293B",
+    fontWeight: "600",
   },
   savePreferenceButton: {
     backgroundColor: "#28A745",
@@ -1214,19 +2336,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   previewCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 22,
     padding: 18,
     marginTop: 18,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 2,
     marginBottom: 20,
   },
 
@@ -1315,21 +2435,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   selectorButton: {
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    backgroundColor: "#F9F9F9",
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: "#D9E4F3",
+    borderRadius: 16,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     marginBottom: 20,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 1,
   },
   selectorButtonText: {
     fontSize: 15,
-    color: "#333",
+    color: "#0F172A",
+    fontWeight: "700",
   },
   selectorPlaceholderText: {
     fontSize: 15,
-    color: "#999",
+    color: "#94A3B8",
+    fontWeight: "600",
   },
   stepperHeader: {
     marginBottom: 20,
@@ -1367,14 +2494,19 @@ const styles = StyleSheet.create({
   },
   stepperNavButton: {
     flex: 1,
-    backgroundColor: "#4A90E2",
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: "#2563EB",
+    paddingVertical: 15,
+    borderRadius: 16,
     alignItems: "center",
     marginHorizontal: 4,
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 3,
   },
   stepperNavButtonDisabled: {
-    backgroundColor: "#A0AEC0",
+    backgroundColor: "#CBD5E1",
   },
   stepperNavButtonText: {
     color: "#FFF",
@@ -1410,14 +2542,6 @@ const styles = StyleSheet.create({
   optionsList: {
     maxHeight: 420,
   },
-  // driverOption: {
-  //   flexDirection: "row",
-  //   alignItems: "center",
-  //   paddingVertical: 10,
-  //   borderBottomWidth: 1,
-  //   borderBottomColor: "#F0F0F0",
-  //   gap: 12,
-  // },
   driverOptionDisabled: {
     opacity: 0.55,
   },
@@ -1478,3 +2602,214 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
 });
+
+const selectedLocationStyles = StyleSheet.create({
+  selectedLocationsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 12,
+
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  selectedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+
+  selectedHeaderTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 54,
+  },
+
+  locationContent: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+
+  locationType: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#9CA3AF",
+    letterSpacing: 0.8,
+    marginBottom: 3,
+  },
+
+  locationAddress: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    lineHeight: 19,
+  },
+
+  pickupIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#22C55E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  dropoffIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  locationConnector: {
+    width: 32,
+    alignItems: "center",
+    height: 18,
+  },
+
+  connectorLine: {
+    width: 2,
+    height: 18,
+    backgroundColor: "#D1D5DB",
+    borderRadius: 1,
+  },
+});
+
+const selectLocationButtonStyles = StyleSheet.create({
+selectorButton: {
+  width: "100%",
+  minHeight: 76,
+
+  flexDirection: "row",
+  alignItems: "center",
+
+  backgroundColor: "#FFFFFF",
+
+  borderRadius: 18,
+
+  paddingHorizontal: 14,
+  paddingVertical: 12,
+
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
+
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 3,
+  },
+  shadowOpacity: 0.06,
+  shadowRadius: 8,
+  elevation: 3,
+},
+
+selectorIconContainer: {
+  width: 42,
+  height: 42,
+
+  borderRadius: 13,
+
+  backgroundColor: "#EFF6FF",
+
+  alignItems: "center",
+  justifyContent: "center",
+
+  marginRight: 12,
+},
+
+selectorContent: {
+  flex: 1,
+},
+
+selectorTitle: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#111827",
+  marginBottom: 3,
+},
+
+selectorPlaceholderText: {
+  fontSize: 13,
+  color: "#9CA3AF",
+},
+
+selectorLocationRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  minHeight: 30,
+},
+
+selectorTextContainer: {
+  flex: 1,
+  marginLeft: 10,
+},
+
+selectorLabel: {
+  fontSize: 9,
+  fontWeight: "800",
+  color: "#9CA3AF",
+  letterSpacing: 0.8,
+  marginBottom: 2,
+},
+
+selectorLocationText: {
+  fontSize: 13,
+  fontWeight: "600",
+  color: "#111827",
+},
+
+startDot: {
+  width: 10,
+  height: 10,
+
+  borderRadius: 5,
+
+  backgroundColor: "#22C55E",
+
+  borderWidth: 2,
+  borderColor: "#DCFCE7",
+},
+
+stopDot: {
+  width: 10,
+  height: 10,
+
+  borderRadius: 5,
+
+  backgroundColor: "#EF4444",
+
+  borderWidth: 2,
+  borderColor: "#FEE2E2",
+},
+
+selectorConnector: {
+  width: 1,
+  height: 10,
+
+  backgroundColor: "#D1D5DB",
+
+  marginLeft: 4.5,
+  marginVertical: 1,
+},
+})

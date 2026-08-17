@@ -9,7 +9,6 @@ import { UserAuthData } from "./interface";
 
 export const userAuth = async (formData: UserAuthData) => {
   try {
-    const baseUrl = await resolveWorkingBaseUrl();
     const {
       name,
       email,
@@ -24,6 +23,27 @@ export const userAuth = async (formData: UserAuthData) => {
       province,
       logo,
     } = formData;
+
+    if (role === "admin") {
+      const mockAdminUser = {
+        id: "mock-admin-user",
+        name: name || "Admin User",
+        email: email || "admin@trackmykid.com",
+        phone: phone || "+27123456789",
+        role: "admin",
+        is_verified: true,
+      };
+
+      await saveAuthToken("mock-admin-token", mockAdminUser);
+      return {
+        status: 201,
+        user: mockAdminUser,
+        token: "mock-admin-token",
+        emailSent: false,
+      };
+    }
+
+    const baseUrl = await resolveWorkingBaseUrl();
 
     // Call backend API
     const response = await axios.post(`${baseUrl}/create-user`, {

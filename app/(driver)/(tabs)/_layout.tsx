@@ -1,8 +1,19 @@
-import { Stack } from "expo-router";
-import React from "react";
+import DriversTabBar from "@/components/DriversTabBar";
+import { Tabs } from "expo-router";
 
-const DriverLayout = () => {
-  return <Stack screenOptions={{ headerShown: false }} />;
-};
-
-export default DriverLayout;
+export default function TabsLayout() {
+  return (
+    <Tabs
+      tabBar={(props) => <DriversTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="trips" />
+      <Tabs.Screen name="messages" />
+      <Tabs.Screen name="students" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
+  );
+}

@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
-import Notification from "../../../components/Notification";
+import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
 
 interface Vehicle {
@@ -279,7 +279,7 @@ export default function Vehicles({ setActiveButton }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}

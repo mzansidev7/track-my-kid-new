@@ -22,7 +22,7 @@ import { BASE_URL } from "../../url";
 import { useAuth } from "../../context/authContext/auth-context";
 
 import FloatingInput from "../../components/FloatingInput";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 
 type FormErrors = {
   email?: string;
@@ -109,13 +109,16 @@ export default function Register({
         ? (["#34C759", "#20B94D"] as const)
         : userType === "client"
           ? (["#FF9F0A", "#FF7A00"] as const)
-          : (["#F3A6F3", "#F3A6F3"] as const);
+          : userType === "admin"
+            ? (["#0F766E", "#14B8A6"] as const)
+            : (["#F3A6F3", "#F3A6F3"] as const);
 
   const roleBackgrounds = {
     driver: require("@/assets/images/driver.jpeg"),
     client: require("@/assets/images/client.png"),
     owner: require("@/assets/images/owner.png"),
     school: require("@/assets/images/school.jpeg"),
+    admin: require("@/assets/images/owner.png"),
   } as const;
 
   const selectedBackground =
@@ -317,7 +320,7 @@ export default function Register({
         <Image source={selectedBackground} style={styles.backgroundImage} />
         <View style={styles.backgroundOverlay} />
       </View>
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}

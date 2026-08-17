@@ -13,7 +13,7 @@ import {
 import { resolveWorkingBaseUrl } from "../../url";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 
 const formatCurrency = (cents: number, currency = "zar") => {
   const value = Number(cents || 0) / 100;
@@ -220,7 +220,7 @@ export default function OwnerPayments() {
 
   return (
     <View style={styles.container}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}

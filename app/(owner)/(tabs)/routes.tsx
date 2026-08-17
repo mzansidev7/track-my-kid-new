@@ -13,13 +13,14 @@ import {
   View,
 } from "react-native";
 import { useRoutes } from "../../../ownerHelpers/hooks/useRoutes";
+import { TimePreference } from "../../../store/asyncStorage/timePreferences.asyncStore";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 
 const Routes = () => {
   const router = useRouter();
   const { user } = useContext(AuthContext);
-  const { routes, loadingRoutes, refreshRoutes } = useRoutes();
+  const { routes, loadingRoutes, refreshRoutes, timePreferences } = useRoutes();
 
   const activeRoutesCount = routes?.length || 0;
 
@@ -52,6 +53,60 @@ const Routes = () => {
       minute: "2-digit",
     });
   };
+
+  const getTimeOnly = (value: string | null | undefined) => {
+    if (!value) return null;
+    const normalized = String(value).trim();
+    const timeOnlyMatch = normalized.match(/(\d{1,2}:\d{2})(?::\d{2})?$/);
+    if (timeOnlyMatch) return timeOnlyMatch[1];
+    try {
+      const d = new Date(normalized);
+      if (isNaN(d.getTime())) return null;
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${hh}:${mm}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const formatPreferenceScope = (scope?: string | null) => {
+    if (!scope) return null;
+    return scope.charAt(0).toUpperCase() + scope.slice(1);
+  };
+
+  const getPreferenceScopeForTime = (
+    value: string | null | undefined,
+    routeId?: string | number | null,
+    routeScope?: string | null,
+  ) => {
+    const scopeFromRoute = routeScope?.trim();
+    if (scopeFromRoute) return scopeFromRoute;
+
+    const normalizedRouteId = routeId != null ? String(routeId).trim() : "";
+    const timeOnly = getTimeOnly(value);
+    if (!timeOnly && !normalizedRouteId) return null;
+    const today = new Date().toISOString().split("T")[0];
+
+    if (normalizedRouteId) {
+      const byRoute = timePrefs.find(
+        (p) =>
+          String(p.routeId ?? "") === normalizedRouteId &&
+          (!p.expiryDate || p.expiryDate >= today),
+      );
+      if (byRoute) return byRoute.scope;
+    }
+
+    if (!timeOnly) return null;
+
+    const pref = timePrefs.find(
+      (p) => p.time === timeOnly && (!p.expiryDate || p.expiryDate >= today),
+    );
+    return pref ? pref.scope : null;
+  };
+
+  // Use time preferences provided by `useRoutes`
+  const timePrefs = timePreferences || [];
 
   const formatTimeWindow = (
     start: string | null | undefined,
@@ -154,6 +209,11 @@ const Routes = () => {
       item.pickup_start_time || item.departure_time,
       item.dropoff_end_time || item.dropoff_start_time,
     );
+    const routePreferenceScope = getPreferenceScopeForTime(
+      item.departure_time || item.pickup_start_time,
+      item.id ?? item.route_id ?? item.routeId,
+      item.time_scope || item.timeScope || item.raw?.time_scope || item.raw?.timeScope,
+    );
 
     return (
       <View style={styles.routeCard}>
@@ -233,6 +293,27 @@ const Routes = () => {
               <Text style={styles.routeSummaryLabel}>Duration</Text>
             </View>
             <Text style={styles.routeSummaryValue}>{duration}</Text>
+          </View>
+          <View style={styles.routeSummaryItem}>
+            <View style={styles.routeSummaryLabelRow}>
+              <MaterialIcons
+                name="event"
+                size={14}
+                color="#6B7280"
+                style={styles.routeSummaryIcon}
+              />
+              <Text style={styles.routeSummaryLabel}>Departure</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.routeSummaryValue}>
+                {formatTime(item.departure_time || item.pickup_start_time)}
+              </Text>
+              {routePreferenceScope ? (
+                <Text style={styles.routePrefLabel}>
+                  {formatPreferenceScope(routePreferenceScope)}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
@@ -505,6 +586,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#111827",
+  },
+  routePrefLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 4,
   },
   routeActionsRow: {
     flexDirection: "row",

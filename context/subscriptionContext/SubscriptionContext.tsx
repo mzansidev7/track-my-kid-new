@@ -119,8 +119,12 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setSubscription(null);
       }
-    } catch (err) {
-      console.error("Failed to load subscription:", err);
+    } catch (err: any) {
+      console.error(
+        "Failed to load subscription:",
+        err?.message ?? err,
+        err,
+      );
       setSubscription(null);
     } finally {
       setLoading(false);

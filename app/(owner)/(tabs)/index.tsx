@@ -11,12 +11,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker } from "react-native-maps";
-import Notification from "../../../components/Notification";
+import AppNotification from "../../../components/Notification";
+import { resolveWorkingBaseUrl } from "../../../url";
+import CustomMap from "../../../components/map";
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useNotifications } from "../../../ownerHelpers/hooks/useNotifications";
 import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
@@ -74,7 +73,7 @@ export default function Home({ user }: any) {
   const router = useRouter();
   const styles = useOwnerStyles();
   const { colors, shadows } = useTheme();
-  const insets = useSafeAreaInsets();
+  
   const { subscription } = useSubscription();
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [profileNotice, setProfileNotice] = useState({
@@ -87,6 +86,7 @@ export default function Home({ user }: any) {
   const { owner } = useOwnerProfile();
   const { vehicles, fetchVehicles } = useOwnerVehicles();
   const { allRoutes, loadingRoutes, refreshRoutes } = useRoutes();
+  const [startedHistories, setStartedHistories] = useState<any[]>([]);
   const { unreadCount, refreshUnreadCount } = useNotifications();
 
   // Filter routes into active and inactive
@@ -98,13 +98,37 @@ export default function Home({ user }: any) {
 
   console.log({ subscription });
 
+  const fetchOwnerRouteHistory = useCallback(async () => {
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const resp = await fetch(`${baseUrl}/owner/route-history`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json", Authorization: user?.token ? `Bearer ${user.token}` : "" },
+      });
+
+      if (!resp.ok) {
+        setStartedHistories([]);
+        return;
+      }
+
+      const data = await resp.json();
+      // Keep only started entries
+      const started = (data || []).filter((h: any) => h.status === "started");
+      setStartedHistories(started || []);
+    } catch (err) {
+      console.warn("Failed fetching owner route history:", err);
+      setStartedHistories([]);
+    }
+  }, [user?.token]);
+
   useFocusEffect(
     useCallback(() => {
       refreshDrivers(true);
       refreshRoutes(true);
       refreshUnreadCount();
       fetchVehicles();
-    }, [fetchVehicles, refreshDrivers, refreshRoutes, refreshUnreadCount]),
+      fetchOwnerRouteHistory();
+    }, [fetchVehicles, refreshDrivers, refreshRoutes, refreshUnreadCount, fetchOwnerRouteHistory]),
   );
 
   const hasValue = (value: unknown) => {
@@ -629,7 +653,7 @@ export default function Home({ user }: any) {
           </View>
         </View>
       </View>
-      <Notification
+      <AppNotification
         visible={profileNotice.visible}
         message={profileNotice.message}
         type={profileNotice.type}
@@ -731,33 +755,57 @@ export default function Home({ user }: any) {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setIsMapExpanded(true)}
-            >
-              <MapView
-                style={styles.mapCanvas}
-                initialRegion={mapRegion}
-                showsCompass={false}
-                showsScale={false}
-                showsTraffic={false}
-                scrollEnabled={false}
-                zoomEnabled={false}
-                rotateEnabled={false}
-                pitchEnabled={false}
-              >
-                {fleetMarkers.map((marker) => (
-                  <Marker
-                    key={marker.id}
-                    coordinate={marker.coordinate}
-                    title={marker.title}
-                  >
-                    <View
-                      style={[styles.mapPin, { backgroundColor: marker.color }]}
-                    />
-                  </Marker>
-                ))}
-              </MapView>
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setIsMapExpanded(true)}>
+              {startedHistories && startedHistories.length > 0 ? (
+                (() => {
+                  const markers = startedHistories
+                    .map((h) => {
+                      const updates = Array.isArray(h.location_updates) ? h.location_updates : [];
+                      const last = updates.length > 0 ? updates[updates.length - 1] : null;
+                      const lat = last?.latitude ?? last?.lat ?? h?.route_snapshot?.start_latitude ?? null;
+                      const lon = last?.longitude ?? last?.lon ?? h?.route_snapshot?.start_longitude ?? null;
+                      if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return null;
+                      return { lat: Number(lat), lon: Number(lon) };
+                    })
+                    .filter((m): m is { lat: number; lon: number } => m != null);
+
+                  if (markers.length === 0) {
+                    return (
+                      <CustomMap
+                        markers={fleetMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+                        style={styles.mapCanvas}
+                      />
+                    );
+                  }
+
+                  const first = markers[0];
+                  const last = markers[markers.length - 1];
+                  return (
+                    <View>
+                      <CustomMap
+                        markers={markers.map((m) => ({ latitude: m.lat, longitude: m.lon }))}
+                        origin={{ latitude: first.lat, longitude: first.lon }}
+                        destination={markers.length > 1 ? { latitude: last.lat, longitude: last.lon } : undefined}
+                        style={styles.mapCanvas}
+                      />
+                      <View style={{ padding: 8 }}>
+                        {markers.map((m, idx) => (
+                          <Text key={idx} style={{ color: colors.text.secondary }}>
+                            Route {idx + 1}: {m.lat.toFixed(6)}, {m.lon.toFixed(6)}
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })()
+              ) : (
+                <CustomMap
+                  markers={fleetMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+                  origin={fleetMarkers.length > 0 ? fleetMarkers[0].coordinate : undefined}
+                  destination={fleetMarkers.length > 1 ? fleetMarkers[fleetMarkers.length - 1].coordinate : undefined}
+                  style={styles.mapCanvas}
+                />
+              )}
             </TouchableOpacity>
 
             <View style={styles.mapFooter}>

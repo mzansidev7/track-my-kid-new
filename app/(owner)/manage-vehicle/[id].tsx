@@ -27,7 +27,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
 import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
 import { AuthContext } from "../../../context/authContext/auth-context";
-import Notification from "../../../components/Notification";
+import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
 
 interface Vehicle {
@@ -1109,7 +1109,7 @@ export default function ManageVehicle() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom", "top"]}>
-      <Notification
+      <AppNotification
         message={notification.message}
         type={notification.type}
         visible={notification.visible}

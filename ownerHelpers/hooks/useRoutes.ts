@@ -8,6 +8,10 @@ import {
   subscribeToRoutesListUpdates,
   unsubscribeFromRoutesRealtime,
 } from "../../store/subscriptions/routesRealtime";
+import {
+  getAllDepartureTimePreferences,
+  getDepartureTimePreference,
+} from "../../store/asyncStorage/timePreferences.asyncStore";
 import { resolveWorkingBaseUrl } from "../../url";
 import { useOwnerProfile } from "./useOwnerProfile";
 
@@ -19,6 +23,7 @@ const normalizeRoute = (route: any) => {
     vehicle_id: route.vehicle_id,
     per_child_amount_cents: route.per_child_amount_cents || 0,
     departure_time: route.departure_time,
+    time_scope: route.time_scope || route.timeScope || null,
     pickup_start_time: route.pickup_start_time,
     pickup_end_time: route.pickup_end_time,
     dropoff_start_time: route.dropoff_start_time,
@@ -40,6 +45,8 @@ export const useRoutes = () => {
   const { owner } = useOwnerProfile();
   const [routes, setRoutes] = useState<any[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [timePreferences, setTimePreferences] = useState<any[]>([]);
+  const [currentDepartureTime, setCurrentDepartureTime] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
 
@@ -88,6 +95,22 @@ export const useRoutes = () => {
             setRoutes([]);
           }
         }
+        // Load time preferences asynchronously so they don't block route loading
+        getAllDepartureTimePreferences(user?.token)
+          .then((prefs) => {
+            setTimePreferences(prefs || []);
+          })
+          .catch((err) => {
+            console.warn("Failed loading time preferences in useRoutes:", err);
+          });
+
+        getDepartureTimePreference(user?.token)
+          .then((current) => {
+            setCurrentDepartureTime(current || null);
+          })
+          .catch((err) => {
+            console.warn("Failed loading current departure time in useRoutes:", err);
+          });
       } catch (err) {
         console.error("Error fetching routes:", err);
         setError("Could not load routes");
@@ -148,5 +171,7 @@ export const useRoutes = () => {
     loadingRoutes,
     error,
     refreshRoutes: fetchRoutes,
+    timePreferences,
+    currentDepartureTime,
   };
 };

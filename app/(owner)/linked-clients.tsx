@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/authContext/auth-context";
-import Notification from "../../components/Notification";
+import AppNotification from "../../components/Notification";
 import {
   subscribeToDriversListUpdates,
   unsubscribeFromRealtime,
@@ -178,7 +178,7 @@ export default function LinkedClients({ setActiveButton }: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Notification
+      <AppNotification
         visible={notification.visible}
         message={notification.message}
         type={notification.type}

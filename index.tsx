@@ -30,6 +30,11 @@ export default function Index() {
       return;
     }
 
+    if (role === "admin") {
+      router.replace("/(admin)");
+      return;
+    }
+
     if (role === "owner") {
       router.replace("/(auth)/home");
       return;
@@ -100,7 +105,7 @@ export default function Index() {
   if (!isVerified) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <VerifyOTP user={userData} />
+        <VerifyOTP />
       </View>
     );
   }
