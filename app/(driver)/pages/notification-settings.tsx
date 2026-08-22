@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/styles/theme";
-import { useDriverProfile } from "@/driverHelpers/hooks/useDriverProfile";
-import DriverHeader from "@/components/driver/DriverHeader";
+import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { useContext } from "react";
 import { resolveWorkingBaseUrl } from "@/url";
@@ -139,13 +139,18 @@ const NotificationSettingsPage = () => {
   }, [driver]);
 
   const sections = useMemo(
-    () => Object.entries(settings).filter(([_, value]) => typeof value === "object"),
+    () =>
+      Object.entries(settings).filter(
+        ([_, value]) => typeof value === "object",
+      ),
     [settings],
   );
 
   const toggleSetting = (category: string, key: string) => {
     setSettings((prev) => {
-      const section = prev[category as keyof typeof prev] as Record<string, boolean> | undefined;
+      const section = prev[category as keyof typeof prev] as
+        | Record<string, boolean>
+        | undefined;
       return {
         ...prev,
         [category]: {
@@ -158,10 +163,14 @@ const NotificationSettingsPage = () => {
 
   const toggleAllInSection = (category: string) => {
     setSettings((prev) => {
-      const section = prev[category as keyof typeof prev] as Record<string, unknown> | undefined;
+      const section = prev[category as keyof typeof prev] as
+        | Record<string, unknown>
+        | undefined;
       if (!section) return prev;
 
-      const booleanEntries = Object.entries(section).filter(([, value]) => typeof value === "boolean");
+      const booleanEntries = Object.entries(section).filter(
+        ([, value]) => typeof value === "boolean",
+      );
       if (!booleanEntries.length) return prev;
 
       const shouldEnable = booleanEntries.some(([, value]) => value === false);
@@ -204,7 +213,11 @@ const NotificationSettingsPage = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || data.message || "Failed to update notification settings.");
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Failed to update notification settings.",
+        );
       }
 
       setMessage("Notification settings updated.");
@@ -219,8 +232,14 @@ const NotificationSettingsPage = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <DriverHeader title="Notification Settings" subtitle="Manage your driver alerts" showBackButton />
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <DriverHeader
+          title="Notification Settings"
+          subtitle="Manage your driver alerts"
+          showBackButton
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -229,26 +248,53 @@ const NotificationSettingsPage = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <DriverHeader title="Notification Settings" subtitle="Choose what alerts you receive" showBackButton />
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <DriverHeader
+        title="Notification Settings"
+        subtitle="Choose what alerts you receive"
+        showBackButton
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {sections.map(([category, values]) => {
           const entries = Object.entries(values as Record<string, unknown>);
-          const booleanEntries = entries.filter(([, value]) => typeof value === "boolean");
+          const booleanEntries = entries.filter(
+            ([, value]) => typeof value === "boolean",
+          );
           if (!entries.length) return null;
 
-          const allEnabled = booleanEntries.length > 0 && booleanEntries.every(([, value]) => value === true);
+          const allEnabled =
+            booleanEntries.length > 0 &&
+            booleanEntries.every(([, value]) => value === true);
           const bulkToggleLabel = allEnabled ? "Uncheck all" : "Check all";
 
           return (
-            <View key={category} style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View
+              key={category}
+              style={[
+                styles.sectionCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{getSectionTitle(category)}</Text>
+                <Text
+                  style={[styles.sectionTitle, { color: colors.text.primary }]}
+                >
+                  {getSectionTitle(category)}
+                </Text>
 
                 {booleanEntries.length > 0 ? (
                   <View style={styles.bulkToggleWrap}>
-                    <Text style={[styles.bulkToggleLabel, { color: colors.text.secondary }]}>{bulkToggleLabel}</Text>
+                    <Text
+                      style={[
+                        styles.bulkToggleLabel,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {bulkToggleLabel}
+                    </Text>
                     <Switch
                       value={allEnabled}
                       onValueChange={() => toggleAllInSection(category)}
@@ -265,7 +311,12 @@ const NotificationSettingsPage = () => {
                 return (
                   <View key={`${category}-${key}`} style={styles.row}>
                     <View style={styles.labelWrapper}>
-                      <Text style={[styles.rowLabel, { color: colors.text.primary }]}>
+                      <Text
+                        style={[
+                          styles.rowLabel,
+                          { color: colors.text.primary },
+                        ]}
+                      >
                         {getSectionTitle(key)}
                       </Text>
                     </View>
@@ -283,15 +334,19 @@ const NotificationSettingsPage = () => {
         })}
 
         {message ? (
-          <Text style={[styles.message, { color: colors.text.primary }]}>{message}</Text>
+          <Text style={[styles.message, { color: colors.text.primary }]}>
+            {message}
+          </Text>
         ) : null}
 
         <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: colors.primary }]} 
+          style={[styles.saveButton, { backgroundColor: colors.primary }]}
           onPress={saveSettings}
           disabled={saving}
         >
-          <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Settings"}</Text>
+          <Text style={styles.saveButtonText}>
+            {saving ? "Saving..." : "Save Settings"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

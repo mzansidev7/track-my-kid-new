@@ -11,7 +11,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const ViewAllStops = () => {

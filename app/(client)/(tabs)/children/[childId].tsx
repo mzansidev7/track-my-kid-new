@@ -16,12 +16,13 @@ import {
 import { Camera, CameraView } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import MapView, { Marker } from "react-native-maps";
+import MapViewDirections from "react-native-maps-directions";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../../../styles/theme";
 import { AuthContext } from "../../../../context/authContext/auth-context";
-import { BASE_URL } from "../../../../url";
+import { resolveWorkingBaseUrl, GOOGLE_API_KEY } from "@/url";
 
 const ChildDetailScreen = () => {
   const router = useRouter();
@@ -57,11 +58,12 @@ const ChildDetailScreen = () => {
   const [tripLoading, setTripLoading] = useState(false);
 
   const fetchChild = useCallback(async () => {
-    if (!childId) return;
+    if (!childId || !user?.token) return;
     setLoading(true);
 
     try {
-      const response = await fetch(`${BASE_URL}/client/children/${childId}`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/client/children/${childId}`, {
         headers: { Authorization: `Bearer ${user?.token}` },
       });
       const data = await response.json();
@@ -79,6 +81,7 @@ const ChildDetailScreen = () => {
     }
   }, [childId, user?.token]);
 
+  console.log({ child });
   useEffect(() => {
     fetchChild();
   }, [fetchChild]);
@@ -103,8 +106,9 @@ const ChildDetailScreen = () => {
         throw new Error("QR code did not contain a valid vehicle id.");
       }
 
+      const baseUrl = await resolveWorkingBaseUrl();
       const response = await fetch(
-        `${BASE_URL}/client/children/${childId}/link-vehicle`,
+        `${baseUrl}/client/children/${childId}/link-vehicle`,
         {
           method: "POST",
           headers: {
@@ -160,7 +164,8 @@ const ChildDetailScreen = () => {
     setSavingChild(true);
 
     try {
-      const response = await fetch(`${BASE_URL}/client/children/${childId}`, {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/client/children/${childId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -191,6 +196,7 @@ const ChildDetailScreen = () => {
   };
 
   const handlePickChildPhoto = async () => {
+    const BASE_URL = await resolveWorkingBaseUrl();
     try {
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -304,7 +310,70 @@ const ChildDetailScreen = () => {
     setIsMapModalVisible(true);
   };
 
+  const openRouteMap = () => {
+    const pickupLat = child?.pickup_latitude;
+    const pickupLng = child?.pickup_longitude;
+    const dropoffLat = child?.dropoff_latitude;
+    const dropoffLng = child?.dropoff_longitude;
+
+    const hasPickup =
+      typeof pickupLat === "number" &&
+      Number.isFinite(pickupLat) &&
+      typeof pickupLng === "number" &&
+      Number.isFinite(pickupLng);
+    const hasDropoff =
+      typeof dropoffLat === "number" &&
+      Number.isFinite(dropoffLat) &&
+      typeof dropoffLng === "number" &&
+      Number.isFinite(dropoffLng);
+
+    if (!hasPickup && !hasDropoff) {
+      Alert.alert(
+        "Location unavailable",
+        "Pickup and drop-off coordinates are not available for this child.",
+      );
+      return;
+    }
+
+    const markers: any[] = [];
+    if (hasPickup) {
+      markers.push({
+        id: "pickup",
+        title: "Pickup Location",
+        coordinate: { latitude: pickupLat, longitude: pickupLng },
+        description: pickupAddress,
+      });
+    }
+    if (hasDropoff) {
+      markers.push({
+        id: "dropoff",
+        title: "Drop-off Location",
+        coordinate: { latitude: dropoffLat, longitude: dropoffLng },
+        description: dropoffAddress,
+      });
+    }
+
+    const latitudes = markers.map((marker) => marker.coordinate.latitude);
+    const longitudes = markers.map((marker) => marker.coordinate.longitude);
+    const centerLat =
+      latitudes.reduce((sum, value) => sum + value, 0) / latitudes.length;
+    const centerLng =
+      longitudes.reduce((sum, value) => sum + value, 0) / longitudes.length;
+
+    setMapMarkers(markers);
+    setMapRegion({
+      latitude: centerLat,
+      longitude: centerLng,
+      latitudeDelta: Math.max(...latitudes) - Math.min(...latitudes) || 0.05,
+      longitudeDelta: Math.max(...longitudes) - Math.min(...longitudes) || 0.05,
+    });
+    setMapModalTitle("Pickup and Drop-off Route");
+    setIsMapModalVisible(true);
+  };
+
   const openLiveTrip = async () => {
+    const BASE_URL = await resolveWorkingBaseUrl();
+
     if (!childId) return;
     setTripLoading(true);
     try {
@@ -372,7 +441,9 @@ const ChildDetailScreen = () => {
     setIsVehicleModalVisible(true);
   };
 
-  const handleRemoveChild = () => {
+  const handleRemoveChild = async () => {
+    const BASE_URL = await resolveWorkingBaseUrl();
+
     Alert.alert("Remove child", "Are you sure you want to remove this child?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -445,6 +516,16 @@ const ChildDetailScreen = () => {
   };
 
   const linkedVehicle = child?.vehicle;
+  const driverInfo = linkedVehicle?.driver || null;
+  const vehicleImageUrl =
+    Array.isArray(linkedVehicle?.vehicle_images) &&
+    linkedVehicle.vehicle_images.length > 0
+      ? typeof linkedVehicle.vehicle_images[0] === "string"
+        ? linkedVehicle.vehicle_images[0]
+        : linkedVehicle.vehicle_images[0]?.url ||
+          linkedVehicle.vehicle_images[0]?.uri ||
+          null
+      : null;
 
   const childStatus = child?.is_active !== false ? "Active" : "Inactive";
   const memberSince = child?.created_at
@@ -455,9 +536,66 @@ const ChildDetailScreen = () => {
       })
     : "Unknown";
 
-  const pickupAddress = child?.pickup_address || "Home";
+  const pickupAddress =
+    child?.pickup_address ||
+    child?.route?.start_location ||
+    child?.school_location?.address ||
+    "Home";
+
   const dropoffAddress =
-    child?.school_address || child?.school_name || "School";
+    child?.dropoff_address ||
+    child?.school_location?.address ||
+    child?.school_address ||
+    child?.school_name ||
+    "School";
+
+  const routeInfo = child?.route;
+  const pickupStartTime =
+    routeInfo?.pickup_start_time || routeInfo?.departure_time;
+  const pickupEndTime = routeInfo?.pickup_end_time;
+  const dropoffStartTime = routeInfo?.dropoff_start_time;
+  const dropoffEndTime = routeInfo?.dropoff_end_time;
+
+  const formatDisplayTime = (value?: string) => {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    return value;
+  };
+
+  const tripPickupTime = formatDisplayTime(pickupStartTime) || "—";
+  const tripDropoffTime = formatDisplayTime(dropoffStartTime) || "—";
+  const tripStatusText = pickupStartTime
+    ? "On the way to school"
+    : dropoffStartTime
+      ? "School route active"
+      : "Route not assigned";
+
+  const activityItems = [
+    {
+      time: tripPickupTime,
+      title: "Pickup window",
+      detail: pickupAddress,
+      status: "done",
+    },
+    {
+      time: pickupEndTime ? formatDisplayTime(pickupEndTime) : tripPickupTime,
+      title: "En route to school",
+      detail: routeInfo?.start_location || "Travel in progress",
+      status: "progress",
+    },
+    {
+      time: tripDropoffTime,
+      title: "Expected arrival at school",
+      detail: dropoffAddress,
+      status: "pending",
+    },
+  ];
 
   return (
     <SafeAreaView
@@ -627,7 +765,7 @@ const ChildDetailScreen = () => {
                         { color: colors.text.primary },
                       ]}
                     >
-                      {child.id}
+                      {child.id?.slice(0, 8)}
                     </Text>
                   </View>
                 </View>
@@ -675,9 +813,7 @@ const ChildDetailScreen = () => {
                     size={14}
                     color="#16A34A"
                   />
-                  <Text style={styles.tripStatusText}>
-                    On the way to school
-                  </Text>
+                  <Text style={styles.tripStatusText}>{tripStatusText}</Text>
                 </View>
               </View>
               <View style={styles.tripTimeline}>
@@ -692,7 +828,9 @@ const ChildDetailScreen = () => {
                         { color: colors.text.primary },
                       ]}
                     >
-                      07:15 AM
+                      {pickupEndTime
+                        ? formatDisplayTime(pickupEndTime)
+                        : tripPickupTime}
                     </Text>
                     <Text
                       style={[
@@ -724,7 +862,9 @@ const ChildDetailScreen = () => {
                         { color: colors.text.primary },
                       ]}
                     >
-                      07:45 AM
+                      {dropoffEndTime
+                        ? formatDisplayTime(dropoffEndTime)
+                        : tripDropoffTime}
                     </Text>
                     <Text
                       style={[
@@ -814,7 +954,7 @@ const ChildDetailScreen = () => {
                 <Text
                   style={[styles.infoValue, { color: colors.text.primary }]}
                 >
-                  {child.school_id || "--"}
+                  {child.school_id?.slice(0, 8) || "--"}
                 </Text>
               </View>
             </View>
@@ -854,22 +994,7 @@ const ChildDetailScreen = () => {
                       {pickupAddress}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.locationAction}
-                    onPress={() =>
-                      openLocationOnMap(
-                        "Pickup Location",
-                        child?.pickup_latitude,
-                        child?.pickup_longitude,
-                        pickupAddress,
-                      )
-                    }
-                  >
-                    <Text style={styles.locationActionText}>View on Map</Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
-              <View style={styles.locationCard}>
                 <View style={styles.locationRow}>
                   <View style={styles.locationIconWrap}>
                     <MaterialIcons
@@ -896,23 +1021,17 @@ const ChildDetailScreen = () => {
                       {dropoffAddress}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.locationAction}
-                    onPress={() =>
-                      openLocationOnMap(
-                        "Drop-off Location",
-                        child?.dropoff_latitude,
-                        child?.dropoff_longitude,
-                        dropoffAddress,
-                      )
-                    }
-                  >
-                    <Text style={styles.locationActionText}>View on Map</Text>
-                  </TouchableOpacity>
                 </View>
+                <TouchableOpacity
+                  style={styles.locationAction}
+                  onPress={openRouteMap}
+                >
+                  <Text style={styles.locationActionText}>
+                    View Route on Map
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-
             <View
               style={[styles.sectionCard, { backgroundColor: colors.surface }]}
             >
@@ -921,39 +1040,35 @@ const ChildDetailScreen = () => {
               >
                 Assigned Vehicle & Driver
               </Text>
-              <View style={styles.vehicleSummary}>
-                <View style={styles.vehicleSummaryLeft}>
-                  <MaterialIcons
-                    name="directions-car"
-                    size={20}
-                    color="#2563EB"
-                  />
-                  <View style={styles.vehicleSummaryText}>
-                    <Text
-                      style={[
-                        styles.vehicleSummaryTitle,
-                        { color: colors.text.primary },
-                      ]}
-                    >
-                      {linkedVehicle?.name || "No vehicle assigned"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.vehicleSummarySubtitle,
-                        { color: colors.text.secondary },
-                      ]}
-                    >
-                      {linkedVehicle?.license_plate || "No registration"}
-                    </Text>
+              {linkedVehicle?.name && (
+                <View style={styles.vehicleSummary}>
+                  <View style={styles.vehicleSummaryLeft}>
+                    <MaterialIcons
+                      name="directions-car"
+                      size={20}
+                      color="#2563EB"
+                    />
+                    <View style={styles.vehicleSummaryText}>
+                      <Text
+                        style={[
+                          styles.vehicleSummaryTitle,
+                          { color: colors.text.primary },
+                        ]}
+                      >
+                        {linkedVehicle?.name || "No vehicle assigned"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.vehicleSummarySubtitle,
+                          { color: colors.text.secondary },
+                        ]}
+                      >
+                        {linkedVehicle?.license_plate || "No registration"}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-                <TouchableOpacity
-                  onPress={openVehicleDetails}
-                  style={styles.vehicleViewButton}
-                >
-                  <Text style={styles.vehicleViewButtonText}>View</Text>
-                </TouchableOpacity>
-              </View>
+              )}
               <TouchableOpacity
                 onPress={openScanner}
                 style={[styles.scanButton, { backgroundColor: colors.primary }]}
@@ -961,37 +1076,48 @@ const ChildDetailScreen = () => {
                 <MaterialIcons name="qr-code-scanner" size={20} color="#fff" />
                 <Text style={styles.scanButtonText}>Scan vehicle QR</Text>
               </TouchableOpacity>
-              <View style={styles.driverSummary}>
-                <View style={styles.driverAvatar}>
-                  <Image
-                    source={require("@/assets/images/client.png")}
-                    style={styles.driverAvatarImage}
-                  />
-                </View>
-                <View style={styles.driverDetails}>
-                  <Text
-                    style={[styles.driverName, { color: colors.text.primary }]}
+
+              {linkedVehicle?.name && (
+                <View style={styles.driverSummary}>
+                  {/* <Text>{JSON.stringify(linkedVehicle?.driver)}</Text> */}
+                  <View style={styles.driverAvatar}>
+                    <Image
+                      source={
+                        linkedVehicle.driver.avatar
+                          ? { uri: linkedVehicle?.driver?.avatar }
+                          : require("@/assets/images/client.png")
+                      }
+                      style={styles.driverAvatarImage}
+                    />
+                  </View>
+                  <View style={styles.driverDetails}>
+                    <Text
+                      style={[
+                        styles.driverName,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {linkedVehicle?.driver?.name ||
+                        linkedVehicle?.driver_name ||
+                        "No driver linked"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.driverRating,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      ⭐ 4.9
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={openVehicleDetails}
+                    style={styles.driverActionButton}
                   >
-                    {linkedVehicle?.driver?.name ||
-                      linkedVehicle?.driver_name ||
-                      "No driver linked"}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.driverRating,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    ⭐ 4.9
-                  </Text>
+                    <Text style={styles.driverActionText}>View</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  onPress={openVehicleDetails}
-                  style={styles.driverActionButton}
-                >
-                  <Text style={styles.driverActionText}>View</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
 
             <View
@@ -1014,27 +1140,8 @@ const ChildDetailScreen = () => {
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
-              {[
-                {
-                  time: "07:15 AM",
-                  title: "Picked up from Home",
-                  detail: "Today",
-                  status: "done",
-                },
-                {
-                  time: "07:22 AM",
-                  title: "On the way to School",
-                  detail: "Today",
-                  status: "progress",
-                },
-                {
-                  time: "07:45 AM",
-                  title: "Expected at School",
-                  detail: "Today",
-                  status: "pending",
-                },
-              ].map((item, idx) => (
-                <View key={idx} style={styles.activityRow}>
+              {activityItems.map((item, idx) => (
+                <View key={`${item.title}-${idx}`} style={styles.activityRow}>
                   <View
                     style={[
                       styles.activityMarker,
@@ -1084,7 +1191,13 @@ const ChildDetailScreen = () => {
 
       <Modal visible={scanModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
+          <View
+            style={[
+              styles.modalCard,
+              styles.scanModalCard,
+              { backgroundColor: colors.surface },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
               Scan vehicle QR
             </Text>
@@ -1112,17 +1225,14 @@ const ChildDetailScreen = () => {
                   <Text style={styles.scanLoadingText}>Linking vehicle…</Text>
                 </View>
               ) : null}
-              {scanError ? (
-                <Text
-                  style={[
-                    styles.scanError,
-                    { color: "#EF4444", marginTop: 12 },
-                  ]}
-                >
-                  {scanError}
-                </Text>
-              ) : null}
             </View>
+            {scanError ? (
+              <Text
+                style={[styles.scanError, { color: "#EF4444", marginTop: 12 }]}
+              >
+                {scanError}
+              </Text>
+            ) : null}
             <TouchableOpacity
               style={[styles.closeButton, { borderColor: colors.border }]}
               onPress={() => setScanModalVisible(false)}
@@ -1297,6 +1407,16 @@ const ChildDetailScreen = () => {
                       description={marker.description}
                     />
                   ))}
+                  {mapMarkers.length > 1 && GOOGLE_API_KEY ? (
+                    <MapViewDirections
+                      origin={mapMarkers[0].coordinate}
+                      destination={mapMarkers[mapMarkers.length - 1].coordinate}
+                      apikey={GOOGLE_API_KEY}
+                      strokeWidth={5}
+                      strokeColor="#2563EB"
+                      optimizeWaypoints={true}
+                    />
+                  ) : null}
                 </MapView>
               ) : (
                 <View style={styles.cameraFallback}>
@@ -1329,74 +1449,182 @@ const ChildDetailScreen = () => {
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
               Vehicle & Driver
             </Text>
-            <View style={styles.vehicleDetailsCard}>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary },
-                ]}
-              >
-                Vehicle
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.name || "No assigned vehicle"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Registration
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.license_plate || "N/A"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Driver
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.driver?.users?.name ||
-                  linkedVehicle?.driver_name ||
-                  "No assigned driver"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Contact
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.driver?.users?.phone || "Not available"}
-              </Text>
-            </View>
+
+            <ScrollView
+              style={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.detailsSectionCard}>
+                <Text
+                  style={[
+                    styles.detailSectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Vehicle Information
+                </Text>
+
+                {vehicleImageUrl ? (
+                  <Image
+                    source={{ uri: vehicleImageUrl }}
+                    style={styles.vehicleImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.vehicleImagePlaceholder}>
+                    <MaterialIcons
+                      name="directions-car"
+                      size={28}
+                      color="#94A3B8"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Name
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.name || "No assigned vehicle"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Model
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.model || "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Registration
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.license_plate || "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Color
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.color || "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailsSectionCard}>
+                <Text
+                  style={[
+                    styles.detailSectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Driver Information
+                </Text>
+
+                {(driverInfo?.avatar || linkedVehicle?.driver?.avatar) && (
+                  <Image
+                    source={{
+                      uri: driverInfo?.avatar || linkedVehicle?.driver?.avatar,
+                    }}
+                    style={styles.driverAvatar}
+                    resizeMode="cover"
+                  />
+                )}
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Name
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.name ||
+                      linkedVehicle?.driver_name ||
+                      linkedVehicle?.driver?.users?.name ||
+                      linkedVehicle?.driver?.name ||
+                      "No assigned driver"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Email
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.email ||
+                      linkedVehicle?.driver?.users?.email ||
+                      linkedVehicle?.driver?.email ||
+                      "Not available"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Phone
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.phone ||
+                      linkedVehicle?.driver?.users?.phone ||
+                      linkedVehicle?.driver?.phone ||
+                      "Not available"}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
             <TouchableOpacity
               style={[styles.closeButton, { borderColor: colors.border }]}
               onPress={() => setIsVehicleModalVisible(false)}
@@ -1554,123 +1782,178 @@ const ChildDetailScreen = () => {
         </View>
       </Modal>
 
-      <Modal visible={isMapModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
-              {mapModalTitle}
-            </Text>
-            <View style={styles.mapContainer}>
-              {mapRegion ? (
-                <MapView style={styles.mapView} initialRegion={mapRegion}>
-                  {mapMarkers.map((marker) => (
-                    <Marker
-                      key={marker.id}
-                      coordinate={marker.coordinate}
-                      title={marker.title}
-                      description={marker.description}
-                    />
-                  ))}
-                </MapView>
-              ) : (
-                <View style={styles.cameraFallback}>
-                  <Text
-                    style={[
-                      styles.cameraFallbackText,
-                      { color: colors.text.primary },
-                    ]}
-                  >
-                    Map data unavailable.
-                  </Text>
-                </View>
-              )}
-            </View>
-            <TouchableOpacity
-              style={[styles.closeButton, { borderColor: colors.border }]}
-              onPress={() => setIsMapModalVisible(false)}
-            >
-              <Text style={[styles.closeText, { color: colors.text.primary }]}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={isVehicleModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
             <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
               Vehicle & Driver
             </Text>
-            <View style={styles.vehicleDetailsCard}>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary },
-                ]}
-              >
-                Vehicle
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.name || "No assigned vehicle"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Registration
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.license_plate || "N/A"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Driver
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.driver?.users?.name ||
-                  linkedVehicle?.driver_name ||
-                  "No assigned driver"}
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailLabel,
-                  { color: colors.text.secondary, marginTop: 12 },
-                ]}
-              >
-                Contact
-              </Text>
-              <Text
-                style={[
-                  styles.vehicleDetailValue,
-                  { color: colors.text.primary },
-                ]}
-              >
-                {linkedVehicle?.driver?.users?.phone || "Not available"}
-              </Text>
-            </View>
+
+            <ScrollView
+              style={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.detailsSectionCard}>
+                <Text
+                  style={[
+                    styles.detailSectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Vehicle Information
+                </Text>
+
+                {vehicleImageUrl ? (
+                  <Image
+                    source={{ uri: vehicleImageUrl }}
+                    style={styles.vehicleImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.vehicleImagePlaceholder}>
+                    <MaterialIcons
+                      name="directions-car"
+                      size={28}
+                      color="#94A3B8"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Name
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.name || "No assigned vehicle"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Model
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.model || "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Registration
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.license_plate || "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Color
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {linkedVehicle?.color || "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailsSectionCard}>
+                <Text
+                  style={[
+                    styles.detailSectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Driver Information
+                </Text>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Name
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.name ||
+                      linkedVehicle?.driver_name ||
+                      linkedVehicle?.driver?.users?.name ||
+                      linkedVehicle?.driver?.name ||
+                      "No assigned driver"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Email
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.email ||
+                      linkedVehicle?.driver?.users?.email ||
+                      linkedVehicle?.driver?.email ||
+                      "Not available"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text
+                    style={[
+                      styles.detailLabel,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
+                    Phone
+                  </Text>
+                  <Text
+                    style={[styles.detailValue, { color: colors.text.primary }]}
+                  >
+                    {driverInfo?.phone ||
+                      linkedVehicle?.driver?.users?.phone ||
+                      linkedVehicle?.driver?.phone ||
+                      "Not available"}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
             <TouchableOpacity
               style={[styles.closeButton, { borderColor: colors.border }]}
               onPress={() => setIsVehicleModalVisible(false)}
@@ -1689,84 +1972,823 @@ const ChildDetailScreen = () => {
 export default ChildDetailScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingTop: 120, paddingBottom: 120 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginBottom: 22,
+  container: {
+    flex: 1,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(15,23,42,0.04)",
+
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 40,
   },
-  title: { fontSize: 28, fontWeight: "800" },
-  card: {
-    borderRadius: 24,
-    padding: 20,
+
+  /* =========================
+     HEADER
+  ========================= */
+
+  topRowWrapper: {
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.10)",
+    zIndex: 10,
+  },
+
+  topRowWrapperScrolled: {
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
     elevation: 4,
   },
-  label: {
+
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 56,
+  },
+
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.045)",
+  },
+
+  topRowTitle: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+
+  pageSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginLeft: 8,
+  },
+
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(15,23,42,0.045)",
+  },
+
+  /* =========================
+     GENERAL CARDS
+  ========================= */
+
+  heroCard: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.035,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+
+  bannerCard: {
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+
+  tripCard: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+  },
+
+  sectionCard: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+  },
+
+  /* =========================
+     CHILD HERO
+  ========================= */
+
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  avatarWrapper: {
+    width: 78,
+    height: 78,
+    borderRadius: 22,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#E5E7EB",
+  },
+
+  heroAvatar: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+
+  avatarAction: {
+    position: "absolute",
+    right: 5,
+    bottom: 5,
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+  },
+
+  heroInfo: {
+    flex: 1,
+    marginLeft: 13,
+  },
+
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+
+  heroName: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "#DCFCE7",
+  },
+
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#166534",
+  },
+
+  heroMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 8,
+  },
+
+  heroMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  heroMetaText: {
+    fontSize: 12,
+    lineHeight: 16,
+    flexShrink: 1,
+  },
+
+  childIdRow: {
+    marginTop: 9,
+  },
+
+  childIdLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+
+  childIdValue: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
+  /* =========================
+     SAFETY BANNER
+  ========================= */
+
+  bannerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  bannerIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(37,99,235,0.10)",
+  },
+
+  bannerText: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+
+  bannerDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  /* =========================
+     TODAY'S TRIP
+  ========================= */
+
+  tripHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+
+  tripTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  tripStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#DCFCE7",
+  },
+
+  tripStatusText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#166534",
+  },
+
+  tripTimeline: {
+    gap: 12,
+  },
+
+  tripPoint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  tripDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 999,
+    marginTop: 4,
+    marginRight: 10,
+  },
+
+  tripPointContent: {
+    flex: 1,
+  },
+
+  tripPointTime: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  tripPointLabel: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  tripPointLocation: {
+    fontSize: 12,
+    marginTop: 1,
+    lineHeight: 17,
+  },
+
+  tripSeparator: {
+    height: 1,
+    backgroundColor: "rgba(148,163,184,0.14)",
+    marginLeft: 21,
+    marginVertical: 4,
+  },
+
+  liveTripButton: {
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#EEF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  liveTripButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#4338CA",
+  },
+
+  /* =========================
+     SECTION HEADERS
+  ========================= */
+
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 14,
+    letterSpacing: -0.2,
+  },
+
+  /* =========================
+     INFORMATION
+  ========================= */
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.10)",
+  },
+
+  infoLabel: {
+    fontSize: 12,
+  },
+
+  infoValue: {
     fontSize: 12,
     fontWeight: "700",
-    marginTop: 18,
-    marginBottom: 8,
-    letterSpacing: 0.3,
+    maxWidth: "60%",
+    textAlign: "right",
   },
-  value: { fontSize: 16, lineHeight: 24 },
-  vehicleCard: { marginTop: 18, borderRadius: 20, padding: 16 },
-  vehicleTitle: { fontSize: 14, fontWeight: "800", marginBottom: 6 },
-  vehicleText: { fontSize: 14, lineHeight: 20 },
+
+  /* =========================
+     LOCATIONS
+  ========================= */
+
+  locationCard: {
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 9,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.13)",
+  },
+
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  locationIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(59,130,246,0.09)",
+  },
+
+  locationTextWrap: {
+    flex: 1,
+    marginLeft: 10,
+    marginRight: 8,
+  },
+
+  locationTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  locationSubtitle: {
+    fontSize: 11,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+
+  locationAction: {
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 9,
+    backgroundColor: "rgba(59,130,246,0.08)",
+  },
+
+  locationActionText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+
+  /* =========================
+     VEHICLE
+  ========================= */
+
+  vehicleSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  vehicleSummaryLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  vehicleSummaryText: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  vehicleSummaryTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  vehicleSummarySubtitle: {
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  vehicleViewButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(37,99,235,0.09)",
+  },
+
+  vehicleViewButtonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+
   scanButton: {
-    marginTop: 24,
+    marginTop: 2,
+    marginBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: 18,
+    gap: 7,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
-  scanButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  scanError: { marginTop: 12, fontSize: 13 },
-  emptyText: { fontSize: 15, lineHeight: 22 },
-  loadingContainer: {
-    minHeight: 240,
+
+  scanButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  driverSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  driverAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
   },
+
+  driverAvatarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+
+  driverDetails: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  driverName: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  driverRating: {
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  driverActionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(37,99,235,0.09)",
+  },
+
+  driverActionText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+
+  /* =========================
+     ACTIVITY
+  ========================= */
+
+  activityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+
+  viewAllText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#2563EB",
+  },
+
+  activityRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.09)",
+  },
+
+  activityMarker: {
+    width: 9,
+    height: 9,
+    borderRadius: 999,
+    marginTop: 5,
+    marginRight: 10,
+  },
+
+  activityMarkerDone: {
+    backgroundColor: "#10B981",
+  },
+
+  activityMarkerProgress: {
+    backgroundColor: "#F59E0B",
+  },
+
+  activityMarkerPending: {
+    backgroundColor: "#60A5FA",
+  },
+
+  activityTextWrap: {
+    flex: 1,
+  },
+
+  activityTime: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  activityTitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  activityDetail: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  /* =========================
+     MODALS
+  ========================= */
+
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.3)",
-    padding: 20,
+    backgroundColor: "rgba(15,23,42,0.48)",
+    padding: 16,
   },
-  modalCard: { width: "100%", borderRadius: 24, padding: 20 },
-  modalTitle: { fontSize: 20, fontWeight: "800", marginBottom: 16 },
+
+  modalCard: {
+    width: "100%",
+    maxHeight: "90%",
+    borderRadius: 20,
+    padding: 18,
+  },
+
+  scanModalCard: {
+    maxHeight: "85%",
+    flexDirection: "column",
+  },
+
+  modalScrollContent: {
+    maxHeight: 430,
+  },
+
+  detailsSectionCard: {
+    backgroundColor: "rgba(15,23,42,0.04)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+  },
+
+  detailSectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.12)",
+  },
+
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  detailValue: {
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: "62%",
+    textAlign: "right",
+  },
+
+  vehicleImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+
+  vehicleImagePlaceholder: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: "rgba(148,163,184,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+
+  closeButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  closeText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  /* =========================
+     MENU
+  ========================= */
+
+  menuCard: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 18,
+  },
+
+  menuItem: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148,163,184,0.10)",
+  },
+
+  menuItemDestructive: {
+    borderBottomColor: "rgba(239,68,68,0.12)",
+  },
+
+  menuItemText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  menuItemTextDestructive: {
+    color: "#DC2626",
+  },
+
+  /* =========================
+     EDIT FORM
+  ========================= */
+
+  editForm: {
+    width: "100%",
+  },
+
+  inputLabel: {
+    fontSize: 11,
+    marginTop: 10,
+    marginBottom: 5,
+    fontWeight: "800",
+  },
+
+  inputField: {
+    width: "100%",
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+  },
+
+  primaryButton: {
+    marginTop: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  primaryButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fff",
+  },
+
+  /* =========================
+     CAMERA
+  ========================= */
+
   cameraContainer: {
     width: "100%",
-    height: 320,
-    borderRadius: 20,
+    height: 280,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#000",
+    marginBottom: 12,
+    marginTop: 4,
   },
-  cameraView: { width: "100%", height: "100%" },
+
+  cameraView: {
+    width: "100%",
+    height: "100%",
+  },
+
   cameraFallback: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  cameraFallbackText: { textAlign: "center", fontSize: 15, lineHeight: 22 },
+
+  cameraFallbackText: {
+    textAlign: "center",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
   scanLoadingOverlay: {
     position: "absolute",
     top: 0,
@@ -1775,540 +2797,54 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.42)",
   },
+
   scanLoadingText: {
     color: "#fff",
-    marginTop: 12,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  closeButton: {
-    marginTop: 18,
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeText: { fontSize: 15, fontWeight: "700" },
-  menuCard: {
-    width: "100%",
-    borderRadius: 24,
-    padding: 20,
-  },
-  menuItem: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.14)",
-  },
-  menuItemDestructive: {
-    borderBottomColor: "rgba(239,68,68,0.2)",
-  },
-  menuItemText: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  menuItemTextDestructive: {
-    color: "#DC2626",
-  },
-  editForm: {
-    width: "100%",
-  },
-  inputLabel: {
+    marginTop: 10,
     fontSize: 13,
-    marginTop: 12,
-    marginBottom: 6,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  inputField: {
-    width: "100%",
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    backgroundColor: "rgba(255,255,255,0.05)",
+
+  scanError: {
+    marginBottom: 12,
+    fontSize: 12,
+    textAlign: "center",
   },
-  primaryButton: {
-    marginTop: 16,
-    paddingVertical: 16,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-  },
+
+  /* =========================
+     MAP
+  ========================= */
+
   mapContainer: {
     width: "100%",
-    height: 280,
-    borderRadius: 20,
+    height: 300,
+    borderRadius: 16,
     overflow: "hidden",
-    marginTop: 14,
+    marginTop: 4,
     backgroundColor: "#E5E7EB",
   },
+
   mapView: {
     width: "100%",
     height: "100%",
   },
-  vehicleDetailsCard: {
-    width: "100%",
-    borderRadius: 20,
-    padding: 16,
-    backgroundColor: "rgba(15,23,42,0.04)",
-    marginTop: 14,
-  },
-  vehicleDetailLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  vehicleDetailValue: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-  },
-  topRowWrapper: {
-    width: "100%",
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.12)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
-  },
-  topRowWrapperScrolled: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  topRowTitle: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  pageSubtitle: {
-    fontSize: 14,
-    marginTop: 6,
-    lineHeight: 20,
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+
+  /* =========================
+     STATES
+  ========================= */
+
+  loadingContainer: {
+    minHeight: 240,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(15,23,42,0.04)",
   },
-  heroCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 4,
-  },
-  heroTop: {
-    flexDirection: "row",
-    gap: 18,
-  },
-  avatarWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 28,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "#E5E7EB",
-  },
-  heroAvatar: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  avatarAction: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#2563EB",
-  },
-  heroInfo: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  heroName: {
-    fontSize: 24,
-    fontWeight: "800",
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "#DCFCE7",
-  },
-  statusPillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#166534",
-  },
-  heroMetaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 14,
-  },
-  heroMetaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  heroMetaText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  childIdRow: {
-    marginTop: 18,
-  },
-  childIdLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-    letterSpacing: 0.3,
-  },
-  childIdValue: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  bannerCard: {
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 18,
-  },
-  bannerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  bannerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(37,99,235,0.12)",
-  },
-  bannerText: {
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  bannerDescription: {
+
+  emptyText: {
     fontSize: 14,
     lineHeight: 20,
-  },
-  tripCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 18,
-  },
-  tripHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  tripTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  tripStatusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#DCFCE7",
-  },
-  tripStatusText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#166534",
-  },
-  tripTimeline: {
-    gap: 18,
-  },
-  tripPoint: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  tripDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 999,
-    marginTop: 6,
-  },
-  tripPointContent: {
-    flex: 1,
-  },
-  tripPointTime: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  tripPointLabel: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  tripPointLocation: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  tripSeparator: {
-    height: 1,
-    backgroundColor: "rgba(148,163,184,0.2)",
-    marginVertical: 14,
-  },
-  liveTripButton: {
-    marginTop: 10,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: "#EEF2FF",
-    alignItems: "center",
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  liveTripButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#4338CA",
-  },
-  sectionCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 18,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 18,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  infoLabel: {
-    fontSize: 14,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  locationCard: {
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.16)",
-  },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  locationIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(59,130,246,0.12)",
-  },
-  locationTextWrap: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  locationSubtitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  locationAction: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: "rgba(59,130,246,0.1)",
-  },
-  locationActionText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-  vehicleSummary: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 18,
-  },
-  vehicleSummaryLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  vehicleSummaryText: {
-    flex: 1,
-  },
-  vehicleSummaryTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  vehicleSummarySubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  vehicleViewButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: "rgba(37,99,235,0.12)",
-  },
-  vehicleViewButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-  driverSummary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  driverAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#E5E7EB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  driverAvatarImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-  driverDetails: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  driverRating: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  driverActionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: "rgba(37,99,235,0.12)",
-  },
-  driverActionText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-  activityHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  viewAllText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-  activityRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 18,
-  },
-  activityMarker: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    marginTop: 6,
-  },
-  activityMarkerDone: {
-    backgroundColor: "#10B981",
-  },
-  activityMarkerProgress: {
-    backgroundColor: "#F59E0B",
-  },
-  activityMarkerPending: {
-    backgroundColor: "#60A5FA",
-  },
-  activityTextWrap: {
-    flex: 1,
-  },
-  activityTime: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  activityTitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  activityDetail: {
-    fontSize: 13,
-    marginTop: 2,
+    textAlign: "center",
+    marginTop: 40,
   },
 });

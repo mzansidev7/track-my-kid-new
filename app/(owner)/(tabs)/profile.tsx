@@ -16,9 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
+import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
 import { AuthContext } from "../../../context/authContext/auth-context";
 
 const OwnerProfile = () => {
@@ -343,6 +343,18 @@ const OwnerProfile = () => {
                   • Cancel Subscription
                 </Text>
               </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => router.push("/(owner)/payments")}
+          >
+            <View>
+              <Text style={styles.settingRowTitle}>Manage Payouts</Text>
+              <Text style={styles.settingRowSubtitle}>
+                Connect Stripe and receive client payments
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>

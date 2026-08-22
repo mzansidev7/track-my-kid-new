@@ -31,7 +31,7 @@ export default function Index() {
     }
 
     if (role === "admin") {
-      router.replace("/(admin)");
+      router.replace("/(admin)/(tabs)");
       return;
     }
 

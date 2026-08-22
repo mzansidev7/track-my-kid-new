@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
 import {
@@ -30,7 +30,11 @@ const SupportChatPage = () => {
   const scrollRef = useRef<ScrollView | null>(null);
 
   const currentUserId = user?.userData?.id || user?.id;
-  const currentUserRole = (user?.userData?.role || user?.role || "driver").toLowerCase();
+  const currentUserRole = (
+    user?.userData?.role ||
+    user?.role ||
+    "driver"
+  ).toLowerCase();
 
   useEffect(() => {
     const initializeChat = async () => {
@@ -38,7 +42,10 @@ const SupportChatPage = () => {
         return;
       }
 
-      const activeSession = await ensureUserLiveChatSession(currentUserId, currentUserRole);
+      const activeSession = await ensureUserLiveChatSession(
+        currentUserId,
+        currentUserRole,
+      );
       if (!activeSession?.id) {
         return;
       }
@@ -47,9 +54,12 @@ const SupportChatPage = () => {
       const sessionMessages = await fetchLiveChatMessages(activeSession.id);
       setMessages(sessionMessages);
 
-      const channel = subscribeToLiveChatMessages(activeSession.id, (nextMessages) => {
-        setMessages(nextMessages);
-      });
+      const channel = subscribeToLiveChatMessages(
+        activeSession.id,
+        (nextMessages) => {
+          setMessages(nextMessages);
+        },
+      );
 
       return () => {
         if (channel) {
@@ -97,7 +107,10 @@ const SupportChatPage = () => {
       });
 
       if (!sentMessage) {
-        Alert.alert("Unable to send", "Your message could not be sent right now.");
+        Alert.alert(
+          "Unable to send",
+          "Your message could not be sent right now.",
+        );
         return;
       }
 
@@ -113,14 +126,26 @@ const SupportChatPage = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <DriverHeader title="Support Chat" showBackButton onBackPress={() => router.back()} />
+      <DriverHeader
+        title="Support Chat"
+        showBackButton
+        onBackPress={() => router.back()}
+      />
 
-      <ScrollView ref={scrollRef} style={styles.chatArea} contentContainerStyle={styles.chatContent}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.chatArea}
+        contentContainerStyle={styles.chatContent}
+      >
         {messages.length === 0 ? (
-          <Text style={styles.emptyState}>Start the conversation with support.</Text>
+          <Text style={styles.emptyState}>
+            Start the conversation with support.
+          </Text>
         ) : (
           messages.map((item) => {
-            const isUser = item.sender_role === currentUserRole || item.sender_id === currentUserId;
+            const isUser =
+              item.sender_role === currentUserRole ||
+              item.sender_id === currentUserId;
 
             return (
               <View
@@ -130,7 +155,9 @@ const SupportChatPage = () => {
                   isUser ? styles.userBubble : styles.supportBubble,
                 ]}
               >
-                <Text style={[styles.messageText, isUser && styles.userText]}>{item.message}</Text>
+                <Text style={[styles.messageText, isUser && styles.userText]}>
+                  {item.message}
+                </Text>
               </View>
             );
           })
@@ -145,8 +172,14 @@ const SupportChatPage = () => {
           style={styles.input}
           multiline
         />
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={isSending}>
-          <Text style={styles.sendButtonText}>{isSending ? "..." : "Send"}</Text>
+        <TouchableOpacity
+          style={styles.sendButton}
+          onPress={handleSend}
+          disabled={isSending}
+        >
+          <Text style={styles.sendButtonText}>
+            {isSending ? "..." : "Send"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

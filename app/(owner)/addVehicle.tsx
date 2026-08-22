@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import AppNotification from "../../components/Notification";

@@ -1,4 +1,4 @@
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
@@ -14,7 +14,7 @@ import {
   Vibration,
   View,
 } from "react-native";
-import { clearOwnerCache } from "../../asyncStorage/ownerCache";
+import { clearOwnerCache } from "../../store/asyncStorage/ownerCache";
 import { AuthContext } from "../../context/authContext/auth-context";
 import AppNotification from "../../components/Notification";
 import { subscribeToDriverProfileUpdates } from "../../store/subscriptions/driversRealtime";
@@ -190,10 +190,10 @@ const DriverDetails = ({
 
   const isOwnerDriverProfile = Boolean(
     (driver as any)?.is_owner_driver ||
-      (driver as any)?.user_id === (user as any)?.userData?.id ||
-      (driver as any)?.userId === (user as any)?.userData?.id ||
-      ((driver as any)?.email || "").toLowerCase() ===
-        ((user as any)?.userData?.email || "").toLowerCase(),
+    (driver as any)?.user_id === (user as any)?.userData?.id ||
+    (driver as any)?.userId === (user as any)?.userData?.id ||
+    ((driver as any)?.email || "").toLowerCase() ===
+      ((user as any)?.userData?.email || "").toLowerCase(),
   );
 
   const handleRemoveDriver = () => {

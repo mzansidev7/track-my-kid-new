@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 
 const ViewAllStudents = () => {
   const { routeId } = useLocalSearchParams();

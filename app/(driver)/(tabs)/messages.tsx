@@ -11,7 +11,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/styles/theme";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 
 const sampleConversations = [
   {
@@ -156,12 +156,12 @@ const Messages = () => {
     <View
       style={[localStyles.container, { backgroundColor: colors.background }]}
     >
-      <DriverHeader 
-      title="Messages" 
-      subtitle="Stay connected with parents, school and fleet owner"
-      showBackButton={true}
-      showNotifications={true}
-      notificationCount={7}
+      <DriverHeader
+        title="Messages"
+        subtitle="Stay connected with parents, school and fleet owner"
+        showBackButton={true}
+        showNotifications={true}
+        notificationCount={7}
       />
       <ScrollView
         contentContainerStyle={localStyles.scrollContent}

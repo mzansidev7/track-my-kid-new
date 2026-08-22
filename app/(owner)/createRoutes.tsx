@@ -1,4 +1,4 @@
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState, useRef } from "react";
@@ -256,82 +256,98 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               Select the start and stop coordinates for this route.
             </Text>
             <TouchableOpacity
-  style={styles.selectorButton}
-  onPress={() => setShowMapPicker(true)}
-  activeOpacity={0.8}
->
-  <View style={selectLocationButtonStyles.selectorIconContainer}>
-    <MaterialIcons
-      name="route"
-      size={22}
-      color="#4A90E2"
-    />
-  </View>
+              style={styles.selectorButton}
+              onPress={() => setShowMapPicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={selectLocationButtonStyles.selectorIconContainer}>
+                <MaterialIcons name="route" size={22} color="#4A90E2" />
+              </View>
 
-  <View style={selectLocationButtonStyles.selectorContent}>
-    {!pickupLocation.name && !dropoffLocation.name ? (
-      <>
-        <Text style={selectLocationButtonStyles.selectorTitle}>
-          Select route locations
-        </Text>
+              <View style={selectLocationButtonStyles.selectorContent}>
+                {!pickupLocation.name && !dropoffLocation.name ? (
+                  <>
+                    <Text style={selectLocationButtonStyles.selectorTitle}>
+                      Select route locations
+                    </Text>
 
-        <Text style={selectLocationButtonStyles.selectorPlaceholderText}>
-          Choose a start and stop location
-        </Text>
-      </>
-    ) : (
-      <>
-        {pickupLocation.name && (
-          <View style={selectLocationButtonStyles.selectorLocationRow}>
-            <View style={selectLocationButtonStyles.startDot} />
+                    <Text
+                      style={selectLocationButtonStyles.selectorPlaceholderText}
+                    >
+                      Choose a start and stop location
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    {pickupLocation.name && (
+                      <View
+                        style={selectLocationButtonStyles.selectorLocationRow}
+                      >
+                        <View style={selectLocationButtonStyles.startDot} />
 
-            <View style={selectLocationButtonStyles.selectorTextContainer}>
-              <Text style={selectLocationButtonStyles.selectorLabel}>
-                START
-              </Text>
+                        <View
+                          style={
+                            selectLocationButtonStyles.selectorTextContainer
+                          }
+                        >
+                          <Text
+                            style={selectLocationButtonStyles.selectorLabel}
+                          >
+                            START
+                          </Text>
 
-              <Text
-                style={selectLocationButtonStyles.selectorLocationText}
-                numberOfLines={1}
-              >
-                {pickupLocation.name}
-              </Text>
-            </View>
-          </View>
-        )}
+                          <Text
+                            style={
+                              selectLocationButtonStyles.selectorLocationText
+                            }
+                            numberOfLines={1}
+                          >
+                            {pickupLocation.name}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
 
-        {pickupLocation.name && dropoffLocation.name && (
-          <View style={selectLocationButtonStyles.selectorConnector} />
-        )}
+                    {pickupLocation.name && dropoffLocation.name && (
+                      <View
+                        style={selectLocationButtonStyles.selectorConnector}
+                      />
+                    )}
 
-        {dropoffLocation.name && (
-          <View style={selectLocationButtonStyles.selectorLocationRow}>
-            <View style={selectLocationButtonStyles.stopDot} />
+                    {dropoffLocation.name && (
+                      <View
+                        style={selectLocationButtonStyles.selectorLocationRow}
+                      >
+                        <View style={selectLocationButtonStyles.stopDot} />
 
-            <View style={selectLocationButtonStyles.selectorTextContainer}>
-              <Text style={selectLocationButtonStyles.selectorLabel}>
-                STOP
-              </Text>
+                        <View
+                          style={
+                            selectLocationButtonStyles.selectorTextContainer
+                          }
+                        >
+                          <Text
+                            style={selectLocationButtonStyles.selectorLabel}
+                          >
+                            STOP
+                          </Text>
 
-              <Text
-                style={selectLocationButtonStyles.selectorLocationText}
-                numberOfLines={1}
-              >
-                {dropoffLocation.name}
-              </Text>
-            </View>
-          </View>
-        )}
-      </>
-    )}
-  </View>
+                          <Text
+                            style={
+                              selectLocationButtonStyles.selectorLocationText
+                            }
+                            numberOfLines={1}
+                          >
+                            {dropoffLocation.name}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
 
-  <MaterialIcons
-    name="chevron-right"
-    size={24}
-    color="#9CA3AF"
-  />
-</TouchableOpacity>
+              <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
+            </TouchableOpacity>
 
             {(pickupLocation.name || dropoffLocation.name) && (
               <View style={selectedLocationStyles.selectedLocationsCard}>
@@ -2697,119 +2713,119 @@ const selectedLocationStyles = StyleSheet.create({
 });
 
 const selectLocationButtonStyles = StyleSheet.create({
-selectorButton: {
-  width: "100%",
-  minHeight: 76,
+  selectorButton: {
+    width: "100%",
+    minHeight: 76,
 
-  flexDirection: "row",
-  alignItems: "center",
+    flexDirection: "row",
+    alignItems: "center",
 
-  backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFFFFF",
 
-  borderRadius: 18,
+    borderRadius: 18,
 
-  paddingHorizontal: 14,
-  paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
 
-  borderWidth: 1,
-  borderColor: "#E5E7EB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
 
-  shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 3,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  shadowOpacity: 0.06,
-  shadowRadius: 8,
-  elevation: 3,
-},
 
-selectorIconContainer: {
-  width: 42,
-  height: 42,
+  selectorIconContainer: {
+    width: 42,
+    height: 42,
 
-  borderRadius: 13,
+    borderRadius: 13,
 
-  backgroundColor: "#EFF6FF",
+    backgroundColor: "#EFF6FF",
 
-  alignItems: "center",
-  justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
 
-  marginRight: 12,
-},
+    marginRight: 12,
+  },
 
-selectorContent: {
-  flex: 1,
-},
+  selectorContent: {
+    flex: 1,
+  },
 
-selectorTitle: {
-  fontSize: 15,
-  fontWeight: "700",
-  color: "#111827",
-  marginBottom: 3,
-},
+  selectorTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 3,
+  },
 
-selectorPlaceholderText: {
-  fontSize: 13,
-  color: "#9CA3AF",
-},
+  selectorPlaceholderText: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
 
-selectorLocationRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  minHeight: 30,
-},
+  selectorLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 30,
+  },
 
-selectorTextContainer: {
-  flex: 1,
-  marginLeft: 10,
-},
+  selectorTextContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
 
-selectorLabel: {
-  fontSize: 9,
-  fontWeight: "800",
-  color: "#9CA3AF",
-  letterSpacing: 0.8,
-  marginBottom: 2,
-},
+  selectorLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#9CA3AF",
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
 
-selectorLocationText: {
-  fontSize: 13,
-  fontWeight: "600",
-  color: "#111827",
-},
+  selectorLocationText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+  },
 
-startDot: {
-  width: 10,
-  height: 10,
+  startDot: {
+    width: 10,
+    height: 10,
 
-  borderRadius: 5,
+    borderRadius: 5,
 
-  backgroundColor: "#22C55E",
+    backgroundColor: "#22C55E",
 
-  borderWidth: 2,
-  borderColor: "#DCFCE7",
-},
+    borderWidth: 2,
+    borderColor: "#DCFCE7",
+  },
 
-stopDot: {
-  width: 10,
-  height: 10,
+  stopDot: {
+    width: 10,
+    height: 10,
 
-  borderRadius: 5,
+    borderRadius: 5,
 
-  backgroundColor: "#EF4444",
+    backgroundColor: "#EF4444",
 
-  borderWidth: 2,
-  borderColor: "#FEE2E2",
-},
+    borderWidth: 2,
+    borderColor: "#FEE2E2",
+  },
 
-selectorConnector: {
-  width: 1,
-  height: 10,
+  selectorConnector: {
+    width: 1,
+    height: 10,
 
-  backgroundColor: "#D1D5DB",
+    backgroundColor: "#D1D5DB",
 
-  marginLeft: 4.5,
-  marginVertical: 1,
-},
-})
+    marginLeft: 4.5,
+    marginVertical: 1,
+  },
+});

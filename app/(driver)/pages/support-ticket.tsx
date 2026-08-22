@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
 import {
@@ -109,16 +109,19 @@ const SupportTicketPage = () => {
 
     fetchUserTickets();
 
-    const channel = subscribeToSupportTickets(currentUserId, (updatedTickets) => {
-      safeSetTickets(updatedTickets ?? []);
-    });
+    const channel = subscribeToSupportTickets(
+      currentUserId,
+      (updatedTickets) => {
+        safeSetTickets(updatedTickets ?? []);
+      },
+    );
 
     return () => {
       if (channel) {
         client.removeChannel(channel);
       }
     };
-  }, [currentUserId ]);
+  }, [currentUserId]);
 
   const handleSubmit = async () => {
     const trimmedTitle = title.trim();

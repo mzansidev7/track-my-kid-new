@@ -14,8 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerProfile } from "../../ownerHelpers/hooks/useOwnerProfile";
-import { updateUser } from "../../asyncStorage/authStore";
+import { useOwnerProfile } from "./ownerHelpers/hooks/useOwnerProfile";
+import { updateUser } from "../../store/asyncStorage/authStore";
 import { AuthContext } from "../../context/authContext/auth-context";
 import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";

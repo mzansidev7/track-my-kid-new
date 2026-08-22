@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "@/url";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import AppNotification from "@/components/Notification";
 
 const ChangePassword = () => {
@@ -29,12 +29,15 @@ const ChangePassword = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notifVisible, setNotifVisible] = useState(false);
-  const [notifType, setNotifType] = useState<"success" | "error" | "warning">("error");
+  const [notifType, setNotifType] = useState<"success" | "error" | "warning">(
+    "error",
+  );
 
   const validate = () => {
     if (!currentPassword.trim()) return "Enter current password";
     if (!newPassword.trim()) return "Enter new password";
-    if (newPassword.length < 8) return "New password must be at least 8 characters";
+    if (newPassword.length < 8)
+      return "New password must be at least 8 characters";
     if (newPassword !== confirmPassword) return "Passwords do not match";
     return null;
   };
@@ -76,7 +79,8 @@ const ChangePassword = () => {
       setNotifVisible(true);
       setTimeout(() => router.back(), 800);
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : "Failed to change password";
+      const errMsg =
+        e instanceof Error ? e.message : "Failed to change password";
       setMessage(errMsg);
       setNotifType("error");
       setNotifVisible(true);
@@ -87,43 +91,77 @@ const ChangePassword = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <DriverHeader title="Change Password" subtitle="Update your account password" showBackButton />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <DriverHeader
+          title="Change Password"
+          subtitle="Update your account password"
+          showBackButton
+        />
 
         <View style={{ padding: 16 }}>
           <View style={{ marginBottom: 12 }}>
-            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>Current Password</Text>
+            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
+              Current Password
+            </Text>
             <TextInput
               value={currentPassword}
               onChangeText={setCurrentPassword}
               placeholder="Current password"
               placeholderTextColor={colors.text.secondary}
               secureTextEntry
-              style={[styles.input, { borderColor: colors.primary, backgroundColor: colors.surface, color: colors.text.primary }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.surface,
+                  color: colors.text.primary,
+                },
+              ]}
             />
           </View>
 
           <View style={{ marginBottom: 12 }}>
-            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>New Password</Text>
+            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
+              New Password
+            </Text>
             <TextInput
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="New password"
               placeholderTextColor={colors.text.secondary}
               secureTextEntry
-              style={[styles.input, { borderColor: colors.primary, backgroundColor: colors.surface, color: colors.text.primary }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.surface,
+                  color: colors.text.primary,
+                },
+              ]}
             />
           </View>
 
           <View style={{ marginBottom: 20 }}>
-            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>Confirm New Password</Text>
+            <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
+              Confirm New Password
+            </Text>
             <TextInput
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Confirm new password"
               placeholderTextColor={colors.text.secondary}
               secureTextEntry
-              style={[styles.input, { borderColor: colors.primary, backgroundColor: colors.surface, color: colors.text.primary }]}
+              style={[
+                styles.input,
+                {
+                  borderColor: colors.primary,
+                  backgroundColor: colors.surface,
+                  color: colors.text.primary,
+                },
+              ]}
             />
           </View>
 
@@ -138,9 +176,22 @@ const ChangePassword = () => {
             }}
           />
 
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 8 }}>
-            <TouchableOpacity onPress={handleSave} style={{ paddingVertical: 14, alignItems: 'center' }} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>}
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ borderRadius: 8 }}
+          >
+            <TouchableOpacity
+              onPress={handleSave}
+              style={{ paddingVertical: 14, alignItems: "center" }}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: "#fff", fontWeight: "700" }}>Save</Text>
+              )}
             </TouchableOpacity>
           </LinearGradient>
         </View>

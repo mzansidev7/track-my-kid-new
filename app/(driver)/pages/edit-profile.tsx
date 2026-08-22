@@ -19,9 +19,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
-import { useDriverProfile } from "@/driverHelpers/hooks/useDriverProfile";
+import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
 import { resolveWorkingBaseUrl } from "@/url";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { validateSouthAfricanId } from "@/utils/saId";
 import AppNotification from "@/components/Notification";
 
@@ -112,7 +112,9 @@ const EditDriverProfile = () => {
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showLicensePicker, setShowLicensePicker] = useState(false);
   const [notifVisible, setNotifVisible] = useState(false);
-  const [notifType, setNotifType] = useState<"success" | "error" | "warning">("error");
+  const [notifType, setNotifType] = useState<"success" | "error" | "warning">(
+    "error",
+  );
   const [notifMessage, setNotifMessage] = useState<string | null>(null);
 
   const closeModal = () => {
@@ -180,16 +182,16 @@ const EditDriverProfile = () => {
   );
 
   const formatDate = (value: string) => {
-      if (!value) return "";
-      const iso = ensureIso(value);
-      if (!iso) return value;
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return value;
-      return d.toLocaleDateString(undefined, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+    if (!value) return "";
+    const iso = ensureIso(value);
+    if (!iso) return value;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   const ensureIso = (value?: string | null) => {
@@ -248,7 +250,7 @@ const EditDriverProfile = () => {
       // Confirm DOB in ID matches entered DOB (compare YYYY-MM-DD)
       if (formData.dob.trim()) {
         const enteredIso = ensureIso(formData.dob) || null;
-        const fromId = validation.dob ? (validation.dob.slice(0, 10)) : null;
+        const fromId = validation.dob ? validation.dob.slice(0, 10) : null;
         if (fromId && enteredIso && enteredIso !== fromId) {
           const msg = `DOB (${formatDate(enteredIso)}) does not match DOB in ID (${formatDate(fromId)}).`;
           setNotifType("error");
@@ -267,7 +269,8 @@ const EditDriverProfile = () => {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      const msg = "Please allow access to your photo library to update your profile picture.";
+      const msg =
+        "Please allow access to your photo library to update your profile picture.";
       setNotifType("error");
       setNotifMessage(msg);
       setNotifVisible(true);
@@ -288,7 +291,7 @@ const EditDriverProfile = () => {
   };
 
   const handleSaveProfile = async () => {
-   const baseUrl = await resolveWorkingBaseUrl();
+    const baseUrl = await resolveWorkingBaseUrl();
 
     if (!user?.token) {
       const msg = "You are not signed in.";
@@ -372,7 +375,8 @@ const EditDriverProfile = () => {
       setNotifVisible(true);
       setTimeout(() => router.push("/(driver)/(tabs)/profile"), 800);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to update profile.";
+      const msg =
+        error instanceof Error ? error.message : "Failed to update profile.";
       setNotifType("error");
       setNotifMessage(msg);
       setNotifVisible(true);
@@ -410,356 +414,384 @@ const EditDriverProfile = () => {
           nestedScrollEnabled={true}
           showsVerticalScrollIndicator={false}
         >
-        <View style={localStyles.avatarSection}>
-          <View style={localStyles.avatarWrapper}>
-            <Image
-              source={
-                avatarPreviewUri
-                  ? { uri: avatarPreviewUri }
-                  : require("@/assets/images/driver.png")
-              }
-              style={localStyles.avatarImage}
-            />
-          </View>
-          <TouchableOpacity
-            style={[localStyles.avatarButton, { borderColor: colors.primary }]}
-            onPress={handlePickAvatar}
-          >
-            <MaterialIcons
-              name="photo-camera"
-              size={18}
-              color={colors.primary}
-            />
-            <Text
-              style={[localStyles.avatarButtonText, { color: colors.primary }]}
-            >
-              Change Photo
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Personal Information Section */}
-        <View style={localStyles.section}>
-          <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-            Personal Information
-          </Text>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Full Name")}
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-              value={formData.name}
-              onChangeText={(value) => handleInputChange("name", value)}
-              placeholder="Enter full name"
-              placeholderTextColor={colors.text.secondary}
-            />
-          </View>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Date of Birth")}
+          <View style={localStyles.avatarSection}>
+            <View style={localStyles.avatarWrapper}>
+              <Image
+                source={
+                  avatarPreviewUri
+                    ? { uri: avatarPreviewUri }
+                    : require("@/assets/images/driver.png")
+                }
+                style={localStyles.avatarImage}
+              />
+            </View>
             <TouchableOpacity
-              activeOpacity={0.8}
               style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  backgroundColor: colors.surface,
-                  justifyContent: "center",
-                },
+                localStyles.avatarButton,
+                { borderColor: colors.primary },
               ]}
-              onPress={() => setShowDobPicker(true)}
+              onPress={handlePickAvatar}
             >
-              <Text style={{ color: formData.dob ? colors.text.primary : colors.text.secondary }}>
-                {formData.dob ? formatDate(formData.dob) : "Select date of birth"}
+              <MaterialIcons
+                name="photo-camera"
+                size={18}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  localStyles.avatarButtonText,
+                  { color: colors.primary },
+                ]}
+              >
+                Change Photo
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("ID Number")}
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-              value={formData.idNumber}
-              onChangeText={(value) => handleInputChange("idNumber", value)}
-              placeholder="Enter ID number"
-              placeholderTextColor={colors.text.secondary}
-            />
-          </View>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Address")}
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.street}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  street: value,
-                })
-              }
-              placeholder="Street Address"
-              placeholderTextColor={colors.text.secondary}
-            />
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.suburb}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  suburb: value,
-                })
-              }
-              placeholder="Suburb"
-              placeholderTextColor={colors.text.secondary}
-            />
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.city}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  city: value,
-                })
-              }
-              placeholder="City"
-              placeholderTextColor={colors.text.secondary}
-            />
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.province}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  province: value,
-                })
-              }
-              placeholder="Province"
-              placeholderTextColor={colors.text.secondary}
-            />
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.postalCode}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  postalCode: value,
-                })
-              }
-              placeholder="Postal Code"
-              keyboardType="numeric"
-              placeholderTextColor={colors.text.secondary}
-            />
-
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                  marginBottom: 16,
-                },
-              ]}
-              value={formData.address.country}
-              onChangeText={(value) =>
-                handleInputChange("address", {
-                  ...formData.address,
-                  country: value,
-                })
-              }
-              placeholder="Country"
-              placeholderTextColor={colors.text.secondary}
-            />
-          </View>
-        </View>
-
-        {/* Contact Information Section */}
-        <View style={localStyles.section}>
-          <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-            Contact Information
-          </Text>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Phone Number")}
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-              value={formData.phone}
-              onChangeText={(value) => handleInputChange("phone", value)}
-              placeholder="Enter phone number"
-              placeholderTextColor={colors.text.secondary}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Email Address")}
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-              value={formData.email}
-              onChangeText={(value) => handleInputChange("email", value)}
-              placeholder="Enter email address"
-              placeholderTextColor={colors.text.secondary}
-              keyboardType="email-address"
-              editable={false}
-            />
-          </View>
-        </View>
-
-        {/* License Information Section */}
-        <View style={localStyles.section}>
-          <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-            License Information
-          </Text>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("License Expiry Date")}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  backgroundColor: colors.surface,
-                  justifyContent: "center",
-                },
-              ]}
-              onPress={() => setShowLicensePicker(true)}
-            >
-              <Text style={{ color: formData.licenseExpiry ? colors.text.primary : colors.text.secondary }}>
-                {formData.licenseExpiry ? formatDate(formData.licenseExpiry) : "Select expiry date"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={localStyles.formGroup}>
-            {renderRequiredLabel("Driving Experience")}
-            <TextInput
-              style={[
-                localStyles.input,
-                {
-                  borderColor: colors.primary,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                },
-              ]}
-              value={formData.experience}
-              onChangeText={(value) => handleInputChange("experience", value)}
-              placeholder="e.g., 5 Years"
-              placeholderTextColor={colors.text.secondary}
-            />
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={localStyles.actionsContainer}>
-          <TouchableOpacity
-            style={[localStyles.cancelButton, { borderColor: colors.primary }]}
-            onPress={() => router.back()}
-            disabled={saving}
-          >
-            <Text
-              style={[localStyles.cancelButtonText, { color: colors.primary }]}
-            >
-              Cancel
+          {/* Personal Information Section */}
+          <View style={localStyles.section}>
+            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
+              Personal Information
             </Text>
-          </TouchableOpacity>
 
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={localStyles.saveButtonGradient}
-          >
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Full Name")}
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={formData.name}
+                onChangeText={(value) => handleInputChange("name", value)}
+                placeholder="Enter full name"
+                placeholderTextColor={colors.text.secondary}
+              />
+            </View>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Date of Birth")}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    backgroundColor: colors.surface,
+                    justifyContent: "center",
+                  },
+                ]}
+                onPress={() => setShowDobPicker(true)}
+              >
+                <Text
+                  style={{
+                    color: formData.dob
+                      ? colors.text.primary
+                      : colors.text.secondary,
+                  }}
+                >
+                  {formData.dob
+                    ? formatDate(formData.dob)
+                    : "Select date of birth"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("ID Number")}
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={formData.idNumber}
+                onChangeText={(value) => handleInputChange("idNumber", value)}
+                placeholder="Enter ID number"
+                placeholderTextColor={colors.text.secondary}
+              />
+            </View>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Address")}
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.street}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    street: value,
+                  })
+                }
+                placeholder="Street Address"
+                placeholderTextColor={colors.text.secondary}
+              />
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.suburb}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    suburb: value,
+                  })
+                }
+                placeholder="Suburb"
+                placeholderTextColor={colors.text.secondary}
+              />
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.city}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    city: value,
+                  })
+                }
+                placeholder="City"
+                placeholderTextColor={colors.text.secondary}
+              />
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.province}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    province: value,
+                  })
+                }
+                placeholder="Province"
+                placeholderTextColor={colors.text.secondary}
+              />
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.postalCode}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    postalCode: value,
+                  })
+                }
+                placeholder="Postal Code"
+                keyboardType="numeric"
+                placeholderTextColor={colors.text.secondary}
+              />
+
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                    marginBottom: 16,
+                  },
+                ]}
+                value={formData.address.country}
+                onChangeText={(value) =>
+                  handleInputChange("address", {
+                    ...formData.address,
+                    country: value,
+                  })
+                }
+                placeholder="Country"
+                placeholderTextColor={colors.text.secondary}
+              />
+            </View>
+          </View>
+
+          {/* Contact Information Section */}
+          <View style={localStyles.section}>
+            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
+              Contact Information
+            </Text>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Phone Number")}
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={formData.phone}
+                onChangeText={(value) => handleInputChange("phone", value)}
+                placeholder="Enter phone number"
+                placeholderTextColor={colors.text.secondary}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Email Address")}
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={formData.email}
+                onChangeText={(value) => handleInputChange("email", value)}
+                placeholder="Enter email address"
+                placeholderTextColor={colors.text.secondary}
+                keyboardType="email-address"
+                editable={false}
+              />
+            </View>
+          </View>
+
+          {/* License Information Section */}
+          <View style={localStyles.section}>
+            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
+              License Information
+            </Text>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("License Expiry Date")}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    backgroundColor: colors.surface,
+                    justifyContent: "center",
+                  },
+                ]}
+                onPress={() => setShowLicensePicker(true)}
+              >
+                <Text
+                  style={{
+                    color: formData.licenseExpiry
+                      ? colors.text.primary
+                      : colors.text.secondary,
+                  }}
+                >
+                  {formData.licenseExpiry
+                    ? formatDate(formData.licenseExpiry)
+                    : "Select expiry date"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={localStyles.formGroup}>
+              {renderRequiredLabel("Driving Experience")}
+              <TextInput
+                style={[
+                  localStyles.input,
+                  {
+                    borderColor: colors.primary,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
+                value={formData.experience}
+                onChangeText={(value) => handleInputChange("experience", value)}
+                placeholder="e.g., 5 Years"
+                placeholderTextColor={colors.text.secondary}
+              />
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={localStyles.actionsContainer}>
             <TouchableOpacity
-              style={localStyles.saveButton}
-              onPress={handleSaveProfile}
+              style={[
+                localStyles.cancelButton,
+                { borderColor: colors.primary },
+              ]}
+              onPress={() => router.back()}
               disabled={saving}
             >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <MaterialIcons name="check" size={18} color="#fff" />
-                  <Text style={localStyles.saveButtonText}>Save Changes</Text>
-                </>
-              )}
+              <Text
+                style={[
+                  localStyles.cancelButtonText,
+                  { color: colors.primary },
+                ]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </ScrollView>
+
+            <LinearGradient
+              colors={[colors.primary, colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={localStyles.saveButtonGradient}
+            >
+              <TouchableOpacity
+                style={localStyles.saveButton}
+                onPress={handleSaveProfile}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="check" size={18} color="#fff" />
+                    <Text style={localStyles.saveButtonText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
       {/* Date pickers (rendered outside ScrollView so Android modal works reliably) */}
       {showDobPicker && (
@@ -780,7 +812,9 @@ const EditDriverProfile = () => {
       {showLicensePicker && (
         <DateTimePicker
           value={
-            formData.licenseExpiry ? new Date(formData.licenseExpiry) : new Date()
+            formData.licenseExpiry
+              ? new Date(formData.licenseExpiry)
+              : new Date()
           }
           mode="date"
           display={Platform.OS === "ios" ? "spinner" : "default"}
@@ -798,21 +832,38 @@ const EditDriverProfile = () => {
         visible={notifVisible}
         onHide={() => setNotifVisible(false)}
       />
-      
+
       {modalVisible && (
         <View style={localStyles.modalOverlay}>
-          <View style={[localStyles.modalCard, { borderColor: colors.border }]}> 
-            <Text style={[localStyles.modalTitle, { color: colors.text.primary }]}>{modalTitle}</Text>
-            <Text style={[localStyles.modalMessage, { color: colors.text.secondary }]}>{modalMessage}</Text>
+          <View style={[localStyles.modalCard, { borderColor: colors.border }]}>
+            <Text
+              style={[localStyles.modalTitle, { color: colors.text.primary }]}
+            >
+              {modalTitle}
+            </Text>
+            <Text
+              style={[
+                localStyles.modalMessage,
+                { color: colors.text.secondary },
+              ]}
+            >
+              {modalMessage}
+            </Text>
             <View style={localStyles.modalActions}>
               <TouchableOpacity
-                style={[localStyles.modalButton, { borderColor: colors.border }]}
+                style={[
+                  localStyles.modalButton,
+                  { borderColor: colors.border },
+                ]}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={{ color: colors.text.secondary }}>Close</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[localStyles.modalPrimaryButton, { backgroundColor: colors.primary }]}
+                style={[
+                  localStyles.modalPrimaryButton,
+                  { backgroundColor: colors.primary },
+                ]}
                 onPress={closeModal}
               >
                 <Text style={{ color: "#fff", fontWeight: "700" }}>OK</Text>

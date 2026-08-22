@@ -1,4 +1,4 @@
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useRef, useState } from "react";

@@ -1,4 +1,3 @@
-
 import AdminTabBar from "@/components/AdminTabBar";
 import { Tabs } from "expo-router";
 

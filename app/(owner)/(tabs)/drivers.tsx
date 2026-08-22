@@ -16,8 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
-import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
+import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 
 const DriversScreen = () => {
   const router = useRouter();

@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -29,12 +28,17 @@ type GooglePlacesAutoCompleteProps = {
   value?: string;
   onChangeText?: (text: string) => void;
 
-  onSelect: (address: string, coords: Coordinates | null) => void;
+  onSelect: (
+    address: string,
+    coords: Coordinates | null,
+    details?: {
+      name?: string;
+      address?: string;
+    },
+  ) => void;
 
   placeholder?: string;
-
   debounce?: number;
-
   minLength?: number;
 };
 
@@ -46,37 +50,29 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   debounce = 400,
   minLength = 2,
 }) => {
-  const [query, setQuery] = useState(value);
-
   const [results, setResults] = useState<Prediction[]>([]);
-
   const [loading, setLoading] = useState(false);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
 
   /**
-   * Keep local value synchronized with parent
-   */
-  useEffect(() => {
-    setQuery(value);
-  }, [value]);
-
-  /**
-   * Debounced Google Places search
+   * Search Google Places
    */
   useEffect(() => {
     if (timer.current) {
       clearTimeout(timer.current);
     }
 
-    if (query.trim().length < minLength) {
+    const search = value.trim();
+
+    if (search.length < minLength) {
       setResults([]);
       return;
     }
 
     timer.current = setTimeout(() => {
-      fetchPredictions(query.trim());
+      fetchPredictions(search);
     }, debounce);
 
     return () => {
@@ -84,7 +80,7 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
         clearTimeout(timer.current);
       }
     };
-  }, [query, debounce, minLength]);
+  }, [value, debounce, minLength]);
 
   /**
    * Fetch autocomplete predictions
@@ -92,21 +88,20 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   const fetchPredictions = async (search: string) => {
     if (!GOOGLE_API_KEY) {
       console.warn("Google Places API key is missing.");
-
       setResults([]);
-
       return;
     }
 
     setLoading(true);
 
     try {
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-        search,
-      )}&key=${GOOGLE_API_KEY}&language=en`;
+      const url =
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
+        `?input=${encodeURIComponent(search)}` +
+        `&key=${GOOGLE_API_KEY}` +
+        `&language=en`;
 
       const response = await fetch(url);
-
       const data = await response.json();
 
       if (data.status === "OK") {
@@ -122,7 +117,6 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
       }
     } catch (error) {
       console.error("Google Places autocomplete error:", error);
-
       setResults([]);
     } finally {
       setLoading(false);
@@ -130,16 +124,10 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   };
 
   /**
-   * Get details for selected location
+   * Select Google Place
    */
   const handleSelect = async (place: Prediction) => {
-    if (!place.place_id) {
-      return;
-    }
-
-    if (!GOOGLE_API_KEY) {
-      console.warn("Google Places API key is missing.");
-
+    if (!place.place_id || !GOOGLE_API_KEY) {
       return;
     }
 
@@ -147,174 +135,150 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
 
     try {
       const url =
-        "https://maps.googleapis.com/maps/api/place/details/json" +
+        `https://maps.googleapis.com/maps/api/place/details/json` +
         `?place_id=${encodeURIComponent(place.place_id)}` +
-        "&fields=formatted_address,geometry" +
+        `&fields=name,formatted_address,geometry` +
         `&key=${GOOGLE_API_KEY}`;
 
       const response = await fetch(url);
-
       const data = await response.json();
 
       const location = data?.result?.geometry?.location;
 
-      if (
+      const address =
+        data?.result?.formatted_address || place.description || "";
+
+      const name =
+        data?.result?.name || place.structured_formatting?.main_text || address;
+
+      const coordinates =
         location &&
         typeof location.lat === "number" &&
         typeof location.lng === "number"
-      ) {
-        const address =
-          data?.result?.formatted_address || place.description || "";
-
-        const coordinates: Coordinates = {
-          latitude: location.lat,
-          longitude: location.lng,
-        };
-
-        /**
-         * Update input
-         */
-        setQuery(address);
-
-        /**
-         * Hide suggestions and close keyboard
-         */
-        setResults([]);
-        inputRef.current?.blur();
-
-        /**
-         * Send location to parent
-         */
-        onSelect(address, coordinates);
-
-        return;
-      }
+          ? {
+              latitude: location.lat,
+              longitude: location.lng,
+            }
+          : null;
 
       /**
-       * If Google didn't return coordinates
+       * IMPORTANT:
+       *
+       * Parent owns the input value.
+       *
+       * We update the parent FIRST.
        */
-      const address = place.description || "";
+      onChangeText?.(name);
 
-      setQuery(address);
+      /**
+       * Then notify parent that a place was selected.
+       */
+      onSelect(name, coordinates, {
+        name,
+        address,
+      });
 
+      /**
+       * Clear suggestions.
+       */
       setResults([]);
-      inputRef.current?.blur();
 
-      onSelect(address, null);
+      /**
+       * Remove keyboard.
+       */
+      inputRef.current?.blur();
     } catch (error) {
       console.error("Google Place details error:", error);
 
       const address = place.description || "";
 
-      setQuery(address);
+      const name = place.structured_formatting?.main_text || address;
+
+      onChangeText?.(name);
+
+      onSelect(name, null, {
+        name,
+        address,
+      });
 
       setResults([]);
       inputRef.current?.blur();
-
-      onSelect(address, null);
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * Clear search
+   * Clear
    */
   const handleClear = () => {
-    setQuery("");
-
     setResults([]);
-
     onChangeText?.("");
-
     onSelect("", null);
   };
 
   return (
     <View style={styles.container}>
-      {/* ================================================= */}
-      {/* SUGGESTIONS */}
-      {/* ================================================= */}
-
+      {/* Suggestions */}
       {results.length > 0 && (
         <View style={styles.resultsContainer}>
-          <FlatList
-            data={results}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-            keyExtractor={(item, index) =>
-              item.place_id || item.description || String(index)
-            }
-            renderItem={({ item }) => {
-              const mainText =
-                item.structured_formatting?.main_text || item.description || "";
+          {results.map((item, index) => {
+            const mainText =
+              item.structured_formatting?.main_text || item.description || "";
 
-              const secondaryText =
-                item.structured_formatting?.secondary_text || "";
+            const secondaryText =
+              item.structured_formatting?.secondary_text || "";
 
-              return (
-                <TouchableOpacity
-                  style={styles.resultItem}
-                  onPress={() => handleSelect(item)}
-                  activeOpacity={0.7}
-                >
-                  {/* Location icon */}
-                  <View style={styles.resultIcon}>
-                    <Text style={styles.resultIconText}>📍</Text>
-                  </View>
+            return (
+              <TouchableOpacity
+                key={item.place_id || item.description || String(index)}
+                style={styles.resultItem}
+                activeOpacity={0.7}
+                onPress={() => handleSelect(item)}
+              >
+                <View style={styles.resultIcon}>
+                  <Text style={styles.resultIconText}>📍</Text>
+                </View>
 
-                  {/* Address */}
-                  <View style={styles.resultTextContainer}>
-                    <Text style={styles.resultTitle} numberOfLines={1}>
-                      {mainText}
+                <View style={styles.resultTextContainer}>
+                  <Text style={styles.resultTitle} numberOfLines={1}>
+                    {mainText}
+                  </Text>
+
+                  {secondaryText ? (
+                    <Text style={styles.resultSubtitle} numberOfLines={1}>
+                      {secondaryText}
                     </Text>
+                  ) : null}
+                </View>
 
-                    {secondaryText ? (
-                      <Text style={styles.resultSubtitle} numberOfLines={1}>
-                        {secondaryText}
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  {/* Arrow */}
-                  <Text style={styles.resultArrow}>›</Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
+                <Text style={styles.resultArrow}>›</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
-      {/* ================================================= */}
-      {/* SEARCH INPUT */}
-      {/* ================================================= */}
-
+      {/* Input */}
       <View style={styles.inputContainer}>
-        {/* Location icon */}
         <View style={styles.inputIcon}>
           <Text style={styles.inputIconText}>📍</Text>
         </View>
 
-        {/* Input */}
         <TextInput
           ref={inputRef}
-          value={query}
+          value={value}
           onChangeText={(text) => {
-            setQuery(text);
-
             onChangeText?.(text);
           }}
-          onBlur={() => setResults([])}
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
           style={styles.input}
           autoCorrect={false}
-          autoCapitalize="none"
+          autoCapitalize="words"
           returnKeyType="search"
         />
 
-        {/* Loading */}
         {loading && (
           <ActivityIndicator
             size="small"
@@ -323,8 +287,7 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
           />
         )}
 
-        {/* Clear */}
-        {!loading && query.length > 0 && (
+        {!loading && value.length > 0 && (
           <TouchableOpacity
             style={styles.clearButton}
             onPress={handleClear}
@@ -340,65 +303,32 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
 
 export default GooglePlacesAutoComplete;
 
-/* ========================================================= */
-/* STYLES */
-/* ========================================================= */
-
 const styles = StyleSheet.create({
-  /**
-   * Main container
-   */
   container: {
     width: "100%",
-
     position: "relative",
-
     zIndex: 10000,
-
-    overflow: "visible",
   },
 
-  /**
-   * Search input
-   */
   inputContainer: {
     height: 52,
-
     width: "100%",
-
     flexDirection: "row",
-
     alignItems: "center",
-
     backgroundColor: "#F9FAFB",
-
     borderWidth: 1,
-
     borderColor: "#E5E7EB",
-
     borderRadius: 14,
-
     paddingHorizontal: 6,
-
-    zIndex: 2,
   },
 
-  /**
-   * Location icon
-   */
   inputIcon: {
     width: 40,
-
     height: 40,
-
     borderRadius: 12,
-
     backgroundColor: "#EFF6FF",
-
     alignItems: "center",
-
     justifyContent: "center",
-
     marginRight: 6,
   },
 
@@ -406,146 +336,77 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  /**
-   * Text input
-   */
   input: {
     flex: 1,
-
     height: "100%",
-
     paddingHorizontal: 8,
-
     fontSize: 15,
-
     fontWeight: "500",
-
     color: "#111827",
   },
 
-  /**
-   * Loading indicator
-   */
   loader: {
     marginHorizontal: 12,
   },
 
-  /**
-   * Clear button
-   */
   clearButton: {
     width: 34,
-
     height: 34,
-
     borderRadius: 17,
-
     backgroundColor: "#E5E7EB",
-
     alignItems: "center",
-
     justifyContent: "center",
-
     marginRight: 4,
   },
 
   clearText: {
     fontSize: 24,
-
     lineHeight: 25,
-
-    fontWeight: "400",
-
     color: "#6B7280",
   },
 
-  /**
-   * ======================================================
-   * GOOGLE SUGGESTIONS
-   * ======================================================
-   *
-   * IMPORTANT:
-   *
-   * bottom: 58
-   *
-   * means the suggestions appear ABOVE
-   * the search input.
-   */
   resultsContainer: {
     position: "absolute",
-
     bottom: 58,
-
     left: 0,
-
     right: 0,
-
     backgroundColor: "#FFFFFF",
-
     borderRadius: 16,
-
     maxHeight: 260,
-
     overflow: "hidden",
-
     borderWidth: 1,
-
     borderColor: "#E5E7EB",
 
     shadowColor: "#000",
-
     shadowOffset: {
       width: 0,
-
       height: -4,
     },
-
     shadowOpacity: 0.12,
-
     shadowRadius: 12,
-
     elevation: 10,
 
     zIndex: 99999,
   },
 
-  /**
-   * Individual suggestion
-   */
   resultItem: {
     minHeight: 68,
-
     flexDirection: "row",
-
     alignItems: "center",
-
     paddingHorizontal: 14,
-
     paddingVertical: 10,
-
     borderBottomWidth: 1,
-
     borderBottomColor: "#F3F4F6",
-
     backgroundColor: "#FFFFFF",
   },
 
-  /**
-   * Suggestion icon
-   */
   resultIcon: {
     width: 40,
-
     height: 40,
-
     borderRadius: 20,
-
     backgroundColor: "#F3F4F6",
-
     alignItems: "center",
-
     justifyContent: "center",
-
     marginRight: 12,
   },
 
@@ -553,39 +414,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
-  /**
-   * Suggestion text
-   */
   resultTextContainer: {
     flex: 1,
-
     paddingRight: 8,
   },
 
   resultTitle: {
     fontSize: 14,
-
     fontWeight: "600",
-
     color: "#111827",
   },
 
   resultSubtitle: {
     fontSize: 12,
-
     color: "#6B7280",
-
     marginTop: 3,
   },
 
-  /**
-   * Arrow
-   */
   resultArrow: {
     fontSize: 24,
-
     color: "#9CA3AF",
-
-    fontWeight: "300",
   },
 });

@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { HelpSupportContent } from "@/components/HelpSupportContent";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -38,7 +38,9 @@ const DriverHelpPage = () => {
     }
   };
 
-  const handleSupportAction = (action: "call" | "email" | "chat" | "ticket") => {
+  const handleSupportAction = (
+    action: "call" | "email" | "chat" | "ticket",
+  ) => {
     switch (action) {
       case "call":
         router.push("/(driver)/pages/support-call" as never);

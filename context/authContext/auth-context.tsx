@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   getUserFromAsyncStorage,
   normalizeRole,
-} from "../../asyncStorage/authStore";
+} from "../../store/asyncStorage/authStore";
 import {
   clearAuthToken,
   setAuthToken,

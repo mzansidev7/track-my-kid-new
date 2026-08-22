@@ -8,11 +8,9 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Image,
   Platform,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import { buildStaticMapUrl } from "../utils/geoapify";
 
 interface Coordinates {
   latitude: number;
@@ -113,24 +111,31 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       const [latStr, lngStr] = selectedLocation.split(",").map((s) => s.trim());
       const lat = parseFloat(latStr);
       const lng = parseFloat(lngStr);
+
       if (!isNaN(lat) && !isNaN(lng)) {
         setSelectedCoordinates({ latitude: lat, longitude: lng });
       }
-    } else {
-      setSelectedCoordinates(null);
     }
   }, [selectedLocation, initialCoordinates]);
 
   useEffect(() => {
-    if (selectedCoordinates && !region) {
-      setRegion({
-        latitude: selectedCoordinates.latitude,
-        longitude: selectedCoordinates.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
+    if (!selectedCoordinates) return;
+
+    const nextRegion = {
+      latitude: selectedCoordinates.latitude,
+      longitude: selectedCoordinates.longitude,
+      latitudeDelta: locked ? 0.01 : 0.005,
+      longitudeDelta: locked ? 0.01 : 0.005,
+    };
+
+    if (
+      !region ||
+      Math.abs(region.latitude - nextRegion.latitude) > 0.000001 ||
+      Math.abs(region.longitude - nextRegion.longitude) > 0.000001
+    ) {
+      setRegion(nextRegion);
     }
-  }, [selectedCoordinates, region]);
+  }, [selectedCoordinates, region, locked]);
 
   const handleMapPress = (event: {
     nativeEvent: { coordinate: Coordinates };
@@ -189,40 +194,61 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   };
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [searching, setSearching] = useState(false);
   const mapRef = useRef<any>(null);
   const [pendingSelection, setPendingSelection] = useState(false);
   const [pendingAddress, setPendingAddress] = useState<string | null>(null);
   const [pendingCoords, setPendingCoords] = useState<Coordinates | null>(null);
 
-  const staticMapUrl = useMemo(() => {
-    if (!selectedCoordinates) return null;
-    try {
-      return buildStaticMapUrl({
-        centerLon: selectedCoordinates.longitude,
-        centerLat: selectedCoordinates.latitude,
-        zoom: 14.35,
-        width: 600,
-        height: 400,
-        markers: [
-          {
-            lon: selectedCoordinates.longitude,
-            lat: selectedCoordinates.latitude,
-            type: "awesome",
-            color: "#bb3f73",
-            size: "x-large",
-            icon: "paw",
-            icontype: "awesome",
-          },
-        ],
-      });
-    } catch (err) {
-      console.warn("Failed to build static map url:", err);
-      return null;
-    }
-  }, [selectedCoordinates]);
+  const handleLocationSelected = (
+    placeName: string,
+    coords: Coordinates | null,
+  ) => {
+    if (!placeName || !placeName.trim()) return;
 
-  
+    if (coords) {
+      setSelectedCoordinates(coords);
+      setRegion({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      });
+
+      try {
+        if (
+          mapRef.current &&
+          typeof mapRef.current.animateToRegion === "function"
+        ) {
+          mapRef.current.animateToRegion(
+            {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            },
+            400,
+          );
+        }
+      } catch {
+        // ignore
+      }
+
+      onLocationSelect(placeName, coords);
+      setPendingAddress(placeName);
+      setPendingCoords(coords);
+      setPendingSelection(true);
+      setSearchQuery(placeName);
+      return;
+    }
+
+    setPendingAddress(placeName);
+    setPendingCoords(null);
+    setPendingSelection(true);
+    setSearchQuery(placeName);
+  };
+
+  // Render a single live map view. A second static preview was causing an
+  // extra map to appear when a school or selected place was already set.
 
   // Render a small embedded map and, when requested, overlay a fullscreen map
   return (
@@ -246,15 +272,25 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={region || defaultRegion}
+          region={
+            locked && selectedCoordinates
+              ? {
+                  latitude: selectedCoordinates.latitude,
+                  longitude: selectedCoordinates.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }
+              : region || defaultRegion
+          }
           ref={mapRef}
-          onRegionChangeComplete={setRegion}
           onPress={handleMapPress}
           showsUserLocation={locationPermission === true}
           showsMyLocationButton={locationPermission === true}
-          zoomEnabled={true}
-          scrollEnabled={true}
-          minZoomLevel={1}
-          maxZoomLevel={20}
+          zoomEnabled={!locked}
+          scrollEnabled={!locked}
+          rotateEnabled={!locked}
+          minZoomLevel={locked ? 12 : 1}
+          maxZoomLevel={locked ? 12 : 20}
         >
           {selectedCoordinates && (
             <Marker
@@ -264,14 +300,23 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
             />
           )}
         </MapView>
-        {selectedCoordinates && staticMapUrl ? (
-          <Image
-            source={{ uri: staticMapUrl }}
-            style={styles.staticPreview}
-            accessibilityLabel="Static map preview"
-          />
-        ) : null}
       </View>
+
+      {!locked && (
+        <View style={styles.searchRowBelow}>
+          <GooglePlacesAutoComplete
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={placeholder}
+            debounce={500}
+            onSelect={(address, coords, details) => {
+              const selectedName =
+                details?.name || details?.address || address || "";
+              handleLocationSelected(selectedName, coords ?? null);
+            }}
+          />
+        </View>
+      )}
 
       {/* Fullscreen modal when parent requests it */}
       {forceFullScreen && (
@@ -289,11 +334,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
               style={StyleSheet.absoluteFill}
               initialRegion={region || defaultRegion}
               ref={mapRef}
-              onRegionChangeComplete={setRegion}
               onPress={handleMapPress}
-            //   showsUserLocation={locationPermission === true}
-            //   showsMyLocationButton={locationPermission === true}
-            
+              //   showsUserLocation={locationPermission === true}
+              //   showsMyLocationButton={locationPermission === true}
+
               zoomEnabled={true}
               scrollEnabled={true}
               rotateEnabled={true}
@@ -309,48 +353,67 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
               )}
             </MapView>
             <View style={styles.overlayHeader} pointerEvents="box-none">
-                <View style={styles.overlayHeaderRow}>
-                  <Text style={styles.overlayTitle}>{title}</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (onClose) return onClose();
-                    }}
-                    style={styles.overlayClose}
-                  >
+              <View style={styles.overlayHeaderRow}>
+                <Text style={styles.overlayTitle}>{title}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onClose) return onClose();
+                  }}
+                  style={styles.overlayClose}
+                >
                   <MaterialIcons name="close" size={24} color="#111" />
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
+              </View>
 
-                <View style={styles.searchRowInline}>
-                  <GooglePlacesAutoComplete
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search address or place"
-                    debounce={500}
-                    onSelect={(address, coords) => {
-                      if (coords) {
-                        setSelectedCoordinates(coords);
-                        setRegion({ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 });
-                        try {
-                          if (mapRef.current && typeof mapRef.current.animateToRegion === "function") {
-                            mapRef.current.animateToRegion({ latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 400);
-                          }
-                        } catch {
-                          // ignore
+              <View style={styles.searchRowInline}>
+                <GooglePlacesAutoComplete
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search address or place"
+                  debounce={500}
+                  onSelect={(address, coords, details) => {
+                    const selectedName =
+                      details?.name || details?.address || address || "";
+
+                    if (coords) {
+                      setSelectedCoordinates(coords);
+                      setRegion({
+                        latitude: coords.latitude,
+                        longitude: coords.longitude,
+                        latitudeDelta: 0.005,
+                        longitudeDelta: 0.005,
+                      });
+                      try {
+                        if (
+                          mapRef.current &&
+                          typeof mapRef.current.animateToRegion === "function"
+                        ) {
+                          mapRef.current.animateToRegion(
+                            {
+                              latitude: coords.latitude,
+                              longitude: coords.longitude,
+                              latitudeDelta: 0.005,
+                              longitudeDelta: 0.005,
+                            },
+                            400,
+                          );
                         }
-                        setPendingAddress(address);
-                        setPendingCoords(coords);
-                        setPendingSelection(true);
-                        setSearchQuery(address);
-                      } else {
-                        setPendingAddress(address);
-                        setPendingCoords(null);
-                        setPendingSelection(true);
-                        setSearchQuery(address);
+                      } catch {
+                        // ignore
                       }
-                    }}
-                  />
-                </View>
+                      setPendingAddress(selectedName);
+                      setPendingCoords(coords);
+                      setPendingSelection(true);
+                      setSearchQuery(selectedName);
+                    } else {
+                      setPendingAddress(selectedName);
+                      setPendingCoords(null);
+                      setPendingSelection(true);
+                      setSearchQuery(selectedName);
+                    }
+                  }}
+                />
+              </View>
             </View>
             <View style={styles.overlayControls} pointerEvents="box-none">
               <View style={styles.locationInfoOverlay}>
@@ -443,7 +506,6 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
               style={styles.fullScreenMap}
               initialRegion={region || defaultRegion}
               ref={mapRef}
-              onRegionChangeComplete={setRegion}
               onPress={handleMapPress}
               showsUserLocation={locationPermission === true}
               showsMyLocationButton={locationPermission === true}
@@ -565,6 +627,9 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  searchRowBelow: {
+    marginTop: 10,
   },
   locationInfo: {
     marginTop: 10,

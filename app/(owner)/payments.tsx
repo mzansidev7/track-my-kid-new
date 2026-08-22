@@ -1,8 +1,10 @@
 import * as FileSystem from "expo-file-system";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,10 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
+import { MaterialIcons } from "@expo/vector-icons";
 import { resolveWorkingBaseUrl } from "../../url";
 import { AuthContext } from "../../context/authContext/auth-context";
-import FloatingInput from "../../components/FloatingInput";
 import AppNotification from "../../components/Notification";
+import {
+  subscribeToOwnerPaymentStatusUpdates,
+  subscribeToPaymentUpdates,
+  unsubscribeFromRealtime,
+} from "../../store/subscriptions/clientRealtime";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 
 const formatCurrency = (cents: number, currency = "zar") => {
   const value = Number(cents || 0) / 100;
@@ -25,19 +34,30 @@ const formatCurrency = (cents: number, currency = "zar") => {
 
 export default function OwnerPayments() {
   const { user } = useContext(AuthContext);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [connectingStripe, setConnectingStripe] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [perChildAmountCents, setPerChildAmountCents] = useState("10000");
+  const [childStatuses, setChildStatuses] = useState<any[]>([]);
+  const [billingPeriod, setBillingPeriod] = useState<any>(null);
   const [connectedAccountId, setConnectedAccountId] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [bankAccountNumber, setBankAccountNumber] = useState("");
-  const [bankBranchCode, setBankBranchCode] = useState("");
+  const [stripeStatus, setStripeStatus] = useState({
+    connected: false,
+    details_submitted: false,
+    charges_enabled: false,
+    payouts_enabled: false,
+  });
   const [notification, setNotification] = useState<{
     visible: boolean;
     message: string;
     type: "success" | "error" | "warning";
   }>({ visible: false, message: "", type: "success" });
+
+  const { renderHeader } = useOwnerPageHeader({
+    title: "Payments & Payouts",
+    subtitle: "Manage your payment methods and payouts",
+    onBackPress: () => router.push("/(owner)/(tabs)/profile"),
+  });
 
   const loadData = async () => {
     if (!user?.token) return;
@@ -45,17 +65,26 @@ export default function OwnerPayments() {
     try {
       const baseUrl = await resolveWorkingBaseUrl();
 
-      const [profileRes, historyRes] = await Promise.all([
-        fetch(`${baseUrl}/owner/profile`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }),
-        fetch(`${baseUrl}/owner/payments/history`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        }),
-      ]);
+      const [profileRes, historyRes, stripeStatusRes, paymentStatusRes] =
+        await Promise.all([
+          fetch(`${baseUrl}/owner/profile`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          }),
+          fetch(`${baseUrl}/owner/payments/history`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          }),
+          fetch(`${baseUrl}/owner/payments/stripe-status`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          }),
+          fetch(`${baseUrl}/owner/payments/status`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          }),
+        ]);
 
       const profileData = await profileRes.json();
       const historyData = await historyRes.json();
+      const stripeStatusData = await stripeStatusRes.json();
+      const paymentStatusData = await paymentStatusRes.json();
 
       if (!profileRes.ok) {
         throw new Error(profileData.error || "Failed to load owner profile");
@@ -63,15 +92,28 @@ export default function OwnerPayments() {
       if (!historyRes.ok) {
         throw new Error(historyData.error || "Failed to load payment history");
       }
+      if (!stripeStatusRes.ok) {
+        throw new Error(
+          stripeStatusData.error || "Failed to load payout status",
+        );
+      }
+      if (!paymentStatusRes.ok) {
+        throw new Error(
+          paymentStatusData.error || "Failed to load child payment status",
+        );
+      }
 
-      setPerChildAmountCents(
-        String(profileData.per_child_amount_cents ?? 10000),
-      );
       setConnectedAccountId(profileData.stripe_connected_account_id || "");
-      setBankName(profileData.bank_name || "");
-      setBankAccountNumber(profileData.bank_account_number || "");
-      setBankBranchCode(profileData.bank_branch_code || "");
+      setStripeStatus(stripeStatusData);
       setHistory(historyData || []);
+      setChildStatuses(paymentStatusData.children || []);
+      setBillingPeriod(paymentStatusData);
+      if (profileData.id) {
+        await AsyncStorage.setItem(
+          `owner-payment-history-${profileData.id}`,
+          JSON.stringify(historyData || []),
+        );
+      }
     } catch (err: any) {
       setNotification({
         visible: true,
@@ -87,51 +129,87 @@ export default function OwnerPayments() {
     loadData();
   }, [user?.token]);
 
-  const saveBillingSettings = async () => {
-    if (!user?.token) return;
-    const parsed = Number.parseInt(perChildAmountCents || "", 10);
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      setNotification({
-        visible: true,
-        message: "Per-child amount must be a valid non-negative number.",
-        type: "error",
-      });
-      return;
-    }
+  useEffect(() => {
+    let cancelled = false;
+    let ownerId: string | null = null;
 
-    setSaving(true);
+    const loadCachedHistoryAndSubscribe = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const profileResponse = await fetch(`${baseUrl}/owner/profile`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        const profile = await profileResponse.json();
+        ownerId = profile?.id || null;
+        if (!ownerId) return;
+
+        const cached = await AsyncStorage.getItem(
+          `owner-payment-history-${ownerId}`,
+        );
+        if (!cancelled && cached) setHistory(JSON.parse(cached));
+
+        const channel = subscribeToPaymentUpdates("owner_id", ownerId, () => {
+          loadData();
+        });
+        const statusChannel = subscribeToOwnerPaymentStatusUpdates(
+          ownerId,
+          loadData,
+        );
+        return async () => {
+          await unsubscribeFromRealtime(channel);
+          await unsubscribeFromRealtime(statusChannel);
+        };
+      } catch (cacheError) {
+        console.warn("Unable to load cached owner payment history", cacheError);
+      }
+    };
+
+    let cleanup: (() => Promise<void>) | undefined;
+    loadCachedHistoryAndSubscribe().then((unsubscribe) => {
+      cleanup = unsubscribe;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [user?.token]);
+
+  const connectStripeAccount = async () => {
+    if (!user?.token) return;
+    setConnectingStripe(true);
     try {
       const baseUrl = await resolveWorkingBaseUrl();
-      const res = await fetch(`${baseUrl}/owner/profile`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({
-          per_child_amount_cents: parsed,
-          stripe_connected_account_id: connectedAccountId.trim() || null,
-          bank_name: bankName.trim() || null,
-          bank_account_number: bankAccountNumber.trim() || null,
-          bank_branch_code: bankBranchCode.trim() || null,
-        }),
+      const res = await fetch(`${baseUrl}/owner/payments/stripe-onboarding`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${user.token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save settings");
+      if (!res.ok || !data.url) {
+        throw new Error(
+          data.message || data.error || "Unable to open Stripe onboarding.",
+        );
+      }
+      await Linking.openURL(data.url);
+      setConnectedAccountId(data.stripe_connected_account_id || "connected");
+      setStripeStatus({
+        connected: true,
+        details_submitted: Boolean(data.details_submitted),
+        charges_enabled: Boolean(data.charges_enabled),
+        payouts_enabled: Boolean(data.payouts_enabled),
+      });
       setNotification({
         visible: true,
-        message: "Billing settings updated.",
+        message: "Continue in Stripe to finish setting up payouts.",
         type: "success",
       });
-      loadData();
     } catch (err: any) {
       setNotification({
         visible: true,
-        message: err.message || "Unable to save settings",
+        message: err.message || "Unable to connect your payout account.",
         type: "error",
       });
     } finally {
-      setSaving(false);
+      setConnectingStripe(false);
     }
   };
 
@@ -226,11 +304,7 @@ export default function OwnerPayments() {
         visible={notification.visible}
         onHide={() => setNotification({ ...notification, visible: false })}
       />
-      {/* <Header
-        setActiveButton={() => {}}
-        title="Payments"
-        subTitle="Billing and payout history"
-      /> */}
+      {renderHeader()}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#4A90E2" />
@@ -238,50 +312,84 @@ export default function OwnerPayments() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
-            <Text style={styles.title}>Owner Billing Settings</Text>
-            <FloatingInput
-              label="Price per Child (cents)"
-              value={perChildAmountCents}
-              keyboardType="numeric"
-              onChangeText={setPerChildAmountCents}
-            />
-            <FloatingInput
-              label="Stripe Connected Account ID"
-              value={connectedAccountId}
-              onChangeText={setConnectedAccountId}
-              autoCapitalize="none"
-            />
-            <FloatingInput
-              label="Bank Name"
-              value={bankName}
-              onChangeText={setBankName}
-              autoCapitalize="words"
-            />
-            <FloatingInput
-              label="Account Number"
-              value={bankAccountNumber}
-              onChangeText={setBankAccountNumber}
-              keyboardType="numeric"
-            />
-            <FloatingInput
-              label="Branch Code"
-              value={bankBranchCode}
-              onChangeText={setBankBranchCode}
-              keyboardType="numeric"
-            />
-            <Text style={styles.noteText}>
-              Enter your payout banking details here. The platform deducts a R5
-              service fee per child when clients pay.
-            </Text>
+            <Text style={styles.title}>Payout Settings</Text>
+            <View style={styles.payoutCard}>
+              <View style={styles.payoutHeader}>
+                <View style={styles.payoutIcon}>
+                  <MaterialIcons
+                    name={
+                      stripeStatus.payouts_enabled
+                        ? "check"
+                        : "account-balance-wallet"
+                    }
+                    size={22}
+                    color={stripeStatus.payouts_enabled ? "#15803D" : "#B45309"}
+                  />
+                </View>
+                <View style={styles.payoutCopy}>
+                  <Text style={styles.stripeStatusLabel}>Payout account</Text>
+                  <Text style={styles.stripeStatusValue}>
+                    {stripeStatus.payouts_enabled
+                      ? "Ready to receive money"
+                      : stripeStatus.connected
+                        ? "Finish Stripe setup"
+                        : "Not connected"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.payoutDescription}>
+                {stripeStatus.payouts_enabled
+                  ? "Client payments will be transferred to your Stripe account."
+                  : "Connect Stripe to verify your identity and add payout details."}
+              </Text>
+            </View>
             <TouchableOpacity
-              style={[styles.button, saving && styles.buttonDisabled]}
-              onPress={saveBillingSettings}
-              disabled={saving}
+              style={[styles.button, connectingStripe && styles.buttonDisabled]}
+              onPress={connectStripeAccount}
+              disabled={connectingStripe}
             >
               <Text style={styles.buttonText}>
-                {saving ? "Saving..." : "Save Billing Settings"}
+                {connectingStripe
+                  ? "Opening Stripe..."
+                  : connectedAccountId
+                    ? "Update payout details"
+                    : "Connect payout account"}
               </Text>
             </TouchableOpacity>
+            <Text style={styles.noteText}>
+              Stripe securely manages your payout banking details. The platform
+              deducts a R5 service fee per child when clients pay.
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Current Child Payment Status</Text>
+            <Text style={styles.rowSub}>
+              Payment due by {billingPeriod?.payment_due_at || "the 5th"};
+              current period ends{" "}
+              {billingPeriod?.billing_period_end || "month end"}.
+            </Text>
+            <FlatList
+              data={childStatuses}
+              keyExtractor={(item) => item.child_id}
+              scrollEnabled={false}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No linked children yet.</Text>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{item.child_name}</Text>
+                    <Text style={styles.rowSub}>
+                      {item.vehicle_name} - {item.status}
+                    </Text>
+                  </View>
+                  <Text style={styles.rowSub}>
+                    {item.status === "paid" ? "Paid" : "Payment required"}
+                  </Text>
+                </View>
+              )}
+            />
           </View>
 
           <View style={styles.card}>
@@ -316,7 +424,8 @@ export default function OwnerPayments() {
                         {item.children_count} child(ren) - {item.status}
                       </Text>
                       <Text style={styles.rowSub}>
-                        Fee: {formatCurrency(fee, item.currency)} • Payout:{" "}
+                        Vehicle: {item.vehicles?.name || "Not recorded"} - Fee:{" "}
+                        {formatCurrency(fee, item.currency)} • Payout:{" "}
                         {formatCurrency(payout, item.currency)}
                       </Text>
                     </View>
@@ -361,6 +470,33 @@ const styles = StyleSheet.create({
     color: "#555",
     fontSize: 13,
     marginBottom: 12,
+  },
+  payoutCard: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  payoutHeader: { flexDirection: "row", alignItems: "center" },
+  payoutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  payoutCopy: { flex: 1 },
+  stripeStatusLabel: { color: "#64748B", fontSize: 12 },
+  stripeStatusValue: { color: "#1F2937", fontWeight: "700", marginTop: 3 },
+  payoutDescription: {
+    color: "#166534",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 10,
   },
   downloadButton: {
     backgroundColor: "#4A90E2",

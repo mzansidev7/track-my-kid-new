@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 
 const StudentsView = () => {
   const router = useRouter();

@@ -1,4 +1,4 @@
-import { useOwnerPageHeader } from "@/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext } from "react";
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRoutes } from "../../../ownerHelpers/hooks/useRoutes";
+import { useRoutes } from "../ownerHelpers/hooks/useRoutes";
 import { TimePreference } from "../../../store/asyncStorage/timePreferences.asyncStore";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
@@ -212,7 +212,10 @@ const Routes = () => {
     const routePreferenceScope = getPreferenceScopeForTime(
       item.departure_time || item.pickup_start_time,
       item.id ?? item.route_id ?? item.routeId,
-      item.time_scope || item.timeScope || item.raw?.time_scope || item.raw?.timeScope,
+      item.time_scope ||
+        item.timeScope ||
+        item.raw?.time_scope ||
+        item.raw?.timeScope,
     );
 
     return (

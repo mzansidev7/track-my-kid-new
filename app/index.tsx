@@ -1,4 +1,3 @@
-
 import React from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useSegments } from "expo-router";
@@ -69,7 +68,7 @@ export default function Index() {
         break;
 
       case "school":
-        targetRoute = "/";
+        targetRoute = "/(school)/(tabs)";
         break;
 
       case "admin":

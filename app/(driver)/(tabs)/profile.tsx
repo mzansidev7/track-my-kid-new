@@ -14,10 +14,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useDriverProfile } from "@/driverHelpers/hooks/useDriverProfile";
+import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
 import { useTheme } from "@/styles/theme";
 import { signOut } from "@/functions/auth";
-import DriverHeader from "@/components/driver/DriverHeader";
+import DriverHeader from "@/app/(driver)/components/DriverHeader";
 
 const DriverProfile = () => {
   const router = useRouter();
@@ -435,16 +435,19 @@ const DriverProfile = () => {
               Vehicle Photo
             </Text>
 
-            {driver?.vehicle?.vehicle_images?.[0] && (
+            {driver?.vehicle?.vehicle_images?.[0] ? (
               <Image
                 source={{ uri: driver?.vehicle.vehicle_images[0].url }}
                 style={localStyles.vehicleImage}
               />
-            )}
-            <View style={localStyles.noQrContainer}>
+            ) : (
+              <View style={localStyles.noQrContainer}>
                 <MaterialIcons name="photo" size={80} color="#D1D5DB" />
-                <Text style={localStyles.noQrText}>No vehicle photo available</Text>
+                <Text style={localStyles.noQrText}>
+                  No vehicle photo available
+                </Text>
               </View>
+            )}
           </View>
 
           <View
@@ -468,7 +471,8 @@ const DriverProfile = () => {
                   style={localStyles.qrCodeImage}
                 />
                 <Text style={localStyles.qrCodeText}>
-                  Scan to view vehicle details
+                  Scan to link parents or guardians to your vehicle for
+                  real-time tracking.
                 </Text>
               </View>
             ) : (
@@ -561,9 +565,21 @@ const DriverProfile = () => {
           style={[localStyles.sectionCard, { backgroundColor: colors.surface }]}
         >
           {[
-            { label: "Change Password", icon: "lock", route: "/(driver)/pages/change-password" },
-            { label: "Notification Settings", icon: "notifications", route: "/(driver)/pages/notification-settings" },
-            { label: "Help & Support", icon: "help-outline", route: "/(driver)/pages/help" },
+            {
+              label: "Change Password",
+              icon: "lock",
+              route: "/(driver)/pages/change-password",
+            },
+            {
+              label: "Notification Settings",
+              icon: "notifications",
+              route: "/(driver)/pages/notification-settings",
+            },
+            {
+              label: "Help & Support",
+              icon: "help-outline",
+              route: "/(driver)/pages/help",
+            },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}

@@ -22,6 +22,7 @@ import AppNotification from "../../components/Notification";
 import { loginUser } from "../../functions/auth";
 import { useTheme } from "../../styles/theme";
 import { BASE_URL } from "../../url";
+import { router } from "expo-router";
 
 export default function Login({
   userType,
@@ -67,6 +68,7 @@ export default function Login({
       await loginUser({ email, password });
       await refreshUser();
       setVisible(false);
+      router.replace("/" as never);
     } catch (error: any) {
       // console.error("Login error:", error);
       setNotification({

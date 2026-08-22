@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { requestRegistrationLink, userAuth } from "../../functions/auth";
 import { BASE_URL } from "../../url";
 import { useAuth } from "../../context/authContext/auth-context";
+import { useRouter } from "expo-router";
 
 import FloatingInput from "../../components/FloatingInput";
 import AppNotification from "../../components/Notification";
@@ -83,6 +84,7 @@ export default function Register({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { refreshUser } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     setFormData({
@@ -289,12 +291,20 @@ export default function Register({
             "Account created successfully. Redirecting to verification...",
           type: "success",
         });
+
+        setTimeout(() => {
+          setSignupVisible?.(false);
+          setVisible?.(false);
+          router.replace("/(auth)/verify-otp");
+        }, 400);
       }
 
-      setTimeout(() => {
-        setSignupVisible?.(false);
-        setVisible?.(false);
-      }, 2000);
+      if (userType === "school") {
+        setTimeout(() => {
+          setSignupVisible?.(false);
+          setVisible?.(false);
+        }, 2000);
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       const serverText =

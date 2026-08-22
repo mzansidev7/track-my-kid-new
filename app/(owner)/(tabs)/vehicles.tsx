@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useOwnerPageHeader } from "../../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";

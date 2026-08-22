@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import CustomMap from "../../components/map";
-import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 import {
@@ -670,7 +670,9 @@ const RouteDetailsScreen = () => {
   const routePreferenceScope = getPreferenceScopeForTime(
     route?.departure_time,
     route?.id,
-    route?.time_scope || (route as any)?.raw?.time_scope || (route as any)?.raw?.timeScope,
+    route?.time_scope ||
+      (route as any)?.raw?.time_scope ||
+      (route as any)?.raw?.timeScope,
   );
 
   const renderMapContent = (isFullScreen: boolean = false) => {
@@ -686,7 +688,11 @@ const RouteDetailsScreen = () => {
     if (isFullScreen) {
       return (
         <CustomMap
-          markers={mapMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+          markers={mapMarkers.map((m) => ({
+            latitude: m.coordinate.latitude,
+            longitude: m.coordinate.longitude,
+            title: m.title,
+          }))}
           origin={origin}
           destination={destination}
           style={styles.mapFullScreen}
@@ -698,7 +704,11 @@ const RouteDetailsScreen = () => {
     // Use interactive CustomMap for non-fullscreen preview for consistency
     return (
       <CustomMap
-        markers={mapMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+        markers={mapMarkers.map((m) => ({
+          latitude: m.coordinate.latitude,
+          longitude: m.coordinate.longitude,
+          title: m.title,
+        }))}
         origin={origin}
         destination={destination}
         style={styles.mapPreview}
@@ -888,7 +898,9 @@ const RouteDetailsScreen = () => {
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Departure time</Text>
               <View>
-                <Text style={styles.infoValue}>{formatTime(route.departure_time)}</Text>
+                <Text style={styles.infoValue}>
+                  {formatTime(route.departure_time)}
+                </Text>
                 {routePreferenceScope ? (
                   <Text style={styles.infoSubValue}>
                     {formatPreferenceScope(routePreferenceScope)}

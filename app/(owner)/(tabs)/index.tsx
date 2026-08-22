@@ -16,12 +16,12 @@ import MapView, { Marker } from "react-native-maps";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
 import CustomMap from "../../../components/map";
-import { useDrivers } from "../../../ownerHelpers/hooks/useDrivers";
-import { useNotifications } from "../../../ownerHelpers/hooks/useNotifications";
-import { useOwnerProfile } from "../../../ownerHelpers/hooks/useOwnerProfile";
-import { useOwnerVehicles } from "../../../ownerHelpers/hooks/useOwnerVehicles";
-import { useRoutes } from "../../../ownerHelpers/hooks/useRoutes";
-import { useOwnerStyles } from "../../../ownerHelpers/styles/ownerStyles";
+import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
+import { useNotifications } from "../ownerHelpers/hooks/useNotifications";
+import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
+import { useOwnerVehicles } from "../ownerHelpers/hooks/useOwnerVehicles";
+import { useRoutes } from "../ownerHelpers/hooks/useRoutes";
+import { useOwnerStyles } from "../ownerHelpers/styles/ownerStyles";
 import { useSubscription } from "@/context/subscriptionContext/SubscriptionContext";
 
 type RouteStatus = {
@@ -73,7 +73,7 @@ export default function Home({ user }: any) {
   const router = useRouter();
   const styles = useOwnerStyles();
   const { colors, shadows } = useTheme();
-  
+
   const { subscription } = useSubscription();
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [profileNotice, setProfileNotice] = useState({
@@ -103,7 +103,10 @@ export default function Home({ user }: any) {
       const baseUrl = await resolveWorkingBaseUrl();
       const resp = await fetch(`${baseUrl}/owner/route-history`, {
         method: "GET",
-        headers: { "Content-Type": "application/json", Authorization: user?.token ? `Bearer ${user.token}` : "" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: user?.token ? `Bearer ${user.token}` : "",
+        },
       });
 
       if (!resp.ok) {
@@ -128,7 +131,13 @@ export default function Home({ user }: any) {
       refreshUnreadCount();
       fetchVehicles();
       fetchOwnerRouteHistory();
-    }, [fetchVehicles, refreshDrivers, refreshRoutes, refreshUnreadCount, fetchOwnerRouteHistory]),
+    }, [
+      fetchVehicles,
+      refreshDrivers,
+      refreshRoutes,
+      refreshUnreadCount,
+      fetchOwnerRouteHistory,
+    ]),
   );
 
   const hasValue = (value: unknown) => {
@@ -755,24 +764,48 @@ export default function Home({ user }: any) {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity activeOpacity={0.9} onPress={() => setIsMapExpanded(true)}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setIsMapExpanded(true)}
+            >
               {startedHistories && startedHistories.length > 0 ? (
                 (() => {
                   const markers = startedHistories
                     .map((h) => {
-                      const updates = Array.isArray(h.location_updates) ? h.location_updates : [];
-                      const last = updates.length > 0 ? updates[updates.length - 1] : null;
-                      const lat = last?.latitude ?? last?.lat ?? h?.route_snapshot?.start_latitude ?? null;
-                      const lon = last?.longitude ?? last?.lon ?? h?.route_snapshot?.start_longitude ?? null;
-                      if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return null;
+                      const updates = Array.isArray(h.location_updates)
+                        ? h.location_updates
+                        : [];
+                      const last =
+                        updates.length > 0 ? updates[updates.length - 1] : null;
+                      const lat =
+                        last?.latitude ??
+                        last?.lat ??
+                        h?.route_snapshot?.start_latitude ??
+                        null;
+                      const lon =
+                        last?.longitude ??
+                        last?.lon ??
+                        h?.route_snapshot?.start_longitude ??
+                        null;
+                      if (
+                        !Number.isFinite(Number(lat)) ||
+                        !Number.isFinite(Number(lon))
+                      )
+                        return null;
                       return { lat: Number(lat), lon: Number(lon) };
                     })
-                    .filter((m): m is { lat: number; lon: number } => m != null);
+                    .filter(
+                      (m): m is { lat: number; lon: number } => m != null,
+                    );
 
                   if (markers.length === 0) {
                     return (
                       <CustomMap
-                        markers={fleetMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
+                        markers={fleetMarkers.map((m) => ({
+                          latitude: m.coordinate.latitude,
+                          longitude: m.coordinate.longitude,
+                          title: m.title,
+                        }))}
                         style={styles.mapCanvas}
                       />
                     );
@@ -783,15 +816,26 @@ export default function Home({ user }: any) {
                   return (
                     <View>
                       <CustomMap
-                        markers={markers.map((m) => ({ latitude: m.lat, longitude: m.lon }))}
+                        markers={markers.map((m) => ({
+                          latitude: m.lat,
+                          longitude: m.lon,
+                        }))}
                         origin={{ latitude: first.lat, longitude: first.lon }}
-                        destination={markers.length > 1 ? { latitude: last.lat, longitude: last.lon } : undefined}
+                        destination={
+                          markers.length > 1
+                            ? { latitude: last.lat, longitude: last.lon }
+                            : undefined
+                        }
                         style={styles.mapCanvas}
                       />
                       <View style={{ padding: 8 }}>
                         {markers.map((m, idx) => (
-                          <Text key={idx} style={{ color: colors.text.secondary }}>
-                            Route {idx + 1}: {m.lat.toFixed(6)}, {m.lon.toFixed(6)}
+                          <Text
+                            key={idx}
+                            style={{ color: colors.text.secondary }}
+                          >
+                            Route {idx + 1}: {m.lat.toFixed(6)},{" "}
+                            {m.lon.toFixed(6)}
                           </Text>
                         ))}
                       </View>
@@ -800,9 +844,21 @@ export default function Home({ user }: any) {
                 })()
               ) : (
                 <CustomMap
-                  markers={fleetMarkers.map((m) => ({ latitude: m.coordinate.latitude, longitude: m.coordinate.longitude, title: m.title }))}
-                  origin={fleetMarkers.length > 0 ? fleetMarkers[0].coordinate : undefined}
-                  destination={fleetMarkers.length > 1 ? fleetMarkers[fleetMarkers.length - 1].coordinate : undefined}
+                  markers={fleetMarkers.map((m) => ({
+                    latitude: m.coordinate.latitude,
+                    longitude: m.coordinate.longitude,
+                    title: m.title,
+                  }))}
+                  origin={
+                    fleetMarkers.length > 0
+                      ? fleetMarkers[0].coordinate
+                      : undefined
+                  }
+                  destination={
+                    fleetMarkers.length > 1
+                      ? fleetMarkers[fleetMarkers.length - 1].coordinate
+                      : undefined
+                  }
                   style={styles.mapCanvas}
                 />
               )}

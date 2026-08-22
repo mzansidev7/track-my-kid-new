@@ -29,7 +29,30 @@ export const DRIVER_COLORS = {
   muted: "#7F94B1",
 };
 
+export const CLIENT_COLORS = {
+  background: "#03151C",
+  surface: "#052A32",
+  surfaceElevated: "#07343D",
+
+  primary: "#00D084",
+  primaryBright: "#00E5B0",
+  primaryDark: "#008F72",
+
+  success: "#19D66B",
+  error: "#FF4D5D",
+  warning: "#E9B83F",
+
+  textPrimary: "#F4F7F5",
+  textSecondary: "#8FA6A8",
+  textMuted: "#587276",
+
+  border: "#0C454D",
+  divider: "#10343A",
+  overlay: "#000000",
+};
+
 export type Theme = "light" | "dark";
+export type BrandName = "owner" | "driver" | "client" | "school";
 
 export const lightTheme = {
   colors: {
@@ -78,13 +101,16 @@ export const lightTheme = {
         divider: DRIVER_COLORS.cyan,
       },
       client: {
-        primary: "#7C3AED",
-        primaryDark: "#5B21B6",
-        gradientStart: "#7C3AED",
-        gradientEnd: "#C084FC",
-        surface: "#F5F3FF",
-        border: "#7C3AED",
-        divider: "#C084FC",
+        background: CLIENT_COLORS.background,
+        card: CLIENT_COLORS.surface,
+        cardBorder: CLIENT_COLORS.border,
+        primary: CLIENT_COLORS.primary,
+        primaryDark: CLIENT_COLORS.primaryDark,
+        gradientStart: CLIENT_COLORS.primary,
+        gradientEnd: CLIENT_COLORS.primaryBright,
+        surface: CLIENT_COLORS.surface,
+        border: CLIENT_COLORS.border,
+        divider: CLIENT_COLORS.divider,
       },
       school: {
         primary: "#B45309",
@@ -151,8 +177,8 @@ export const darkTheme = {
         gradientStart: "#0F766E",
         gradientEnd: "#10B981",
         surface: "#052E24",
-         border: "#0F766E",
-    divider: "#10B981",
+        border: "#0F766E",
+        divider: "#10B981",
       },
       driver: {
         background: DRIVER_COLORS.background,
@@ -168,6 +194,9 @@ export const darkTheme = {
         divider: DRIVER_COLORS.cyan,
       },
       client: {
+        background: CLIENT_COLORS.background,
+        card: "#1F133D",
+        cardBorder: "#7C3AED",
         primary: "#7C3AED",
         primaryDark: "#5B21B6",
         gradientStart: "#7C3AED",
@@ -218,6 +247,7 @@ type ThemeContextType = {
   shadows: typeof lightTheme.shadows;
   isDark: boolean;
   toggleTheme: () => void;
+  getBrandColors: (brand: BrandName) => typeof lightTheme.colors.brands.owner;
 };
 
 export const ThemeContext = createContext<ThemeContextType | undefined>(
@@ -285,9 +315,11 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
 
+  const getBrandColors = (brand: BrandName) => colors.brands[brand];
+
   return (
     <ThemeContext.Provider
-      value={{ theme, colors, shadows, isDark, toggleTheme }}
+      value={{ theme, colors, shadows, isDark, toggleTheme, getBrandColors }}
     >
       {children}
     </ThemeContext.Provider>

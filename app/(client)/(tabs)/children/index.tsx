@@ -1,491 +1,362 @@
-import React, { useContext, useEffect, useState } from "react";
+import React from "react";
 import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TouchableOpacity,
-  View,
+  ScrollView,
+  StyleSheet,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../../../../styles/theme";
-import { AuthContext } from "../../../../context/authContext/auth-context";
-import { BASE_URL } from "../../../../url";
-import {
-  subscribeToClientChildrenUpdates,
-  unsubscribeFromRealtime,
-} from "../../../../store/subscriptions/clientRealtime";
-import {
-  saveChildren,
-  loadChildren,
-} from "../../../../asyncStorage/clientCache";
+import AppNotification from "../../../../components/Notification";
+import ClientHeader from "../../components/ClientHeader";
+import { Child, useChildren } from "../../clientHelpers/hooks/useChildren";
+import { useClientProfile } from "../../clientHelpers/hooks/useClientProfile";
+
+const formatTime = (value?: string) => {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return value;
+};
+
+const deriveChildStatus = (child: Child) => {
+  const route = child.route;
+  const pickupTime = route?.pickup_start_time || route?.departure_time;
+  const dropoffTime = route?.dropoff_start_time;
+
+  if (child.status) {
+    return {
+      label: child.status,
+      accent: child.accent || "#2563EB",
+      note:
+        child.eta && child.eta !== "None"
+          ? `ETA to school: ${child.eta}`
+          : "Tracking active",
+    };
+  }
+
+  if (pickupTime || dropoffTime) {
+    return {
+      label: pickupTime ? "On a Trip" : "At School",
+      accent: pickupTime ? "#22C55E" : "#F59E0B",
+      note: pickupTime
+        ? `ETA to school: ${formatTime(pickupTime)}`
+        : "Checked in safely at school",
+    };
+  }
+
+  return {
+    label: "At School",
+    accent: "#F59E0B",
+    note: "Checked in safely at school",
+  };
+};
 
 const ChildrenScreen = () => {
   const router = useRouter();
-  const { colors } = useTheme();
-  const { user } = useContext(AuthContext);
-  const [children, setChildren] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { children: existingChildren, childrenLoading } = useChildren();
+  const { client } = useClientProfile();
+  const [profileNotification, setProfileNotification] = React.useState({
+    visible: false,
+    message: "",
+    type: "warning" as const,
+  });
 
-  const fetchChildren = async (forceRefresh = false) => {
-    setLoading(true);
-    setError(null);
+  const openAddChild = () => {
+    const phone = (client?.phone || "").replace(/[\s()-]/g, "");
+    const profileComplete = Boolean(
+      client?.first_name?.trim() &&
+      client?.last_name?.trim() &&
+      /^\+?[0-9]{7,15}$/.test(phone) &&
+      client?.relationship &&
+      client?.home_address?.trim() &&
+      client?.home_latitude !== null &&
+      client?.home_latitude !== undefined &&
+      client?.home_longitude !== null &&
+      client?.home_longitude !== undefined,
+    );
 
-    try {
-      const cachedChildren = await loadChildren();
-      if (!forceRefresh && cachedChildren && cachedChildren.length >= 0) {
-        setChildren(cachedChildren);
-      }
-
-      const response = await fetch(`${BASE_URL}/client/children`, {
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-        },
+    if (!profileComplete) {
+      setProfileNotification({
+        visible: true,
+        message:
+          "Please complete your personal information before adding a child. Routing to the profile page",
+        type: "warning",
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          data.error || data.message || "Unable to load children.",
-        );
-      }
-
-      const nextChildren = Array.isArray(data) ? data : [];
-      await saveChildren(nextChildren);
-      setChildren(nextChildren);
-    } catch (err: any) {
-      console.error("Fetch children error:", err);
-      setError(err?.message || "Unable to load children.");
-    } finally {
-      setLoading(false);
+      setTimeout(() => {
+        router.push("/(client)/pages/personal-information");
+      }, 4000);
+      return;
     }
+
+    router.push("/(client)/(tabs)/children/add-child");
   };
 
-  useEffect(() => {
-    if (!user?.token) return;
-
-    fetchChildren();
-
-    const channel = subscribeToClientChildrenUpdates(
-      user.userData?.id || user?.id,
-      () => {
-        fetchChildren(true);
-      },
-    );
-
-    return () => {
-      unsubscribeFromRealtime(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.token, user?.userData?.id, user?.id]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchChildren(true);
-    setRefreshing(false);
-  };
-
-  const renderChild = ({ item }: { item: any }) => {
-    return (
-      <TouchableOpacity
-        style={[styles.childCard, { backgroundColor: colors.surface }]}
-        // onPress={() =>
-        //   router.push(`/(client)/(tabs)/children/${item.id.toString()}`)
-        // }
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.childCardHeader, { color: colors.text.primary }]}>
-          {JSON.stringify(item)}
-        </Text>
-        <View style={styles.childCardHeader}>
-          <View style={styles.childCardLeft}>
-            <Image
-              source={
-                item?.avatar
-                  ? { uri: item.avatar }
-                  : require("@/assets/images/client.png")
-              }
-              style={styles.childAvatar}
-            />
-            <View style={styles.childInfo}>
-              <Text style={[styles.childName, { color: colors.text.primary }]}>
-                {item.name} {item.lastname || ""}
-              </Text>
-              <View style={styles.childMetaRow}>
-                <Ionicons name="school" size={14} color="#8B5CF6" />
-                <Text
-                  style={[styles.childMeta, { color: colors.text.secondary }]}
-                >
-                  {item.grade || "Grade not set"} •{" "}
-                  {item.school_name || "School"}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor: item.vehicle ? "#DCFCE7" : "#DBEAFE",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={item.vehicle ? "car" : "information-circle"}
-                  size={14}
-                  color={item.vehicle ? "#16A34A" : "#1D4ED8"}
-                />
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    {
-                      color: item.vehicle ? "#16A34A" : "#1D4ED8",
-                    },
-                  ]}
-                >
-                  {item.vehicle
-                    ? "On the way to school"
-                    : "Not linked to a vehicle"}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.menuButton}>
-            <MaterialIcons
-              name="more-vert"
-              size={20}
-              color={colors.text.secondary}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.childCardStats}>
-          <View style={styles.statItem}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="radio-button-off" size={18} color="#2563EB" />
-            </View>
-            <View>
-              <Text
-                style={[styles.statLabel, { color: colors.text.secondary }]}
-              >
-                Today&apos;s Pickup
-              </Text>
-              <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                07:15 AM
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statItem}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="home" size={18} color="#10B981" />
-            </View>
-            <View>
-              <Text
-                style={[styles.statLabel, { color: colors.text.secondary }]}
-              >
-                Today&apos;s Drop-off
-              </Text>
-              <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                02:30 PM
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statItem}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="navigate-circle" size={18} color="#8B5CF6" />
-            </View>
-            <View>
-              <Text
-                style={[styles.statLabel, { color: colors.text.secondary }]}
-              >
-                Route
-              </Text>
-              <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                Route 5
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <MaterialIcons
-            name="chevron-right"
-            size={20}
-            color={colors.text.secondary}
-          />
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const overviewCards = [
+    {
+      count: existingChildren.filter(
+        (child) => deriveChildStatus(child).label === "On a Trip",
+      ).length,
+      label: "On a Trip",
+      sub: "View live location",
+      icon: "directions-bus" as const,
+      color: "#DCFCE7",
+      iconColor: "#16A34A",
+    },
+    {
+      count: existingChildren.filter(
+        (child) => deriveChildStatus(child).label === "At School",
+      ).length,
+      label: "At School",
+      sub: "Checked in",
+      icon: "school" as const,
+      color: "#FEF3C7",
+      iconColor: "#F59E0B",
+    },
+    {
+      count: existingChildren.filter((child) => !child.route).length,
+      label: "Upcoming",
+      sub: "Later today",
+      icon: "schedule" as const,
+      color: "#E9D5FF",
+      iconColor: "#8B5CF6",
+    },
+  ];
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
+    <SafeAreaView style={styles.safeArea}>
+      <ClientHeader
+        title="My Children"
+        subtitle="Track and manage your children"
+        showBackButton={true}
+      />
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
           <View>
-            <Text style={[styles.headerTitle, { color: colors.text.primary }]}>
-              My Children
-            </Text>
-            <Text
-              style={[styles.headerSubtitle, { color: colors.text.secondary }]}
-            >
-              Manage and monitor your children
-            </Text>
+            <Text style={styles.title}>My Children</Text>
+            <Text style={styles.subtitle}>Manage and track your children</Text>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Ionicons
-                name="notifications"
-                size={24}
-                color={colors.text.primary}
-              />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>2</Text>
-              </View>
-            </TouchableOpacity>
-            <Image
-              source={require("@/assets/images/client.png")}
-              style={styles.headerAvatar}
-            />
-          </View>
-        </View>
-
-        {/* Banner */}
-        <View style={[styles.bannerCard, { backgroundColor: colors.surface }]}>
-          <View style={styles.bannerLeft}>
-            <View style={styles.bannerIconContainer}>
-              <MaterialIcons name="shield" size={28} color="#2563EB" />
+          <TouchableOpacity style={styles.bellButton}>
+            <Ionicons name="notifications-outline" size={23} color="#111827" />
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>2</Text>
             </View>
-            <View style={styles.bannerText}>
-              <Text
-                style={[styles.bannerTitle, { color: colors.text.primary }]}
-              >
-                Your children are our priority
-              </Text>
-              <Text
-                style={[
-                  styles.bannerDescription,
-                  { color: colors.text.secondary },
-                ]}
-              >
-                We ensure their safety with real-time tracking, verified drivers
-                and secure trips.
-              </Text>
-            </View>
-          </View>
-          <View style={styles.bannerIllustration}>
-            <Ionicons name="shield-checkmark" size={60} color="#2563EB" />
-          </View>
-        </View>
-
-        {/* Your Children Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-            Your Children ({children.length})
-          </Text>
-          <TouchableOpacity
-            style={styles.addChildButton}
-            // onPress={() => router.push("/(client)/(tabs)/children/add-child")}
-          >
-            <MaterialIcons name="add-circle" size={20} color="#2563EB" />
-            <Text style={[styles.addChildText, { color: "#2563EB" }]}>
-              Add Child
-            </Text>
           </TouchableOpacity>
         </View>
 
-        {loading && !refreshing ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : error ? (
-          <View style={styles.messageCard}>
-            <Text style={[styles.messageTitle, { color: colors.text.primary }]}>
-              Unable to load children
-            </Text>
-            <Text
-              style={[styles.messageText, { color: colors.text.secondary }]}
-            >
-              {error}
-            </Text>
-            <TouchableOpacity onPress={() => fetchChildren()}>
-              <Text style={[styles.retryText, { color: colors.primary }]}>
-                Try again
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : children.length === 0 ? (
-          <View style={styles.emptyStateCard}>
-            <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-              No children yet
-            </Text>
-            <Text
-              style={[styles.emptySubtitle, { color: colors.text.secondary }]}
-            >
-              Add your first child profile to link them to a vehicle and begin
-              tracking.
-            </Text>
-          </View>
-        ) : (
-          <View>
-            {children.map((child, idx) => (
-              <View key={child.id.toString()}>
-                {renderChild({ item: child, index: idx } as any)}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Need to update something? */}
-        {children.length > 0 && (
-          <>
-            <View
-              style={[styles.updateCard, { backgroundColor: colors.surface }]}
-            >
-              <View>
-                <Text
-                  style={[styles.updateTitle, { color: colors.text.primary }]}
-                >
-                  Need to update something?
-                </Text>
-                <Text
-                  style={[
-                    styles.updateSubtitle,
-                    { color: colors.text.secondary },
-                  ]}
-                >
-                  Edit your child&apos;s details, school, or trip information.
-                </Text>
-              </View>
-              <TouchableOpacity>
-                <Text style={[styles.updateLink, { color: "#2563EB" }]}>
-                  Manage Children
-                </Text>
-              </TouchableOpacity>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryLeft}>
+            <View style={styles.summaryIconContainer}>
+              <Ionicons name="people" size={26} color="#2563EB" />
             </View>
+            <View style={styles.summaryMeta}>
+              <Text style={styles.summaryCount}>
+                {(existingChildren && existingChildren.length) || 0} Children
+              </Text>
+              <Text style={styles.summaryInfo}>
+                {overviewCards[0].count} On a trip · {overviewCards[1].count} At
+                school
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={styles.addButton} onPress={openAddChild}>
+            <MaterialIcons name="add" size={22} color="#2563EB" />
+            <Text style={styles.addText}>Add Child</Text>
+          </TouchableOpacity>
+        </View>
 
-            {/* Quick Actions */}
-            <View style={styles.quickActionsHeader}>
-              <Text
+        <Text style={styles.sectionTitle}>Children Overview</Text>
+        <View style={styles.overviewGrid}>
+          {/*  */}
+          {overviewCards.map((card) => (
+            <TouchableOpacity
+              key={card.label}
+              style={[
+                styles.overviewCard,
+                {
+                  backgroundColor: card.color,
+                  borderColor: `${card.iconColor}`,
+                  shadowColor: "#000",
+                },
+              ]}
+            >
+              <View
                 style={[
-                  styles.quickActionsTitle,
-                  { color: colors.text.primary },
+                  styles.overviewIcon,
+                  { backgroundColor: `${card.iconColor}1A` },
                 ]}
               >
-                Quick Actions
-              </Text>
-            </View>
-            <View style={styles.quickActions}>
-              {[
-                {
-                  label: "Add Child",
-                  desc: "Register a new child",
-                  icon: "person-add",
-                  color: "#10B981",
-                  // onPress: () =>
-                  //   router.push("/(client)/(tabs)/children/add-child"),
-                },
-                {
-                  label: "Update School",
-                  desc: "Change school information",
-                  icon: "school",
-                  color: "#F59E0B",
-                },
-                {
-                  label: "Manage Trips",
-                  desc: "View and edit child trips",
-                  icon: "calendar-today",
-                  color: "#2563EB",
-                },
-                {
-                  label: "Share QR Code",
-                  desc: "Share child's QR with driver",
-                  icon: "qr-code",
-                  color: "#8B5CF6",
-                },
-              ].map((action, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.actionTile}
-                  onPress={(action as any).onPress}
-                >
-                  <View
-                    style={[
-                      styles.actionIcon,
-                      { backgroundColor: `${action.color}22` },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={action.icon as any}
-                      size={24}
-                      color={action.color}
-                    />
-                  </View>
-                  <Text
-                    style={[styles.actionLabel, { color: colors.text.primary }]}
-                  >
-                    {action.label}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.actionDesc,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    {action.desc}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                <MaterialIcons
+                  name={card.icon}
+                  size={18}
+                  color={card.iconColor}
+                />
+                <Text style={styles.overviewCount}>{card.count}</Text>
+              </View>
+              <Text style={styles.overviewLabel}>{card.label}</Text>
+              <Text style={styles.overviewSub}>{card.sub}</Text>
+              <MaterialIcons name="chevron-right" size={20} color="#4B5563" />
+            </TouchableOpacity>
+          ))}
+        </View>
 
-            {/* Safety Banner */}
-            <View style={styles.safetyBanner}>
-              <View style={styles.safetyLeft}>
-                <View style={styles.safetyIcon}>
-                  <MaterialIcons name="shield" size={28} color="#fff" />
-                </View>
-                <View>
-                  <Text
-                    style={[styles.safetyTitle, { color: colors.text.primary }]}
-                  >
-                    Safety at Every Step
-                  </Text>
-                  <Text
-                    style={[
-                      styles.safetyDescription,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    You will be notified when your child is picked up and
-                    dropped off.
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.safetyIllustration}>
-                <Ionicons name="bus" size={40} color="#10B981" />
-              </View>
+        <Text style={styles.sectionTitleLarge}>My Children</Text>
+
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          {childrenLoading && existingChildren.length === 0 ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text style={styles.loadingText}>Loading children...</Text>
             </View>
-          </>
-        )}
-      </ScrollView>
+          ) : existingChildren.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <MaterialIcons
+                  name="people-outline"
+                  size={28}
+                  color="#2563EB"
+                />
+              </View>
+              <Text style={styles.emptyTitle}>No children yet</Text>
+              <Text style={styles.emptyText}>
+                Add your first child to start tracking their school trip.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={openAddChild}
+              >
+                <Text style={styles.emptyButtonText}>Add Child</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            existingChildren.map((child: Child) => {
+              const status = deriveChildStatus(child);
+              const routeName = child.route?.route_name || "Route";
+              const pickupTime = formatTime(
+                child.route?.pickup_start_time || child.route?.departure_time,
+              );
+              const dropoffTime = formatTime(
+                child.route?.dropoff_start_time ||
+                  child.route?.dropoff_end_time,
+              );
+
+              return (
+                <View key={child.id || child.name} style={styles.childCard}>
+                  <View style={styles.childHeader}>
+                    <View style={styles.avatarWrap}>
+                      {child.avatar ? (
+                        <Image
+                          source={{ uri: child.avatar }}
+                          style={{ width: 50, height: 50, borderRadius: 23 }}
+                        />
+                      ) : (
+                        <Text style={styles.avatarText}>
+                          {(child.name || "C").charAt(0)}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={styles.childInfo}>
+                      <Text style={styles.childName}>
+                        {child.name} {child.lastname || ""}
+                      </Text>
+                      <Text style={styles.childMeta}>
+                        {child.grade || "Grade not set"} •{" "}
+                        {child.school_name || "School not set"}
+                      </Text>
+
+                      <View style={styles.statusRow}>
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            color: "#475569",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {routeName}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.trackButton}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/(client)/(tabs)/children/[childId]",
+                          params: { childId: child.id },
+                        })
+                      }
+                    >
+                      <Ionicons
+                        name="location-outline"
+                        size={22}
+                        color="#1D4ED8"
+                      />
+                      <Text style={styles.trackText}>Track</Text>
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={20}
+                        color="#64748B"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.inlineStatusCard}>
+                    <Ionicons
+                      name={
+                        status.label === "At School"
+                          ? "checkmark-circle"
+                          : "navigate-circle"
+                      }
+                      size={18}
+                      color={status.accent}
+                    />
+                    <Text style={styles.inlineStatusText}>{status.label}</Text>
+                    <Text style={styles.inlineTimeText}>
+                      {status.label === "At School"
+                        ? status.note
+                        : `${pickupTime} • ${dropoffTime}`}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          {!childrenLoading && existingChildren.length > 0 && (
+            <View style={styles.safetyBanner}>
+              <View style={styles.safetyIconWrap}>
+                <MaterialIcons name="security" size={32} color="#fff" />
+              </View>
+              <Text style={styles.safetyText}>
+                We&apos;ll notify you if your child is picked up, dropped off or
+                if there are any changes.
+              </Text>
+              <MaterialIcons name="chevron-right" size={26} color="#111827" />
+            </View>
+          )}
+        </ScrollView>
+        <AppNotification
+          message={profileNotification.message}
+          type={profileNotification.type}
+          visible={profileNotification.visible}
+          onHide={() =>
+            setProfileNotification((current) => ({
+              ...current,
+              visible: false,
+            }))
+          }
+        />
+      </View>
     </SafeAreaView>
   );
 };
@@ -493,385 +364,473 @@ const ChildrenScreen = () => {
 export default ChildrenScreen;
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingBottom: 120 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#F3F5F7",
+  },
 
-  // Header
-  header: {
+  container: {
+    flex: 1,
+    backgroundColor: "#F3F5F7",
+    paddingHorizontal: 14,
+  },
+
+  /* TOP BAR */
+  topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    alignItems: "center",
+    paddingTop: 4,
+    paddingBottom: 8,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    marginBottom: 4,
+
+  timeText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
   },
-  headerSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  headerActions: {
+
+  statusIcons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 5,
   },
-  notificationButton: {
+
+  /* HEADER */
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+
+  title: {
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "800",
+    color: "#111827",
+    letterSpacing: -0.5,
+  },
+
+  subtitle: {
+    marginTop: 1,
+    fontSize: 12,
+    color: "#64748B",
+  },
+
+  bellButton: {
     position: "relative",
-    width: 44,
-    height: 44,
-    justifyContent: "center",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#DDE7F1",
     alignItems: "center",
+    justifyContent: "center",
   },
-  notificationBadge: {
+
+  badge: {
     position: "absolute",
-    top: -2,
-    right: 0,
-    backgroundColor: "#EF4444",
-    borderRadius: 999,
-    width: 22,
-    height: 22,
-    justifyContent: "center",
+    right: 1,
+    top: 1,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#111827",
     alignItems: "center",
+    justifyContent: "center",
   },
-  notificationBadgeText: {
+
+  badgeText: {
+    fontSize: 9,
+    color: "#fff",
+    fontWeight: "700",
+  },
+
+  /* SUMMARY */
+  summaryCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#EAF2FF",
+    borderRadius: 13,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#CFE0FF",
+    marginBottom: 12,
+  },
+
+  summaryLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  summaryIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: "#DDEBFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+
+  summaryMeta: {
+    flex: 1,
+  },
+
+  summaryCount: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  summaryInfo: {
+    fontSize: 10,
+    color: "#475569",
+    marginTop: 1,
+  },
+
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderWidth: 1.2,
+    borderColor: "#2E5BFF",
+    backgroundColor: "#F4F8FF",
+  },
+
+  addText: {
+    marginLeft: 3,
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+
+  /* SECTION TITLES */
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
+    marginTop: 3,
+    marginBottom: 7,
+  },
+
+  sectionTitleLarge: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 8,
+    marginBottom: 7,
+  },
+
+  /* OVERVIEW */
+  overviewGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 6,
+    marginBottom: 7,
+  },
+
+  overviewCard: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 8,
+    minHeight: 78,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  overviewIcon: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 15,
+    minHeight: 28,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+
+  overviewCount: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
+    lineHeight: 20,
+  },
+
+  overviewLabel: {
+    fontSize: 11,
+    color: "#111827",
+    fontWeight: "700",
+    marginTop: 1,
+  },
+
+  overviewSub: {
+    fontSize: 9,
+    color: "#475569",
+    marginTop: 0,
+    marginBottom: 1,
+  },
+
+  /* LIST */
+  list: {
+    flex: 1,
+    marginTop: 3,
+  },
+
+  loadingState: {
+    minHeight: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: "#475569",
+    fontWeight: "700",
+  },
+
+  emptyState: {
+    minHeight: 220,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 24,
+    marginTop: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "#EAF2FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  emptyText: {
+    textAlign: "center",
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#475569",
+    maxWidth: 260,
+  },
+
+  emptyButton: {
+    marginTop: 18,
+    backgroundColor: "#2563EB",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+
+  emptyButtonText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "800",
   },
-  headerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-  },
 
-  // Banner
-  bannerCard: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 24,
-    padding: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  bannerLeft: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 12,
-  },
-  bannerIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "rgba(37, 99, 235, 0.12)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bannerText: {
-    flex: 1,
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  bannerDescription: {
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  bannerIllustration: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Section Header
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  addChildButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  addChildText: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  // Child Card
+  /* CHILD CARD */
   childCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 24,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 9,
+    marginBottom: 9,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
-  childCardHeader: {
+
+  childHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
+    alignItems: "center",
   },
-  childCardLeft: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 12,
+
+  avatarWrap: {
+    width: 45,
+    height: 45,
+    borderRadius: 23,
+    backgroundColor: "#D9EAFD",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
   },
-  childAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+
+  avatarText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1E3A8A",
   },
+
   childInfo: {
     flex: 1,
   },
+
   childName: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
-    marginBottom: 6,
+    color: "#111827",
   },
-  childMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
+
   childMeta: {
-    fontSize: 13,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    alignSelf: "flex-start",
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  menuButton: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
+    fontSize: 10,
+    color: "#475569",
+    marginTop: 2,
   },
 
-  // Child Card Stats
-  childCardStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
-  },
-  statItem: {
-    flex: 1,
+  statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-  },
-  statIconContainer: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  cardFooter: {
-    marginTop: 12,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-
-  // Update Card
-  updateCard: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    marginTop: 8,
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  updateTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  updateSubtitle: {
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  updateLink: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  // Quick Actions
-  quickActionsHeader: {
-    paddingHorizontal: 20,
-    marginBottom: 14,
-  },
-  quickActionsTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  quickActions: {
-    flexDirection: "row",
+    gap: 5,
+    marginTop: 5,
     flexWrap: "wrap",
-    paddingHorizontal: 20,
-    marginBottom: 24,
-    gap: 12,
   },
-  actionTile: {
-    width: "48%",
-    borderRadius: 20,
-    padding: 16,
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.02)",
-  },
-  actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  actionDesc: {
-    fontSize: 11,
-    textAlign: "center",
-    lineHeight: 16,
+    gap: 3,
   },
 
-  // Safety Banner
+  statusText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  extraMeta: {
+    fontSize: 9,
+    color: "#475569",
+    fontWeight: "600",
+  },
+
+  /* TRACK BUTTON */
+  trackButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EAF2FF",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "#D0DAF3",
+  },
+
+  trackText: {
+    marginLeft: 3,
+    fontSize: 10,
+    color: "#1D4ED8",
+    fontWeight: "700",
+  },
+
+  /* INLINE STATUS */
+  inlineStatusCard: {
+    marginTop: 8,
+    backgroundColor: "#EDF6FF",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+
+  inlineStatusText: {
+    fontSize: 10,
+    color: "#111827",
+    fontWeight: "700",
+  },
+
+  inlineTimeText: {
+    fontSize: 9,
+    color: "#475569",
+    marginLeft: 1,
+  },
+
+  /* SAFETY */
   safetyBanner: {
-    marginHorizontal: 20,
-    marginBottom: 40,
-    borderRadius: 24,
-    padding: 18,
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: "#EAF4FF",
+    borderRadius: 12,
+    padding: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D4E5FF",
+  },
+
+  safetyIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: "#0F5BEF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+
+  safetyText: {
+    flex: 1,
+    fontSize: 10,
+    lineHeight: 14,
+    color: "#111827",
+    fontWeight: "600",
+  },
+
+  /* BOTTOM NAV */
+  bottomNav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#ECFDF5",
-  },
-  safetyLeft: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 12,
-  },
-  safetyIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "#16A34A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  safetyTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  safetyDescription: {
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  safetyIllustration: {
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "#F3F5F7",
+    paddingTop: 7,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
 
-  // States
-  loadingContainer: {
-    minHeight: 240,
+  navItem: {
+    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  messageCard: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 24,
-    padding: 20,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
+
+  navText: {
+    marginTop: 4,
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "600",
   },
-  messageTitle: {
-    fontSize: 16,
+
+  navTextActive: {
+    color: "#1D4ED8",
     fontWeight: "800",
-    marginBottom: 8,
-  },
-  messageText: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  retryText: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  emptyStateCard: {
-    marginHorizontal: 20,
-    marginTop: 40,
-    borderRadius: 24,
-    padding: 24,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    alignItems: "center",
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "center",
   },
 });

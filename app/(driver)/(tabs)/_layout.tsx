@@ -1,4 +1,4 @@
-import DriversTabBar from "@/components/DriversTabBar";
+import DriversTabBar from "../components/DriversTabBar";
 import { Tabs } from "expo-router";
 
 export default function TabsLayout() {

@@ -10,8 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerPageHeader } from "../../ownerHelpers/hooks/useOwnerPageHeader";
-import { clearOwnerCache } from "../../asyncStorage/ownerCache";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import { clearOwnerCache } from "../../store/asyncStorage/ownerCache";
 import { AuthContext } from "../../context/authContext/auth-context";
 import FloatingInput from "../../components/FloatingInput";
 import AppNotification from "../../components/Notification";

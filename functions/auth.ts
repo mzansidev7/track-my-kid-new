@@ -3,7 +3,7 @@ import {
   getUserFromAsyncStorage,
   saveAuthToken,
   updateUser,
-} from "../asyncStorage/authStore";
+} from "../store/asyncStorage/authStore";
 import { DEBUG_API_CONFIG, resolveWorkingBaseUrl } from "../url";
 import { UserAuthData } from "./interface";
 
