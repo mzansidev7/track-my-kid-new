@@ -1,5 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { useRouter } from "expo-router";
 import {
   getUserFromAsyncStorage,
   normalizeRole,
@@ -9,6 +16,7 @@ import {
   setAuthToken,
 } from "../../supabaseConfig/supabaseConfig";
 import { BASE_URL, resolveWorkingBaseUrl } from "../../url";
+import { installAuthExpiryHandler } from "../../utils/authExpiry";
 
 const OWNER_DRIVER_MODE_KEY = "owner_driver_mode";
 
@@ -37,6 +45,7 @@ export { AuthContext };
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [driverMode, setDriverMode] = useState<boolean>(false);
@@ -44,7 +53,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const loadUser = async () => {
     try {
       const storedUser = await getUserFromAsyncStorage();
-      console.log("🔍 Loaded user from AsyncStorage:", storedUser);
       if (!storedUser || !storedUser.user) {
         setUser(null);
         return;
@@ -207,7 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     // Clear local storage first (most reliable)
     await AsyncStorage.removeItem("authToken");
     await AsyncStorage.removeItem("user");
@@ -231,7 +239,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     //     error,
     //   );
     // }
-  };
+  }, []);
+
+  useEffect(() => {
+    installAuthExpiryHandler(async () => {
+      await logout();
+      router.replace("/(auth)/home");
+    });
+  }, [logout, router]);
 
   return (
     <AuthContext.Provider

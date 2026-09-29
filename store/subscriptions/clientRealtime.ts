@@ -144,6 +144,50 @@ export const subscribeToClientChildrenAndSchoolsUpdates = (
       async () => {
         onDataChange();
       },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "routes",
+      },
+      async () => {
+        onDataChange();
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_children",
+      },
+      async () => {
+        onDataChange();
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_stops",
+      },
+      async () => {
+        onDataChange();
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_assignments",
+      },
+      async () => {
+        onDataChange();
+      },
     );
 
   channel.subscribe((status: string) => {

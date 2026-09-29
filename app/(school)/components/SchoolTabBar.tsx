@@ -1,5 +1,4 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -34,7 +33,7 @@ const tabs = [
   },
 ];
 
-export default function SchoolTabBar(_props: BottomTabBarProps) {
+export default function SchoolTabBar() {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
@@ -174,31 +173,24 @@ const styles = StyleSheet.create({
   tabItem: {
     flex: 1,
     height: 62,
-
     alignItems: "center",
     justifyContent: "center",
-
     position: "relative",
   },
 
   iconWrapper: {
     width: 42,
     height: 42,
-
-    borderRadius: 14,
-
+    borderRadius: 50,
     alignItems: "center",
     justifyContent: "center",
   },
 
   activeIndicator: {
     position: "absolute",
-
     bottom: 5,
-
     width: 4,
     height: 4,
-
     borderRadius: 4,
   },
 });

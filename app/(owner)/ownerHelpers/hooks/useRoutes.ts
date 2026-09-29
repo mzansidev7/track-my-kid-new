@@ -14,6 +14,7 @@ import {
 } from "../../../../store/asyncStorage/timePreferences.asyncStore";
 import { resolveWorkingBaseUrl } from "@/url";
 import { useOwnerProfile } from "./useOwnerProfile";
+import { RouteStatus } from "../interface/owner.interfece";
 
 const normalizeRoute = (route: any) => {
   return {
@@ -179,4 +180,14 @@ export const useRoutes = () => {
     timePreferences,
     currentDepartureTime,
   };
+};
+
+export const useActiveRoutes = ({ allRoutes }: any) => {
+  // Filter routes into active and inactive
+  const activeRoutes = (allRoutes || []).filter((route: any) => {
+    const hasVehicle = route.vehicle_id && route.vehicles;
+    const hasDriver = route.driver_id && route.drivers;
+    return hasVehicle && hasDriver;
+  });
+  return activeRoutes;
 };

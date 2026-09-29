@@ -29,38 +29,12 @@ import {
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/messagesRealtime";
 import { BASE_URL } from "../../../url";
-
-const colors = {
-  background: "#F7F8FA",
-  ink: "#172B4D",
-  muted: "#718096",
-  border: "#E4EAF2",
-  blue: "#4285F4",
-  purple: "#8E44AD",
-};
-
-const getInitials = (name = "") =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("") || "?";
-const formatTime = (value?: string) => {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-const getRoleLabel = (role?: string) =>
-  role === "client"
-    ? "Parent"
-    : role === "driver"
-      ? "Driver"
-      : role === "owner"
-        ? "Fleet owner"
-        : "School contact";
+import {
+  colors,
+  formatTime,
+  getInitials,
+  getRoleLabel,
+} from "../schoolHelpers/actionHelpers/actions";
 
 export default function Messages() {
   const { user } = useContext(AuthContext);
@@ -139,6 +113,9 @@ export default function Messages() {
         setDraft("");
         setMessages(await fetchMessagesWithCache(selectedConversation.id));
       }
+    } catch (err) {
+      setSending(false);
+      console.warn(err);
     } finally {
       setSending(false);
     }

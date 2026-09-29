@@ -56,7 +56,7 @@ export default function Index() {
 
     switch (role) {
       case "owner":
-        targetRoute = "/(owner)/(tabs)";
+        targetRoute = "/(owner)/onboarding";
         break;
 
       case "client":
@@ -72,7 +72,7 @@ export default function Index() {
         break;
 
       case "admin":
-        targetRoute = "/(admin)";
+        targetRoute = "/(admin)/(tabs)";
         break;
 
       default:

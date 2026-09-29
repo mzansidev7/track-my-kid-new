@@ -693,7 +693,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fullScreenWrapper: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 999,
   },
   overlayHeader: {

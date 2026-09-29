@@ -75,91 +75,75 @@ const DriverHeader = ({
   };
 
   return (
-  <View style={[styles.container, style]}>
-    {/* LEFT SIDE */}
-    <View style={styles.leftSection}>
-      {showBackButton && (
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBack}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons
-            name="arrow-back"
-            size={23}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-      )}
-    </View>
+    <View style={[styles.container, style]}>
+      {/* LEFT SIDE */}
+      <View style={styles.leftSection}>
+        {showBackButton && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="arrow-back" size={23} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+      </View>
 
-    {/* CENTER TITLE */}
-    <View style={styles.centerSection}>
-      <Text
-        style={styles.title}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
-
-      {subtitle ? (
-        <Text
-          style={styles.subtitle}
-          numberOfLines={1}
-        >
-          {subtitle}
+      {/* CENTER TITLE */}
+      <View style={styles.centerSection}>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
         </Text>
-      ) : null}
+
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* RIGHT SIDE */}
+      <View style={styles.rightSection}>
+        {rightComponent ? (
+          rightComponent
+        ) : (
+          <>
+            {showNotifications && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                activeOpacity={0.7}
+                onPress={onRightPress}
+              >
+                <MaterialIcons
+                  name="notifications-none"
+                  size={24}
+                  color="#FFFFFF"
+                />
+
+                {notificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationText}>
+                      {notificationCount > 9 ? "9+" : notificationCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {rightIcon && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                activeOpacity={0.7}
+                onPress={onRightPress}
+              >
+                <MaterialIcons name={rightIcon} size={23} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
     </View>
-
-    {/* RIGHT SIDE */}
-    <View style={styles.rightSection}>
-      {rightComponent ? (
-        rightComponent
-      ) : (
-        <>
-          {showNotifications && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              activeOpacity={0.7}
-              onPress={onRightPress}
-            >
-              <MaterialIcons
-                name="notifications-none"
-                size={24}
-                color="#FFFFFF"
-              />
-
-              {notificationCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationText}>
-                    {notificationCount > 9
-                      ? "9+"
-                      : notificationCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {rightIcon && (
-            <TouchableOpacity
-              style={styles.iconButton}
-              activeOpacity={0.7}
-              onPress={onRightPress}
-            >
-              <MaterialIcons
-                name={rightIcon}
-                size={23}
-                color="#FFFFFF"
-              />
-            </TouchableOpacity>
-          )}
-        </>
-      )}
-    </View>
-  </View>
-);
+  );
 };
 
 export default DriverHeader;
@@ -167,13 +151,15 @@ export default DriverHeader;
 const styles = StyleSheet.create({
   container: {
     minHeight: 58,
+    paddingTop: 18,
+    paddingBottom: 10,
+    paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    // marginTop: 20,
     position: "relative",
-    backgroundColor: "#061A3A",
-    padding: 10,
+    backgroundColor: "#0F9D58",
+    marginBottom: 20,
   },
 
   leftSection: {
@@ -199,7 +185,7 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    color: "#7F94B1",
+    color: "#E7F9EE",
     fontSize: 11,
     marginTop: 3,
     textAlign: "center",
@@ -209,11 +195,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#0D2850",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "rgba(15, 157, 88, 0.18)",
   },
 
   rightSection: {
@@ -228,11 +214,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#0D2850",
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "rgba(15, 157, 88, 0.18)",
     position: "relative",
   },
 
@@ -248,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#061A3A",
+    borderColor: "#0F9D58",
   },
 
   notificationText: {

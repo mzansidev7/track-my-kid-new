@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useContext, useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
   FlatList,
@@ -35,6 +36,9 @@ const formatCurrency = (cents: number, currency = "zar") => {
 export default function OwnerPayments() {
   const { user } = useContext(AuthContext);
   const router = useRouter();
+  const searchParams = useLocalSearchParams();
+  const fromOnboarding = searchParams.fromOnboarding === "true";
+  const stripeReturn = searchParams.stripe === "complete";
   const [loading, setLoading] = useState(true);
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -56,7 +60,9 @@ export default function OwnerPayments() {
   const { renderHeader } = useOwnerPageHeader({
     title: "Payments & Payouts",
     subtitle: "Manage your payment methods and payouts",
-    onBackPress: () => router.push("/(owner)/(tabs)/profile"),
+    onBackPress: fromOnboarding
+      ? () => router.push("/(owner)/onboarding")
+      : () => router.push("/(owner)/(tabs)/profile"),
   });
 
   const loadData = async () => {
@@ -173,6 +179,38 @@ export default function OwnerPayments() {
       cleanup?.();
     };
   }, [user?.token]);
+
+  const completeOnboarding = async () => {
+    if (!fromOnboarding) {
+      return;
+    }
+
+    try {
+      await AsyncStorage.setItem("owner_onboarding_complete", "true");
+      router.replace("/(owner)/(tabs)" as never);
+    } catch (error) {
+      console.warn("Unable to persist owner onboarding completion:", error);
+      router.replace("/(owner)/(tabs)" as never);
+    }
+  };
+
+  useEffect(() => {
+    if (!(fromOnboarding || stripeReturn) || !stripeStatus.payouts_enabled) {
+      return;
+    }
+
+    const finalizeOnboarding = async () => {
+      try {
+        await AsyncStorage.setItem("owner_onboarding_complete", "true");
+      } catch (error) {
+        console.warn("Unable to persist owner onboarding completion:", error);
+      }
+
+      router.replace("/(owner)/(tabs)" as never);
+    };
+
+    finalizeOnboarding();
+  }, [fromOnboarding, router, stripeReturn, stripeStatus.payouts_enabled]);
 
   const connectStripeAccount = async () => {
     if (!user?.token) return;
@@ -312,7 +350,7 @@ export default function OwnerPayments() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
-            <Text style={styles.title}>Payout Settings</Text>
+            <Text style={styles.title}>Client / Parent Payment Setup</Text>
             <View style={styles.payoutCard}>
               <View style={styles.payoutHeader}>
                 <View style={styles.payoutIcon}>
@@ -356,10 +394,47 @@ export default function OwnerPayments() {
                     : "Connect payout account"}
               </Text>
             </TouchableOpacity>
-            <Text style={styles.noteText}>
-              Stripe securely manages your payout banking details. The platform
-              deducts a R5 service fee per child when clients pay.
+
+            {(fromOnboarding || stripeReturn) &&
+              stripeStatus.payouts_enabled && (
+                <TouchableOpacity
+                  style={[styles.button, styles.continueButton]}
+                  onPress={completeOnboarding}
+                >
+                  <Text style={styles.buttonText}>Continue to dashboard</Text>
+                </TouchableOpacity>
+              )}
+
+            <Text style={[styles.noteText, { marginTop: 12 }]}>
+              Stripe securely manages your payout banking details. Track My Kids
+              does not store your banking information.
             </Text>
+            <View style={{ marginTop: 10 }}>
+              <Text style={styles.noteText}>
+                If you have any issues with Stripe, please contact their support
+                at{" "}
+                <Text
+                  style={{ color: "#4A90E2" }}
+                  onPress={() => Linking.openURL("mailto:support@stripe.com")}
+                >
+                  support@stripe.com
+                </Text>
+              </Text>
+            </View>
+            <View style={{ marginTop: 10 }}>
+              <Text style={styles.noteText}>
+                For more information about how Stripe handles your data.
+              </Text>
+              <Text style={styles.noteText}>
+                Visit the Stripe Privacy Policy at{" "}
+                <Text
+                  style={{ color: "#4A90E2" }}
+                  onPress={() => Linking.openURL("https://stripe.com/privacy")}
+                >
+                  stripe.com/privacy
+                </Text>
+              </Text>
+            </View>
           </View>
 
           <View style={styles.card}>
@@ -465,6 +540,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   buttonDisabled: { opacity: 0.65 },
+  continueButton: { marginTop: 10, backgroundColor: "#16A34A" },
   buttonText: { color: "#FFF", fontWeight: "700" },
   noteText: {
     color: "#555",

@@ -1,11 +1,7 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTheme } from "@/styles/theme";
 
 type Props = {
   routeName: string;
@@ -24,41 +20,55 @@ const DriverRouteCard = ({
   time,
   onPress,
 }: Props) => {
+  const { colors } = useTheme();
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.header}>
         <View>
-          <Text style={styles.label}>Today&apos;s Route</Text>
-          <Text style={styles.routeName}>{routeName}</Text>
+          <Text style={[styles.label, { color: colors.primary }]}>
+            Today&apos;s Route
+          </Text>
+          <Text style={[styles.routeName, { color: colors.primary }]}>
+            {routeName}
+          </Text>
         </View>
 
-        <View style={styles.routeIcon}>
-          <MaterialIcons
-            name="alt-route"
-            size={23}
-            color="#FFFFFF"
-          />
+        <View
+          style={[styles.routeIcon, { backgroundColor: colors.background }]}
+        >
+          <MaterialIcons name="alt-route" size={23} color={colors.primary} />
         </View>
       </View>
 
       <View style={styles.route}>
         <View style={styles.timeline}>
-          <View style={styles.startDot} />
-          <View style={styles.line} />
-          <View style={styles.endDot} />
+          <View
+            style={[styles.startDot, { backgroundColor: colors.primary }]}
+          />
+          <View style={[styles.line, { backgroundColor: colors.border }]} />
+          <View style={[styles.endDot, { backgroundColor: colors.primary }]} />
         </View>
 
         <View style={styles.locations}>
           <View style={styles.location}>
-            <Text style={styles.locationLabel}>START</Text>
-            <Text style={styles.locationText}>
+            <Text style={[styles.locationLabel, { color: colors.primary }]}>
+              START
+            </Text>
+            <Text style={[styles.locationText, { color: colors.primary }]}>
               {startLocation}
             </Text>
           </View>
 
           <View style={styles.location}>
-            <Text style={styles.locationLabel}>DESTINATION</Text>
-            <Text style={styles.locationText}>
+            <Text style={[styles.locationLabel, { color: colors.primary }]}>
+              DESTINATION
+            </Text>
+            <Text style={[styles.locationText, { color: colors.primary }]}>
               {endLocation}
             </Text>
           </View>
@@ -67,42 +77,32 @@ const DriverRouteCard = ({
 
       <View style={styles.infoRow}>
         <View style={styles.info}>
-          <MaterialIcons
-            name="schedule"
-            size={17}
-            color="#22C7D6"
-          />
+          <MaterialIcons name="schedule" size={17} color={colors.primary} />
 
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: colors.primary }]}>
             {time || "Not scheduled"}
           </Text>
         </View>
 
         <View style={styles.info}>
-          <MaterialIcons
-            name="groups"
-            size={17}
-            color="#22C7D6"
-          />
+          <MaterialIcons name="groups" size={17} color={colors.primary} />
 
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoText, { color: colors.primary }]}>
             {students} students
           </Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, { backgroundColor: colors.primary }]}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Text style={styles.buttonText}>View Route</Text>
+        <Text style={[styles.buttonText, { color: colors.surface }]}>
+          View Route
+        </Text>
 
-        <MaterialIcons
-          name="arrow-forward"
-          size={19}
-          color="#FFFFFF"
-        />
+        <MaterialIcons name="arrow-forward" size={19} color={colors.surface} />
       </TouchableOpacity>
     </View>
   );
@@ -110,12 +110,11 @@ const DriverRouteCard = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#0D2850",
     borderRadius: 18,
     padding: 18,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "rgba(15, 157, 88, 0.16)",
   },
 
   header: {
@@ -125,12 +124,12 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: "#7F94B1",
+    color: "#4B5563",
     fontSize: 12,
   },
 
   routeName: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 19,
     fontWeight: "700",
     marginTop: 4,
@@ -140,7 +139,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
-    backgroundColor: "#0057FF",
+    backgroundColor: "#0F9D58",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -159,20 +158,20 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#22C7D6",
+    backgroundColor: "#22C55E",
   },
 
   line: {
     width: 2,
     height: 45,
-    backgroundColor: "#31557C",
+    backgroundColor: "#BBF7D0",
   },
 
   endDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#0057FF",
+    backgroundColor: "#0F9D58",
   },
 
   locations: {
@@ -186,14 +185,14 @@ const styles = StyleSheet.create({
   },
 
   locationLabel: {
-    color: "#6F86A4",
+    color: "#64748B",
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 1,
   },
 
   locationText: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 14,
     fontWeight: "600",
     marginTop: 3,
@@ -211,13 +210,13 @@ const styles = StyleSheet.create({
   },
 
   infoText: {
-    color: "#C7D3E2",
+    color: "#334155",
     fontSize: 12,
     marginLeft: 6,
   },
 
   button: {
-    backgroundColor: "#0057FF",
+    backgroundColor: "#0F9D58",
     height: 46,
     borderRadius: 13,
     marginTop: 18,

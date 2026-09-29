@@ -1,4 +1,4 @@
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState } from "react";
@@ -19,6 +19,7 @@ import { updateUser } from "../../store/asyncStorage/authStore";
 import { AuthContext } from "../../context/authContext/auth-context";
 import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
+import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 
 const normalizeAddressValue = (value: any) => {
   if (typeof value === "string") {
@@ -66,6 +67,12 @@ const PersonalInfo = () => {
     identity_number:
       owner?.identity_number || profileUser?.identity_number || "",
     address: normalizeAddressValue(owner?.address || profileUser?.address),
+  });
+
+  const { renderHeader } = useOwnerPageHeader({
+    title: "Personal Information",
+    subtitle: "Manage your personal details",
+    onBackPress: () => router.push("/(owner)/(tabs)/profile"),
   });
 
   useEffect(() => {
@@ -379,38 +386,38 @@ const PersonalInfo = () => {
     }
   };
 
-  const setingProfileHeader = () => (
-    <View style={styles.header}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.push("/(owner)/(tabs)/profile")}
-          style={{ padding: 8 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text
-          style={{
-            fontSize: 20,
-            fontWeight: "800",
-            color: "white",
-            marginLeft: 12,
-          }}
-        >
-          Update your personal details
-        </Text>
-      </View>
-    </View>
-  );
+  // const setingProfileHeader = () => (
+  //   <View style={styles.header}>
+  //     <View
+  //       style={{
+  //         flexDirection: "row",
+  //         alignItems: "center",
+  //       }}
+  //     >
+  //       <TouchableOpacity
+  //         onPress={() => router.push("/(owner)/(tabs)/profile")}
+  //         style={{ padding: 8 }}
+  //       >
+  //         <Ionicons name="arrow-back" size={24} color="white" />
+  //       </TouchableOpacity>
+  //       <Text
+  //         style={{
+  //           fontSize: 20,
+  //           fontWeight: "800",
+  //           color: "white",
+  //           marginLeft: 12,
+  //         }}
+  //       >
+  //         Update your personal details
+  //       </Text>
+  //     </View>
+  //   </View>
+  // );
 
   if (loading) {
     return (
       <View style={styles.container}>
-        {setingProfileHeader()}
+        {renderHeader()}
         <View style={styles.loadingCenter}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>Loading profile details...</Text>
@@ -421,7 +428,7 @@ const PersonalInfo = () => {
 
   return (
     <View style={styles.container}>
-      {setingProfileHeader()}
+      {renderHeader()}
 
       <AppNotification
         visible={notification.visible}
@@ -839,7 +846,7 @@ const styles = StyleSheet.create({
 
   avatarInitials: {
     color: "#FFF",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
   },
 

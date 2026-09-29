@@ -1,5 +1,4 @@
 import React from "react";
-import { useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -8,129 +7,195 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "@/styles/theme";
+import useDriverRoutes from "../driverHelpers/hooks/useDriverRoutes";
 
-const sampleStudents = [
-  {
-    id: "1",
-    name: "Amelia Johnson",
-    school: "Curro Hazeldean",
-    grade: "Grade 3",
-    status: "ONBOARD",
-    pickedUp: "07:15 AM",
-    avatar: "https://images.unsplash.com/photo-1502685104226-ee32379fefbe?auto=format&fit=crop&w=200&q=80",
-  },
-  {
-    id: "2",
-    name: "Liam Williams",
-    school: "Curro Hazeldean",
-    grade: "Grade 4",
-    status: "ONBOARD",
-    pickedUp: "07:20 AM",
-    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
-  },
-  {
-    id: "3",
-    name: "Zoe Mokoena",
-    school: "The Meadows Primary",
-    grade: "Grade 2",
-    status: "ONBOARD",
-    pickedUp: "07:55 AM",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-  },
-  {
-    id: "4",
-    name: "Ethan van der Merwe",
-    school: "Lombardy Primary",
-    grade: "Grade 5",
-    status: "CURRENT STOP",
-    pickedUp: "Onboard",
-    avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=200&q=80",
-    highlight: true,
-  },
-  {
-    id: "5",
-    name: "Sarah Khan",
-    school: "Lombardy Primary",
-    grade: "Grade 1",
-    status: "ONBOARD",
-    pickedUp: "08:18 AM",
-    avatar: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80",
-  },
-];
+const timeToMinutes = (value?: string | null) => {
+  if (!value) return null;
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
 
 const Students = () => {
   const { colors } = useTheme();
-  const router = useRouter();
+  const { routes, routesLoading, routesError, refreshRoutes } =
+    useDriverRoutes();
+  const currentDate = new Date();
+  const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
+  const route = React.useMemo(() => {
+    if (!routes.length) return null;
 
+    const activeRoute = routes.find((candidate) => {
+      const pickupStart = timeToMinutes(candidate.pickup_start_time);
+      const pickupEnd = timeToMinutes(candidate.pickup_end_time);
+      const dropoffStart = timeToMinutes(candidate.dropoff_start_time);
+      const dropoffEnd = timeToMinutes(candidate.dropoff_end_time);
+
+      const inPickupWindow =
+        pickupStart !== null &&
+        pickupEnd !== null &&
+        currentMinutes >= pickupStart &&
+        currentMinutes <= pickupEnd;
+      const inDropoffWindow =
+        dropoffStart !== null &&
+        dropoffEnd !== null &&
+        currentMinutes >= dropoffStart &&
+        currentMinutes <= dropoffEnd;
+
+      return inPickupWindow || inDropoffWindow;
+    });
+
+    return activeRoute || routes[0];
+  }, [currentMinutes, routes]);
+  const routeStops = route?.route_stops || [];
+  const students = (route?.route_children || []).map((routeChild: any) => {
+    const child = routeChild.children || {};
+    const stop = routeStops.find(
+      (routeStop) => routeStop.child_id === routeChild.child_id,
+    );
+    const isDropoff = stop?.stop_type === "dropoff";
+    return {
+      id: String(routeChild.child_id || child.id),
+      name: [child.name, child.lastname].filter(Boolean).join(" ") || "Child",
+      school:
+        child.school_name || child.schools?.name || "School not specified",
+      grade: child.grade || "Grade not specified",
+      status:
+        stop?.status === "completed"
+          ? isDropoff
+            ? "DROPPED OFF"
+            : "ONBOARD"
+          : stop?.status === "in_progress"
+            ? "CURRENT STOP"
+            : "WAITING",
+      pickedUp: stop?.status === "completed" ? "Completed" : "Not completed",
+      avatar: child.avatar || null,
+      highlight: stop?.status === "in_progress",
+    };
+  });
+  const completedCount = students.filter(
+    (student) =>
+      student.status === "ONBOARD" || student.status === "DROPPED OFF",
+  ).length;
+  const currentStop = students.find(
+    (student) => student.status === "CURRENT STOP",
+  );
 
   return (
-    <View style={[styles.safeArea, { backgroundColor: colors.background }]}> 
-
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.background }]}
+    >
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.heroCard, {marginTop: 20}]}> 
-          <View style={styles.heroIconCircle}> 
+        {routesLoading ? (
+          <Text style={{ color: colors.text.secondary, margin: 20 }}>
+            Loading students...
+          </Text>
+        ) : routesError ? (
+          <Text style={{ color: "#DC2626", margin: 20 }}>{routesError}</Text>
+        ) : null}
+        <View style={[styles.heroCard, { marginTop: 20 }]}>
+          <View style={styles.heroIconCircle}>
             <MaterialIcons name="directions-bus" size={26} color="#0F9D58" />
           </View>
           <View style={{ flex: 1, marginLeft: 14 }}>
             <Text style={styles.heroLabel}>Current Route</Text>
-            <Text style={styles.heroTitle}>Pretoria East - Morning Route</Text>
-            <Text style={styles.heroSubtitle}>Curro Hazeldean → Various Schools</Text>
+            <Text style={styles.heroTitle}>
+              {route?.route_name || "No route assigned"}
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              {route?.start_location || "Route start"} →{" "}
+              {route?.end_location || "Route end"}
+            </Text>
           </View>
-          <View style={styles.heroBadge}> 
-            <Text style={styles.heroBadgeText}>IN PROGRESS</Text>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>
+              {route ? "ASSIGNED" : "NO ROUTE"}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.heroStats}> 
+        <View style={styles.heroStats}>
           <View style={styles.heroStatItem}>
             <Text style={styles.heroStatLabel}>Children Onboard</Text>
-            <Text style={styles.heroStatValue}>12 / 16</Text>
+            <Text style={styles.heroStatValue}>
+              {completedCount} / {students.length}
+            </Text>
           </View>
           <View style={styles.heroStatItem}>
             <Text style={styles.heroStatLabel}>Next Stop</Text>
-            <Text style={styles.heroStatValue}>Lombardy Estate</Text>
-            <Text style={styles.heroStatMeta}>ETA 5 min</Text>
+            <Text style={styles.heroStatValue}>
+              {currentStop?.school || "No current stop"}
+            </Text>
+            <Text style={styles.heroStatMeta}>
+              {currentStop ? "Current stop" : "Waiting"}
+            </Text>
           </View>
           <View style={styles.heroStatItem}>
             <Text style={styles.heroStatLabel}>Route Progress</Text>
-            <Text style={styles.heroStatValue}>40%</Text>
+            <Text style={styles.heroStatValue}>
+              {students.length
+                ? Math.round((completedCount / students.length) * 100)
+                : 0}
+              %
+            </Text>
           </View>
           <View style={styles.heroStatItem}>
             <Text style={styles.heroStatLabel}>Distance Left</Text>
-            <Text style={styles.heroStatValue}>18.4 km</Text>
-            <Text style={styles.heroStatMeta}>Est. 45 min</Text>
+            <Text style={styles.heroStatValue}>{routeStops.length}</Text>
+            <Text style={styles.heroStatMeta}>Stops</Text>
           </View>
         </View>
 
-        <View style={styles.tabRow}> 
+        <View style={styles.tabRow}>
           <TouchableOpacity style={[styles.tabItem, styles.tabActive]}>
-            <Text style={[styles.tabText, styles.tabTextActive]}>Onboard (12)</Text>
+            <Text style={[styles.tabText, styles.tabTextActive]}>
+              Completed ({completedCount})
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.tabItem}>
-            <Text style={styles.tabText}>Not Picked Up (3)</Text>
+            <Text style={styles.tabText}>
+              Waiting (
+              {
+                students.filter((student) => student.status === "WAITING")
+                  .length
+              }
+              )
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.tabItem}>
-            <Text style={styles.tabText}>Dropped Off (7)</Text>
+            <Text style={styles.tabText}>
+              Current (
+              {
+                students.filter((student) => student.status === "CURRENT STOP")
+                  .length
+              }
+              )
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.infoBanner}> 
-          <View style={styles.infoBadge}> 
+        <View style={styles.infoBanner}>
+          <View style={styles.infoBadge}>
             <MaterialIcons name="shield" size={20} color="#0F9D58" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.infoTitle}>All children are accounted for</Text>
-            <Text style={styles.infoSubtitle}>Last updated: Just now</Text>
+            <Text style={styles.infoTitle}>
+              {completedCount} of {students.length} stops completed
+            </Text>
+            <Text style={styles.infoSubtitle}>
+              Route status: {route ? "assigned" : "not assigned"}
+            </Text>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => void refreshRoutes()}>
             <Text style={styles.infoAction}>Refresh</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.listCard}> 
-          {sampleStudents.map((student) => (
+        <View style={styles.listCard}>
+          {students.map((student) => (
             <View
               key={student.id}
               style={[
@@ -141,7 +206,16 @@ const Students = () => {
                 },
               ]}
             >
-              <Image source={{ uri: student.avatar }} style={styles.studentAvatar} />
+              {student.avatar ? (
+                <Image
+                  source={{ uri: student.avatar }}
+                  style={styles.studentAvatar}
+                />
+              ) : (
+                <View style={styles.studentAvatar}>
+                  <MaterialIcons name="person" size={22} color="#FFFFFF" />
+                </View>
+              )}
               <View style={styles.studentInfo}>
                 <Text style={styles.studentName}>{student.name}</Text>
                 <Text style={styles.studentSchool}>{student.school}</Text>
@@ -165,18 +239,24 @@ const Students = () => {
           <MaterialIcons name="chevron-right" size={20} color="#0F9D58" />
         </TouchableOpacity>
 
-        <View style={styles.reminderCard}> 
-          <View style={styles.reminderIconBox}> 
+        <View style={styles.reminderCard}>
+          <View style={styles.reminderIconBox}>
             <MaterialIcons name="safety-check" size={22} color="#F97316" />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.reminderTitle}>Safety Reminder</Text>
-            <Text style={styles.reminderText}>Please ensure all children are seated and wearing seatbelts.</Text>
+            <Text style={styles.reminderText}>
+              Please ensure all children are seated and wearing seatbelts.
+            </Text>
           </View>
-          <MaterialIcons name="chevron-right" size={22} color={colors.text.secondary} />
+          <MaterialIcons
+            name="chevron-right"
+            size={22}
+            color={colors.text.secondary}
+          />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 

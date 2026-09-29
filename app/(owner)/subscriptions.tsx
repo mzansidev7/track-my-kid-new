@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -25,6 +26,7 @@ export default function OwnerSubscriptions() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const { user } = useContext(AuthContext);
+  const fromOnboarding = searchParams.fromOnboarding === "true";
   const [plans, setPlans] = useState<any[]>([]);
   const [ownerSubscription, setOwnerSubscription] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +127,7 @@ export default function OwnerSubscriptions() {
 
   const currentSubscriptionLabelText = currentSubscriptionLabel();
 
-  const loadSubscriptions = async () => {
+  const loadSubscriptions = useCallback(async () => {
     if (!user?.token) {
       return;
     }
@@ -163,7 +165,7 @@ export default function OwnerSubscriptions() {
             String(cfg.publishable_key).startsWith("pk_test_"),
           );
         }
-      } catch (e) {
+      } catch {
         // ignore stripe config errors for now
       }
     } catch (err: any) {
@@ -175,11 +177,11 @@ export default function OwnerSubscriptions() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.token]);
 
   useEffect(() => {
     loadSubscriptions();
-  }, [user?.token]);
+  }, [loadSubscriptions]);
 
   useEffect(() => {
     if (stripePublishableKey) {
@@ -318,8 +320,26 @@ export default function OwnerSubscriptions() {
         message: "Payment successful! Your subscription has been updated.",
       });
       setPaymentModalVisible(false);
+
+      if (fromOnboarding) {
+        try {
+          await AsyncStorage.setItem("owner_onboarding_complete", "true");
+        } catch (storageError) {
+          console.warn(
+            "Unable to persist owner onboarding completion:",
+            storageError,
+          );
+        }
+      }
+
       // Refresh subscription state
       loadSubscriptions();
+
+      if (fromOnboarding) {
+        setTimeout(() => {
+          router.replace("/(owner)/(tabs)" as never);
+        }, 900);
+      }
     } catch (err: any) {
       setNotification({
         visible: true,
@@ -628,13 +648,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#1F2937",
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 21,
     fontWeight: "900",
     color: "#FFFFFF",
     marginBottom: 6,
   },
   headerSubtitle: {
-    fontSize: 15,
+    fontSize: 12,
     color: "#CBD5E1",
     lineHeight: 22,
     maxWidth: "90%",
@@ -673,8 +693,8 @@ const styles = StyleSheet.create({
   },
   currentPlanCard: {
     backgroundColor: "#111827",
-    borderRadius: 26,
-    padding: 24,
+    borderRadius: 18,
+    padding: 16,
     marginBottom: 24,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
@@ -727,20 +747,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B82F6",
   },
   currentPlanName: {
-    fontSize: 26,
+    fontSize: 21,
     fontWeight: "900",
     color: "#FFFFFF",
     marginBottom: 8,
   },
   currentPlanPrice: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
     color: "#60A5FA",
     marginBottom: 12,
   },
   currentPlanDescription: {
     color: "#CBD5E1",
-    lineHeight: 24,
+    lineHeight: 19,
   },
   currentPlanMeta: {
     flexDirection: "row",

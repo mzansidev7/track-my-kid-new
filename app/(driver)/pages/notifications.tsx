@@ -135,8 +135,12 @@ const DriverNotifications = () => {
         subtitle="Stay connected with parents, school and fleet owner"
         showBackButton={true}
         showNotifications={true}
-        notificationCount={(notifications && notifications.length) || 0}
-      />{" "}
+        notificationCount={
+          (notifications &&
+            notifications.filter((n: any) => !n.is_read).length) ||
+          0
+        }
+      />
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4CAF50" />

@@ -7,18 +7,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 
 const BillingPayments = () => {
   const router = useRouter();
 
+  const { renderHeader } = useOwnerPageHeader({
+    title: "Managing Payments & Billing",
+    subtitle: ` Learn how to set up payment processing, manage billing rates, and
+            handle financial transactions securely.`,
+    onBackPress: () => router.push("/(owner)/(tabs)/profile"),
+  });
+
   return (
     <View style={styles.container}>
-      {/* <Header
-        setActiveButton={() => router.back()}
-        title="Billing & Payments"
-        subTitle="Payments, invoices, and account billing"
-      /> */}
-
+      {/* {renderHeader()} */}
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Managing Payments & Billing</Text>

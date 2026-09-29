@@ -151,7 +151,7 @@ const DriverProfile = () => {
       <View style={localStyles.divider} />
       <ScrollView contentContainerStyle={localStyles.profileContent}>
         <LinearGradient
-          colors={["#061A3A", "#061A3A", "#061A3A"]}
+          colors={["#0F9D58", "#0A7A43", "#0F9D58"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={localStyles.profileHeroCard}
@@ -664,7 +664,7 @@ const localStyles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#22C55E",
     borderWidth: 2,
-    borderColor: "#061A3A",
+    borderColor: "#0F9D58",
   },
 
   profileHeroCard: {

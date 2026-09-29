@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useContext, useEffect, useState, useCallback } from "react";
+import { useTheme } from "@/styles/theme";
 import {
   ActivityIndicator,
   Image,
@@ -12,7 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
 import CustomMap from "../../components/map";
 import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
@@ -149,6 +149,10 @@ const RouteDetailsScreen = () => {
   const [assigning, setAssigning] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(0);
+  const [liveDriverLocation, setLiveDriverLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
 
   const handleBack = () => {
     if (returnTo === "vehicle" && vehicleId) {
@@ -166,6 +170,46 @@ const RouteDetailsScreen = () => {
     title: "Route Details",
     onBackPress: handleBack,
   });
+
+  useEffect(() => {
+    const driverId = route?.driver_id || route?.drivers?.id;
+    if (!driverId || !user?.token) {
+      setLiveDriverLocation(null);
+      return;
+    }
+
+    let active = true;
+    const fetchLiveDriverLocation = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/driver/location/${driverId}`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        if (!response.ok || !active) return;
+        const data = await response.json();
+        const latitude = Number(data?.latitude);
+        const longitude = Number(data?.longitude);
+        if (
+          data?.is_online &&
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude)
+        ) {
+          setLiveDriverLocation({ latitude, longitude });
+        } else {
+          setLiveDriverLocation(null);
+        }
+      } catch (locationError) {
+        console.error("Owner live driver location error:", locationError);
+      }
+    };
+
+    fetchLiveDriverLocation();
+    const interval = setInterval(fetchLiveDriverLocation, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [route?.driver_id, route?.drivers?.id, user?.token]);
 
   const fetchRouteDetails = useCallback(async () => {
     if (!routeId || !user?.token) {
@@ -543,13 +587,12 @@ const RouteDetailsScreen = () => {
   };
 
   const getStopCoordinate = (stop: RouteDetails["route_stops"][number]) => {
-    if (
-      typeof stop?.latitude === "number" &&
-      typeof stop?.longitude === "number"
-    ) {
+    const stopLatitude = Number(stop?.latitude);
+    const stopLongitude = Number(stop?.longitude);
+    if (Number.isFinite(stopLatitude) && Number.isFinite(stopLongitude)) {
       return {
-        latitude: stop.latitude,
-        longitude: stop.longitude,
+        latitude: stopLatitude,
+        longitude: stopLongitude,
       };
     }
 
@@ -561,25 +604,26 @@ const RouteDetailsScreen = () => {
     if (!child) return null;
 
     if (stop.stop_type === "pickup") {
-      if (
-        typeof child.pickup_latitude === "number" &&
-        typeof child.pickup_longitude === "number"
-      ) {
+      const pickupLatitude = Number(child.pickup_latitude);
+      const pickupLongitude = Number(child.pickup_longitude);
+      if (Number.isFinite(pickupLatitude) && Number.isFinite(pickupLongitude)) {
         return {
-          latitude: child.pickup_latitude,
-          longitude: child.pickup_longitude,
+          latitude: pickupLatitude,
+          longitude: pickupLongitude,
         };
       }
     }
 
     if (stop.stop_type === "dropoff") {
+      const dropoffLatitude = Number(child.dropoff_latitude);
+      const dropoffLongitude = Number(child.dropoff_longitude);
       if (
-        typeof child.dropoff_latitude === "number" &&
-        typeof child.dropoff_longitude === "number"
+        Number.isFinite(dropoffLatitude) &&
+        Number.isFinite(dropoffLongitude)
       ) {
         return {
-          latitude: child.dropoff_latitude,
-          longitude: child.dropoff_longitude,
+          latitude: dropoffLatitude,
+          longitude: dropoffLongitude,
         };
       }
     }
@@ -593,45 +637,72 @@ const RouteDetailsScreen = () => {
     const markers: {
       coordinate: { latitude: number; longitude: number };
       title: string;
-      pinColor: string;
+      type: "pickup" | "dropoff" | "driver";
+      endpoint?: "start" | "end";
     }[] = [];
 
-    if (route.start_latitude && route.start_longitude) {
+    const startLatitude = Number(route.start_latitude);
+    const startLongitude = Number(route.start_longitude);
+    const endLatitude = Number(route.end_latitude);
+    const endLongitude = Number(route.end_longitude);
+    const hasStart =
+      Number.isFinite(startLatitude) && Number.isFinite(startLongitude);
+    const hasEnd =
+      Number.isFinite(endLatitude) && Number.isFinite(endLongitude);
+
+    if (hasStart) {
       markers.push({
         coordinate: {
-          latitude: route.start_latitude,
-          longitude: route.start_longitude,
+          latitude: startLatitude,
+          longitude: startLongitude,
         },
-        title: "Pickup Start",
-        pinColor: "#7ED321",
+        title: route.start_location || "Pickup Start",
+        type: "pickup",
+        endpoint: "start",
       });
     }
 
-    if (route.end_latitude && route.end_longitude) {
+    [...(route.route_stops || [])]
+      .sort((first, second) => first.stop_order - second.stop_order)
+      .forEach((stop, index) => {
+        const coordinate = getStopCoordinate(stop);
+        if (!coordinate) return;
+
+        const childName =
+          stop.children?.name ||
+          route.route_children?.find(
+            (routeChild) => routeChild.child_id === stop.child_id,
+          )?.children?.name;
+        const label = childName
+          ? `${stop.stop_type === "pickup" ? "Pickup" : "Dropoff"} • ${childName}`
+          : `${stop.stop_type === "pickup" ? "Pickup" : "Dropoff"} Stop ${index + 1}`;
+
+        markers.push({
+          coordinate,
+          title: label,
+          type: stop.stop_type,
+        });
+      });
+
+    if (hasEnd) {
       markers.push({
         coordinate: {
-          latitude: route.end_latitude,
-          longitude: route.end_longitude,
+          latitude: endLatitude,
+          longitude: endLongitude,
         },
-        title: "Dropoff End",
-        pinColor: "#FF6B6B",
+        title: route.end_location || "Dropoff End",
+        type: "dropoff",
+        endpoint: "end",
       });
     }
 
-    route.route_stops?.forEach((stop, index) => {
-      const coordinate = getStopCoordinate(stop);
-      if (!coordinate) return;
-
-      const label = stop.children?.name
-        ? `${stop.stop_type === "pickup" ? "Pickup" : "Dropoff"} • ${stop.children.name}`
-        : `${stop.stop_type === "pickup" ? "Pickup" : "Dropoff"} Stop ${index + 1}`;
-
+    if (liveDriverLocation) {
       markers.push({
-        coordinate,
-        title: label,
-        pinColor: stop.stop_type === "pickup" ? "#4A90E2" : "#F5A623",
+        coordinate: liveDriverLocation,
+        title: "Driver live location",
+        type: "driver",
       });
-    });
+    }
 
     return markers;
   };
@@ -681,9 +752,13 @@ const RouteDetailsScreen = () => {
     if (!region) return null;
 
     const mapMarkers = getMapMarkers();
-    const coords = mapMarkers.map((m) => m.coordinate);
+    const coords = mapMarkers
+      .filter((marker) => marker.type !== "driver")
+      .map((m) => m.coordinate);
     const origin = coords.length > 0 ? coords[0] : null;
     const destination = coords.length > 1 ? coords[coords.length - 1] : null;
+    const waypoints = coords.length > 2 ? coords.slice(1, -1) : [];
+    const returnWaypoints = [...waypoints].reverse();
 
     if (isFullScreen) {
       return (
@@ -692,11 +767,17 @@ const RouteDetailsScreen = () => {
             latitude: m.coordinate.latitude,
             longitude: m.coordinate.longitude,
             title: m.title,
+            type: m.type,
+            endpoint: m.endpoint,
           }))}
           origin={origin}
           destination={destination}
+          waypoints={waypoints}
+          returnWaypoints={returnWaypoints}
+          showReturnDirection={true}
           style={styles.mapFullScreen}
           centerOnUser={true}
+          showMarkerLabels={true}
         />
       );
     }
@@ -708,10 +789,16 @@ const RouteDetailsScreen = () => {
           latitude: m.coordinate.latitude,
           longitude: m.coordinate.longitude,
           title: m.title,
+          type: m.type,
+          endpoint: m.endpoint,
         }))}
         origin={origin}
         destination={destination}
+        waypoints={waypoints}
+        returnWaypoints={returnWaypoints}
+        showReturnDirection={true}
         style={styles.mapPreview}
+        showMarkerLabels={true}
       />
     );
   };
@@ -896,19 +983,6 @@ const RouteDetailsScreen = () => {
               )}
             </View>
             <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Departure time</Text>
-              <View>
-                <Text style={styles.infoValue}>
-                  {formatTime(route.departure_time)}
-                </Text>
-                {routePreferenceScope ? (
-                  <Text style={styles.infoSubValue}>
-                    {formatPreferenceScope(routePreferenceScope)}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-            <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Vehicle</Text>
               {assignmentItems.length > 0 ? (
                 <View style={styles.assignmentCard}>
@@ -966,6 +1040,20 @@ const RouteDetailsScreen = () => {
                 </View>
               )}
             </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Departure time</Text>
+              <View>
+                <Text style={styles.infoValue}>
+                  {formatTime(route.departure_time)}
+                </Text>
+                {routePreferenceScope ? (
+                  <Text style={styles.infoSubValue}>
+                    {formatPreferenceScope(routePreferenceScope)}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Route Rate</Text>
               <Text style={styles.infoValue}>
@@ -1403,9 +1491,9 @@ const styles = StyleSheet.create({
   },
   routeHeader: {
     marginHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 22,
-    borderRadius: 24,
+    marginTop: 12,
+    marginBottom: 16,
+    borderRadius: 16,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 12 },
@@ -1414,18 +1502,18 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
   routeHeaderGradient: {
-    padding: 24,
-    gap: 20,
+    padding: 10,
+    gap: 12,
   },
   routeHeaderTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 12,
   },
   routeIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
@@ -1439,13 +1527,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routeTitle: {
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: "800",
     color: "#FFF",
     marginBottom: 6,
   },
   routeSubtitle: {
-    fontSize: 15,
+    fontSize: 12,
     color: "rgba(255,255,255,0.88)",
     fontWeight: "500",
     lineHeight: 22,
@@ -1459,7 +1547,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(255,255,255,0.14)",
     borderRadius: 16,
-    padding: 16,
+    padding: 10,
   },
   routeHeaderStatLabel: {
     fontSize: 12,
@@ -1600,8 +1688,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   assignmentButton: {
-    backgroundColor: "#7ED321",
-    paddingVertical: 16,
+    backgroundColor: "#7C3AED",
+    paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 18,
     alignItems: "center",
@@ -1799,7 +1887,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   modalSaveButton: {
-    backgroundColor: "#7ED321",
+    backgroundColor: "#7C3AED",
   },
   modalButtonText: {
     fontSize: 15,
@@ -1927,10 +2015,10 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#7ED321",
+    backgroundColor: "#7C3AED",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#7ED321",
+    shadowColor: "#7C3AED",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 8,
@@ -2053,7 +2141,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   viewAllStopsButton: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#7C3AED",
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 18,
@@ -2068,7 +2156,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   viewAllStudentsButton: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#7C3AED",
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 18,

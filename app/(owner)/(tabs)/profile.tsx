@@ -2,15 +2,11 @@ import ThemeToggle from "../../../components/ThemeToggle";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext, useState, useEffect } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Image,
   Modal,
-  Platform,
   ScrollView,
-  StatusBar,
-  StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
@@ -20,6 +16,9 @@ import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
 import { AuthContext } from "../../../context/authContext/auth-context";
+import Loading from "../ownerHelpers/components/Loading";
+import { ownersProfileStyles } from "../ownerHelpers/styles/ownerStyles";
+import { LogoutModal } from "../ownerHelpers/components/Modals";
 
 const OwnerProfile = () => {
   const router = useRouter();
@@ -33,8 +32,6 @@ const OwnerProfile = () => {
   const [emergencyAlerts, setEmergencyAlerts] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
-  const androidTopInset =
-    Platform.OS === "android" ? (StatusBar.currentHeight ?? 24) : 0;
 
   const { renderHeader } = useOwnerPageHeader({
     title: "Profile & Settings",
@@ -43,7 +40,6 @@ const OwnerProfile = () => {
   });
 
   const handleLogout = async () => {
-    console.log("Logout initiated");
     setShowLogoutModal(true);
   };
 
@@ -55,9 +51,7 @@ const OwnerProfile = () => {
     } catch (err) {
       console.warn("Logout error:", err);
     }
-
-    console.log("Logout successful, navigating to auth screen");
-    router.replace("/");
+    router.replace("/(auth)/home");
   };
 
   useEffect(() => {
@@ -90,61 +84,36 @@ const OwnerProfile = () => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        {renderHeader()}
-        <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>Fetching profile data...</Text>
-        </View>
-        <Modal
-          visible={showLogoutModal}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setShowLogoutModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Confirm logout</Text>
-              <Text style={styles.modalMessage}>
-                Are you sure you want to sign out of your owner account?
-              </Text>
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
-                  onPress={() => setShowLogoutModal(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalConfirmButton]}
-                  onPress={confirmLogout}
-                >
-                  <Text style={styles.modalConfirmText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+      <View style={ownersProfileStyles.container}>
+        <Loading renderHeader={renderHeader} title="Fetching profile data..." />
+        <LogoutModal
+          showLogoutModal={showLogoutModal}
+          // setShowLogoutModal={setShowLogoutModal},
+          // confirmLogout={confirmLogout},
+        />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <View style={ownersProfileStyles.container}>
         {renderHeader()}
 
-        <View style={styles.loadingCenter}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={refreshOwner}>
-            <Text style={styles.retryText}>Retry</Text>
+        <View style={ownersProfileStyles.loadingCenter}>
+          <Text style={ownersProfileStyles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={ownersProfileStyles.retryBtn}
+            onPress={refreshOwner}
+          >
+            <Text style={ownersProfileStyles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
         <TouchableOpacity
-          style={[styles.logoutBtn, { margin: 16 }]}
+          style={[ownersProfileStyles.logoutBtn, { margin: 16 }]}
           onPress={handleLogout}
         >
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={ownersProfileStyles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
         <Modal
@@ -153,24 +122,34 @@ const OwnerProfile = () => {
           transparent
           onRequestClose={() => setShowLogoutModal(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Confirm logout</Text>
-              <Text style={styles.modalMessage}>
+          <View style={ownersProfileStyles.modalOverlay}>
+            <View style={ownersProfileStyles.modalCard}>
+              <Text style={ownersProfileStyles.modalTitle}>Confirm logout</Text>
+              <Text style={ownersProfileStyles.modalMessage}>
                 Are you sure you want to sign out of your owner account?
               </Text>
-              <View style={styles.modalActions}>
+              <View style={ownersProfileStyles.modalActions}>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalCancelButton]}
+                  style={[
+                    ownersProfileStyles.modalButton,
+                    ownersProfileStyles.modalCancelButton,
+                  ]}
                   onPress={() => setShowLogoutModal(false)}
                 >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
+                  <Text style={ownersProfileStyles.modalCancelText}>
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalConfirmButton]}
+                  style={[
+                    ownersProfileStyles.modalButton,
+                    ownersProfileStyles.modalConfirmButton,
+                  ]}
                   onPress={confirmLogout}
                 >
-                  <Text style={styles.modalConfirmText}>Logout</Text>
+                  <Text style={ownersProfileStyles.modalConfirmText}>
+                    Logout
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -181,35 +160,40 @@ const OwnerProfile = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={ownersProfileStyles.container}>
       {renderHeader()}
 
       <ScrollView
-        contentContainerStyle={[styles.content, styles.scrollContent]}
+        contentContainerStyle={[
+          ownersProfileStyles.content,
+          ownersProfileStyles.scrollContent,
+        ]}
       >
-        <View style={styles.accountCard}>
+        <View style={ownersProfileStyles.accountCard}>
           {owner?.name ? (
             <>
               {owner?.avatar ? (
-                <View style={styles.accountAvatar}>
+                <View style={ownersProfileStyles.accountAvatar}>
                   <Image
                     source={{ uri: owner.avatar }}
                     style={{ width: 60, height: 60, borderRadius: 30 }}
                   />
                 </View>
               ) : (
-                <View style={styles.accountAvatar}>
-                  <Text style={styles.accountAvatarText}>
+                <View style={ownersProfileStyles.accountAvatar}>
+                  <Text style={ownersProfileStyles.accountAvatarText}>
                     {profileUser?.name?.charAt(0)?.toUpperCase() || "O"}
                   </Text>
                 </View>
               )}
-              <View style={styles.accountInfo}>
-                <Text style={styles.accountName}>
+              <View style={ownersProfileStyles.accountInfo}>
+                <Text style={ownersProfileStyles.accountName}>
                   {profileUser?.name || "Owner"}
                 </Text>
-                <Text style={styles.accountRole}>Owner&apos;s Account</Text>
-                <Text style={styles.accountSince}>
+                <Text style={ownersProfileStyles.accountRole}>
+                  Owner&apos;s Account
+                </Text>
+                <Text style={ownersProfileStyles.accountSince}>
                   Member since{" "}
                   {new Date(profileUser?.created_at).toLocaleDateString(
                     "en-ZA",
@@ -226,43 +210,49 @@ const OwnerProfile = () => {
           ) : null}
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Account</Text>
+        <View style={ownersProfileStyles.sectionCard}>
+          <Text style={ownersProfileStyles.sectionTitle}>Account</Text>
           <TouchableOpacity
-            style={styles.settingRow}
+            style={ownersProfileStyles.settingRow}
             onPress={() => router.push("/(owner)/personal-info")}
           >
             <View>
-              <Text style={styles.settingRowTitle}>Edit Profile</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Edit Profile
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Update your account details
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Phone Number</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Phone Number
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 {profileUser?.phone || "+1 (555) 123-4567"}
               </Text>
             </View>
           </View>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Email</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>Email</Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 {profileUser?.email || "owner@example.com"}
               </Text>
             </View>
           </View>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Driver Mode</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Driver Mode
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Enable driver features and self-assign vehicles.
               </Text>
             </View>
@@ -275,14 +265,18 @@ const OwnerProfile = () => {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Subscription & Billing</Text>
+        <View style={ownersProfileStyles.sectionCard}>
+          <Text style={ownersProfileStyles.sectionTitle}>
+            Subscription & Billing
+          </Text>
           <TouchableOpacity
-            style={styles.settingRow}
+            style={ownersProfileStyles.settingRow}
             onPress={() => router.push("/(owner)/subscriptions")}
           >
             <View>
-              <Text style={styles.settingRowTitle}>Manage Subscription</Text>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Manage Subscription
+              </Text>
               <View
                 style={{
                   flexDirection: "row",
@@ -292,19 +286,25 @@ const OwnerProfile = () => {
                 }}
               >
                 <Text
-                  style={[styles.settingRowSubtitle, { fontWeight: "700" }]}
+                  style={[
+                    ownersProfileStyles.settingRowSubtitle,
+                    { fontWeight: "700" },
+                  ]}
                 >
                   • Current Plan:{" "}
                 </Text>
                 <Text
-                  style={[styles.settingRowSubtitle, { fontWeight: "400" }]}
+                  style={[
+                    ownersProfileStyles.settingRowSubtitle,
+                    { fontWeight: "400" },
+                  ]}
                 >
                   {" "}
                   {currentPlanName || "Free / Starter"}
                 </Text>
                 <Text
                   style={[
-                    styles.settingRowSubtitle,
+                    ownersProfileStyles.settingRowSubtitle,
                     { fontWeight: "400", marginLeft: 8 },
                   ]}
                 >
@@ -312,7 +312,7 @@ const OwnerProfile = () => {
                 </Text>
                 <Text
                   style={[
-                    styles.settingRowSubtitle,
+                    ownersProfileStyles.settingRowSubtitle,
                     { fontWeight: "400", marginLeft: 8 },
                   ]}
                 >
@@ -320,7 +320,7 @@ const OwnerProfile = () => {
                 </Text>
                 <Text
                   style={[
-                    styles.settingRowSubtitle,
+                    ownersProfileStyles.settingRowSubtitle,
                     { fontWeight: "400", marginLeft: 8 },
                   ]}
                 >
@@ -328,7 +328,7 @@ const OwnerProfile = () => {
                 </Text>
                 <Text
                   style={[
-                    styles.settingRowSubtitle,
+                    ownersProfileStyles.settingRowSubtitle,
                     { fontWeight: "400", marginLeft: 8 },
                   ]}
                 >
@@ -336,7 +336,7 @@ const OwnerProfile = () => {
                 </Text>
                 <Text
                   style={[
-                    styles.settingRowSubtitle,
+                    ownersProfileStyles.settingRowSubtitle,
                     { fontWeight: "400", marginLeft: 8 },
                   ]}
                 >
@@ -347,12 +347,28 @@ const OwnerProfile = () => {
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.settingRow}
+            style={ownersProfileStyles.settingRow}
+            onPress={() => router.push("/(owner)/workflows")}
+          >
+            <View>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Operations Center
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
+                Review dispatches, compliance, billing, and client workflows
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={ownersProfileStyles.settingRow}
             onPress={() => router.push("/(owner)/payments")}
           >
             <View>
-              <Text style={styles.settingRowTitle}>Manage Payouts</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Manage Payouts
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Connect Stripe and receive client payments
               </Text>
             </View>
@@ -360,12 +376,14 @@ const OwnerProfile = () => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          <View style={styles.settingRow}>
+        <View style={ownersProfileStyles.sectionCard}>
+          <Text style={ownersProfileStyles.sectionTitle}>Notifications</Text>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Pickup Notifications</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Pickup Notifications
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Updates when pickup starts
               </Text>
             </View>
@@ -377,10 +395,12 @@ const OwnerProfile = () => {
             />
           </View>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Drop-off Notifications</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Drop-off Notifications
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Alerts when drop-off is near
               </Text>
             </View>
@@ -392,10 +412,12 @@ const OwnerProfile = () => {
             />
           </View>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Delay Alerts</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Delay Alerts
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Be notified about delays
               </Text>
             </View>
@@ -407,10 +429,12 @@ const OwnerProfile = () => {
             />
           </View>
 
-          <View style={styles.settingRow}>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Emergency Alerts</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>
+                Emergency Alerts
+              </Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Urgent updates for your account
               </Text>
             </View>
@@ -423,12 +447,12 @@ const OwnerProfile = () => {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
-          <View style={styles.settingRow}>
+        <View style={ownersProfileStyles.sectionCard}>
+          <Text style={ownersProfileStyles.sectionTitle}>Appearance</Text>
+          <View style={ownersProfileStyles.settingRow}>
             <View>
-              <Text style={styles.settingRowTitle}>Dark Mode</Text>
-              <Text style={styles.settingRowSubtitle}>
+              <Text style={ownersProfileStyles.settingRowTitle}>Dark Mode</Text>
+              <Text style={ownersProfileStyles.settingRowSubtitle}>
                 Use a darker theme for night viewing
               </Text>
             </View>
@@ -436,8 +460,11 @@ const OwnerProfile = () => {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity
+          style={ownersProfileStyles.logoutBtn}
+          onPress={handleLogout}
+        >
+          <Text style={ownersProfileStyles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
       <Modal
@@ -446,24 +473,30 @@ const OwnerProfile = () => {
         transparent
         onRequestClose={() => setShowLogoutModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirm logout</Text>
-            <Text style={styles.modalMessage}>
+        <View style={ownersProfileStyles.modalOverlay}>
+          <View style={ownersProfileStyles.modalCard}>
+            <Text style={ownersProfileStyles.modalTitle}>Confirm logout</Text>
+            <Text style={ownersProfileStyles.modalMessage}>
               Are you sure you want to sign out of your owner account?
             </Text>
-            <View style={styles.modalActions}>
+            <View style={ownersProfileStyles.modalActions}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
+                style={[
+                  ownersProfileStyles.modalButton,
+                  ownersProfileStyles.modalCancelButton,
+                ]}
                 onPress={() => setShowLogoutModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={ownersProfileStyles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirmButton]}
+                style={[
+                  ownersProfileStyles.modalButton,
+                  ownersProfileStyles.modalConfirmButton,
+                ]}
                 onPress={confirmLogout}
               >
-                <Text style={styles.modalConfirmText}>Logout</Text>
+                <Text style={ownersProfileStyles.modalConfirmText}>Logout</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -474,204 +507,3 @@ const OwnerProfile = () => {
 };
 
 export default OwnerProfile;
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
-  content: { padding: 16 },
-  scrollContent: { paddingTop: 28 },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: "#2563EB",
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // Profile Header
-  loadingCenter: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    color: "#666",
-    fontSize: 16,
-  },
-  errorText: {
-    color: "#D32F2F",
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  retryBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: "#4A90E2",
-    borderRadius: 10,
-  },
-  retryText: {
-    color: "#FFF",
-    fontWeight: "600",
-  },
-  accountCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 24,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  accountAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "black",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  accountAvatarText: {
-    fontSize: 24,
-    color: "white",
-    fontWeight: "800",
-  },
-  accountInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  accountName: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "black",
-    marginBottom: 4,
-  },
-  accountRole: {
-    fontSize: 14,
-    color: "rgba(0,0,0,0.85)",
-    marginBottom: 4,
-  },
-  accountSince: {
-    fontSize: 12,
-    color: "rgba(0,0,0,0.65)",
-  },
-  sectionCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.05,
-    shadowRadius: 20,
-    elevation: 5,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 16,
-  },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  settingRowTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  settingRowSubtitle: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
-    maxWidth: 230,
-  },
-  logoutBtn: {
-    backgroundColor: "#EF4444",
-    padding: 16,
-    borderRadius: 18,
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logoutText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    padding: 22,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 14,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 10,
-  },
-  modalMessage: {
-    fontSize: 15,
-    color: "#4B5563",
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  modalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    minWidth: 100,
-    alignItems: "center",
-  },
-  modalCancelButton: {
-    backgroundColor: "#F3F4F6",
-  },
-  modalConfirmButton: {
-    backgroundColor: "#EF4444",
-  },
-  modalCancelText: {
-    color: "#374151",
-    fontWeight: "700",
-  },
-  modalConfirmText: {
-    color: "#FFF",
-    fontWeight: "700",
-  },
-});

@@ -25,6 +25,7 @@ import {
   TimeScope,
 } from "../../store/asyncStorage/timePreferences.asyncStore";
 import { resolveWorkingBaseUrl } from "../../url";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const timeToMinutes = (value: string) => {
   const m = String(value || "")
@@ -1145,394 +1146,440 @@ const CreateRoutes = ({ setActiveButton }: any) => {
             </View>
           </Modal>
           {showMapPicker && (
-            <View style={locationPickerStyles.fullscreenOverlay}>
-              {/* MAP */}
-              <View style={locationPickerStyles.mapContainer}>
-                <Map
-                  style={locationPickerStyles.fullscreenMap}
-                  markers={[
-                    ...(pickupLocation.latitude != null &&
-                    pickupLocation.longitude != null
-                      ? [
-                          {
+            <Modal
+              visible={showMapPicker}
+              animationType="slide"
+              presentationStyle="fullScreen"
+              onRequestClose={() => {
+                setShowMapPicker(false);
+                setPickupConfirmed(false);
+              }}
+            >
+              <SafeAreaView
+                style={locationPickerStyles.fullscreenOverlay}
+                edges={["top", "bottom"]}
+              >
+                {/* MAP */}
+                <View
+                  style={locationPickerStyles.mapContainer}
+                  pointerEvents="box-none"
+                >
+                  <Map
+                    style={locationPickerStyles.fullscreenMap}
+                    markers={[
+                      ...(pickupLocation.latitude != null &&
+                      pickupLocation.longitude != null
+                        ? [
+                            {
+                              latitude: pickupLocation.latitude,
+                              longitude: pickupLocation.longitude,
+                              title: "Pickup",
+                              type: "pickup" as const,
+                            },
+                          ]
+                        : []),
+
+                      ...(dropoffLocation.latitude != null &&
+                      dropoffLocation.longitude != null
+                        ? [
+                            {
+                              latitude: dropoffLocation.latitude,
+                              longitude: dropoffLocation.longitude,
+                              title: "Dropoff",
+                              type: "dropoff" as const,
+                            },
+                          ]
+                        : []),
+                    ]}
+                    origin={
+                      pickupLocation.latitude != null &&
+                      pickupLocation.longitude != null
+                        ? {
                             latitude: pickupLocation.latitude,
                             longitude: pickupLocation.longitude,
-                            title: "Pickup",
-                            type: "pickup" as const,
-                          },
-                        ]
-                      : []),
-
-                    ...(dropoffLocation.latitude != null &&
-                    dropoffLocation.longitude != null
-                      ? [
-                          {
+                          }
+                        : null
+                    }
+                    destination={
+                      dropoffLocation.latitude != null &&
+                      dropoffLocation.longitude != null
+                        ? {
                             latitude: dropoffLocation.latitude,
                             longitude: dropoffLocation.longitude,
-                            title: "Dropoff",
-                            type: "dropoff" as const,
-                          },
-                        ]
-                      : []),
-                  ]}
-                  origin={
-                    pickupLocation.latitude != null &&
-                    pickupLocation.longitude != null
-                      ? {
-                          latitude: pickupLocation.latitude,
-                          longitude: pickupLocation.longitude,
-                        }
-                      : null
-                  }
-                  destination={
-                    dropoffLocation.latitude != null &&
-                    dropoffLocation.longitude != null
-                      ? {
-                          latitude: dropoffLocation.latitude,
-                          longitude: dropoffLocation.longitude,
-                        }
-                      : null
-                  }
-                  centerOnUser={true}
-                  focus={mapFocus}
-                />
+                          }
+                        : null
+                    }
+                    centerOnUser={true}
+                    focus={mapFocus}
+                  />
 
-                {/* Close button */}
-                <TouchableOpacity
-                  style={locationPickerStyles.closeMapButton}
-                  onPress={() => {
-                    setShowMapPicker(false);
-                    setPickupConfirmed(false);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="close" size={24} color="#222" />
-                </TouchableOpacity>
+                  {/* Close button */}
+                  <TouchableOpacity
+                    style={locationPickerStyles.closeMapButton}
+                    onPress={() => {
+                      setShowMapPicker(false);
+                      setPickupConfirmed(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="close" size={24} color="#222" />
+                  </TouchableOpacity>
 
-                {/* Current location button */}
-                <TouchableOpacity
-                  style={locationPickerStyles.myLocationButton}
-                  onPress={() => {
-                    // Your existing current-location logic
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="my-location" size={22} color="#4A90E2" />
-                </TouchableOpacity>
-              </View>
-
-              {/* BOTTOM PANEL */}
-              <View style={locationPickerStyles.locationPanel}>
-                {/* Drag indicator */}
-                <View style={locationPickerStyles.dragIndicator} />
-
-                {/* Header */}
-                <View style={locationPickerStyles.panelHeader}>
-                  <View>
-                    <Text style={locationPickerStyles.sheetTitle}>
-                      Select locations
-                    </Text>
-                    <Text style={locationPickerStyles.sheetSubtitle}>
-                      Set the pickup and drop-off points for this route
-                    </Text>
-                  </View>
-
-                  <View style={locationPickerStyles.routeIcon}>
-                    <MaterialIcons name="alt-route" size={22} color="#4A90E2" />
-                  </View>
+                  {/* Current location button */}
+                  <TouchableOpacity
+                    style={locationPickerStyles.myLocationButton}
+                    onPress={() => {
+                      // Your existing current-location logic
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons
+                      name="my-location"
+                      size={22}
+                      color="#4A90E2"
+                    />
+                  </TouchableOpacity>
                 </View>
 
-                {/* PICKUP */}
-                <View style={locationPickerStyles.locationSection}>
-                  <View style={locationPickerStyles.locationIconColumn}>
-                    <View
-                      style={[
-                        locationPickerStyles.locationDot,
-                        locationPickerStyles.pickupDot,
-                      ]}
-                    >
-                      <MaterialIcons
-                        name="radio-button-checked"
-                        size={12}
-                        color="#fff"
-                      />
+                {/* BOTTOM PANEL */}
+                <View style={locationPickerStyles.locationPanel}>
+                  {/* Drag indicator */}
+                  <View style={locationPickerStyles.dragIndicator} />
+
+                  {/* Header */}
+                  <View style={locationPickerStyles.panelHeader}>
+                    <View>
+                      <Text style={locationPickerStyles.sheetTitle}>
+                        Select locations
+                      </Text>
+                      <Text style={locationPickerStyles.sheetSubtitle}>
+                        Set the start and end points for this route
+                      </Text>
                     </View>
 
-                    {!pickupConfirmed && (
-                      <View style={locationPickerStyles.locationLine} />
-                    )}
+                    <View style={locationPickerStyles.routeIcon}>
+                      <MaterialIcons
+                        name="alt-route"
+                        size={22}
+                        color="#4A90E2"
+                      />
+                    </View>
                   </View>
 
-                  <View style={locationPickerStyles.locationInputContainer}>
-                    <Text style={locationPickerStyles.inputLabel}>
-                      Pickup location
-                    </Text>
+                  {/* START */}
+                  <View style={locationPickerStyles.locationSection}>
+                    <View style={locationPickerStyles.locationIconColumn}>
+                      <View
+                        style={[
+                          locationPickerStyles.locationDot,
+                          locationPickerStyles.pickupDot,
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="radio-button-checked"
+                          size={12}
+                          color="#fff"
+                        />
+                      </View>
 
-                    <View style={locationPickerStyles.inputWrapper}>
-                      <GooglePlacesAutoComplete
-                        value={pickupLocation.name}
-                        placeholder="Search pickup location"
-                        debounce={400}
-                        onSelect={(address, coords) => {
-                          if (!address || !address.trim()) {
+                      {!pickupConfirmed && (
+                        <View style={locationPickerStyles.locationLine} />
+                      )}
+                    </View>
+
+                    <View style={locationPickerStyles.locationInputContainer}>
+                      <Text style={locationPickerStyles.inputLabel}>
+                        Start location
+                      </Text>
+
+                      <View style={locationPickerStyles.inputWrapper}>
+                        <GooglePlacesAutoComplete
+                          value={pickupLocation.name}
+                          placeholder="Search start location"
+                          debounce={400}
+                          onChangeText={(name) =>
+                            setPickupLocation((current) => ({
+                              ...current,
+                              name,
+                              latitude: name ? current.latitude : null,
+                              longitude: name ? current.longitude : null,
+                            }))
+                          }
+                          onSelect={(address, coords) => {
+                            if (!address || !address.trim()) {
+                              setPickupLocation({
+                                name: "",
+                                latitude: null,
+                                longitude: null,
+                              });
+                              setMapFocus(null);
+                              return;
+                            }
+
+                            if (coords) {
+                              setPickupLocation({
+                                name: address,
+                                latitude: coords.latitude,
+                                longitude: coords.longitude,
+                              });
+
+                              setMapFocus({
+                                latitude: coords.latitude,
+                                longitude: coords.longitude,
+                              });
+                            } else {
+                              setPickupLocation({
+                                name: address,
+                                latitude: null,
+                                longitude: null,
+                              });
+                              setMapFocus(null);
+                            }
+                          }}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* START ACTION */}
+                  {!pickupConfirmed ? (
+                    <View style={locationPickerStyles.actionRow}>
+                      <TouchableOpacity
+                        style={[
+                          locationPickerStyles.primaryButton,
+                          !pickupLocation.name &&
+                            locationPickerStyles.disabledButton,
+                        ]}
+                        disabled={!pickupLocation.name}
+                        onPress={() => setPickupConfirmed(true)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="check" size={20} color="#fff" />
+
+                        <Text style={locationPickerStyles.primaryButtonText}>
+                          Confirm start location
+                        </Text>
+                      </TouchableOpacity>
+
+                      {pickupLocation.name ? (
+                        <TouchableOpacity
+                          style={locationPickerStyles.secondaryButton}
+                          onPress={() => {
                             setPickupLocation({
                               name: "",
                               latitude: null,
                               longitude: null,
                             });
                             setMapFocus(null);
-                            return;
-                          }
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialIcons name="close" size={18} color="#666" />
 
-                          if (coords) {
-                            setPickupLocation({
-                              name: address,
-                              latitude: coords.latitude,
-                              longitude: coords.longitude,
-                            });
-
-                            setMapFocus({
-                              latitude: coords.latitude,
-                              longitude: coords.longitude,
-                            });
-                          } else {
-                            setPickupLocation({
-                              name: address,
-                              latitude: null,
-                              longitude: null,
-                            });
-                            setMapFocus(null);
-                          }
-                        }}
-                      />
+                          <Text
+                            style={locationPickerStyles.secondaryButtonText}
+                          >
+                            Clear
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
-                  </View>
-                </View>
+                  ) : (
+                    <>
+                      {/* End */}
+                      <View style={locationPickerStyles.locationSection}>
+                        <View style={locationPickerStyles.locationIconColumn}>
+                          <View
+                            style={[
+                              locationPickerStyles.locationDot,
+                              locationPickerStyles.dropoffDot,
+                            ]}
+                          >
+                            <MaterialIcons
+                              name="location-on"
+                              size={14}
+                              color="#fff"
+                            />
+                          </View>
+                        </View>
 
-                {/* PICKUP ACTION */}
-                {!pickupConfirmed ? (
-                  <View style={locationPickerStyles.actionRow}>
-                    <TouchableOpacity
-                      style={[
-                        locationPickerStyles.primaryButton,
-                        !pickupLocation.name &&
-                          locationPickerStyles.disabledButton,
-                      ]}
-                      disabled={!pickupLocation.name}
-                      onPress={() => setPickupConfirmed(true)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialIcons name="check" size={20} color="#fff" />
-
-                      <Text style={locationPickerStyles.primaryButtonText}>
-                        Confirm pickup
-                      </Text>
-                    </TouchableOpacity>
-
-                    {pickupLocation.name ? (
-                      <TouchableOpacity
-                        style={locationPickerStyles.secondaryButton}
-                        onPress={() => {
-                          setPickupLocation({
-                            name: "",
-                            latitude: null,
-                            longitude: null,
-                          });
-                          setMapFocus(null);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <MaterialIcons name="close" size={18} color="#666" />
-
-                        <Text style={locationPickerStyles.secondaryButtonText}>
-                          Clear
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ) : (
-                  <>
-                    {/* DROPOFF */}
-                    <View style={locationPickerStyles.locationSection}>
-                      <View style={locationPickerStyles.locationIconColumn}>
                         <View
+                          style={locationPickerStyles.locationInputContainer}
+                        >
+                          <Text style={locationPickerStyles.inputLabel}>
+                            End location
+                          </Text>
+
+                          <View style={locationPickerStyles.inputWrapper}>
+                            <GooglePlacesAutoComplete
+                              value={dropoffLocation.name}
+                              placeholder="Search end location"
+                              debounce={400}
+                              onChangeText={(name) =>
+                                setDropoffLocation((current) => ({
+                                  ...current,
+                                  name,
+                                  latitude: name ? current.latitude : null,
+                                  longitude: name ? current.longitude : null,
+                                }))
+                              }
+                              onSelect={(address, coords) => {
+                                if (!address || !address.trim()) {
+                                  setDropoffLocation({
+                                    name: "",
+                                    latitude: null,
+                                    longitude: null,
+                                  });
+                                  setMapFocus(null);
+                                  return;
+                                }
+
+                                if (coords) {
+                                  setDropoffLocation({
+                                    name: address,
+                                    latitude: coords.latitude,
+                                    longitude: coords.longitude,
+                                  });
+
+                                  setMapFocus({
+                                    latitude: coords.latitude,
+                                    longitude: coords.longitude,
+                                  });
+                                } else {
+                                  setDropoffLocation({
+                                    name: address,
+                                    latitude: null,
+                                    longitude: null,
+                                  });
+                                  setMapFocus(null);
+                                }
+                              }}
+                            />
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* FINAL ACTIONS */}
+                      <View style={locationPickerStyles.actionRow}>
+                        <TouchableOpacity
                           style={[
-                            locationPickerStyles.locationDot,
-                            locationPickerStyles.dropoffDot,
+                            locationPickerStyles.primaryButton,
+                            !dropoffLocation.name &&
+                              locationPickerStyles.disabledButton,
                           ]}
+                          disabled={!dropoffLocation.name}
+                          onPress={() => {
+                            setShowMapPicker(false);
+                            setPickupConfirmed(false);
+                          }}
+                          activeOpacity={0.8}
                         >
                           <MaterialIcons
-                            name="location-on"
-                            size={14}
+                            name="check-circle"
+                            size={20}
                             color="#fff"
                           />
-                        </View>
+
+                          <Text style={locationPickerStyles.primaryButtonText}>
+                            Use these locations
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={locationPickerStyles.secondaryButton}
+                          onPress={() => {
+                            setPickupConfirmed(false);
+                            setMapFocus(null);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialIcons name="edit" size={18} color="#666" />
+
+                          <Text
+                            style={locationPickerStyles.secondaryButtonText}
+                          >
+                            Edit
+                          </Text>
+                        </TouchableOpacity>
                       </View>
+                    </>
+                  )}
 
-                      <View style={locationPickerStyles.locationInputContainer}>
-                        <Text style={locationPickerStyles.inputLabel}>
-                          Drop-off location
-                        </Text>
+                  {/* SELECTED LOCATIONS */}
+                  {(pickupLocation.name || dropoffLocation.name) && (
+                    <View style={locationPickerStyles.selectedContainer}>
+                      <Text style={locationPickerStyles.selectedTitle}>
+                        Selected locations
+                      </Text>
 
-                        <View style={locationPickerStyles.inputWrapper}>
-                          <GooglePlacesAutoComplete
-                            value={dropoffLocation.name}
-                            placeholder="Search drop-off location"
-                            debounce={400}
-                            onSelect={(address, coords) => {
-                              if (!address || !address.trim()) {
-                                setDropoffLocation({
-                                  name: "",
-                                  latitude: null,
-                                  longitude: null,
-                                });
-                                setMapFocus(null);
-                                return;
-                              }
+                      {pickupLocation.name && (
+                        <View style={locationPickerStyles.selectedLocation}>
+                          <View
+                            style={[
+                              locationPickerStyles.smallDot,
+                              locationPickerStyles.pickupDot,
+                            ]}
+                          />
 
-                              if (coords) {
-                                setDropoffLocation({
-                                  name: address,
-                                  latitude: coords.latitude,
-                                  longitude: coords.longitude,
-                                });
+                          <View
+                            style={locationPickerStyles.selectedTextContainer}
+                          >
+                            <Text style={locationPickerStyles.selectedType}>
+                              PICKUP
+                            </Text>
 
-                                setMapFocus({
-                                  latitude: coords.latitude,
-                                  longitude: coords.longitude,
-                                });
-                              } else {
-                                setDropoffLocation({
-                                  name: address,
-                                  latitude: null,
-                                  longitude: null,
-                                });
-                                setMapFocus(null);
-                              }
-                            }}
+                            <Text
+                              style={locationPickerStyles.selectedAddress}
+                              numberOfLines={1}
+                            >
+                              {pickupLocation.name}
+                            </Text>
+                          </View>
+
+                          <MaterialIcons
+                            name="check-circle"
+                            size={20}
+                            color="#22C55E"
                           />
                         </View>
-                      </View>
-                    </View>
+                      )}
 
-                    {/* FINAL ACTIONS */}
-                    <View style={locationPickerStyles.actionRow}>
-                      <TouchableOpacity
-                        style={[
-                          locationPickerStyles.primaryButton,
-                          !dropoffLocation.name &&
-                            locationPickerStyles.disabledButton,
-                        ]}
-                        disabled={!dropoffLocation.name}
-                        onPress={() => {
-                          setShowMapPicker(false);
-                          setPickupConfirmed(false);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <MaterialIcons
-                          name="check-circle"
-                          size={20}
-                          color="#fff"
-                        />
+                      {dropoffLocation.name && (
+                        <View style={locationPickerStyles.selectedLocation}>
+                          <View
+                            style={[
+                              locationPickerStyles.smallDot,
+                              locationPickerStyles.dropoffDot,
+                            ]}
+                          />
 
-                        <Text style={locationPickerStyles.primaryButtonText}>
-                          Use these locations
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={locationPickerStyles.secondaryButton}
-                        onPress={() => {
-                          setPickupConfirmed(false);
-                          setMapFocus(null);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <MaterialIcons name="edit" size={18} color="#666" />
-
-                        <Text style={locationPickerStyles.secondaryButtonText}>
-                          Edit
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-
-                {/* SELECTED LOCATIONS */}
-                {(pickupLocation.name || dropoffLocation.name) && (
-                  <View style={locationPickerStyles.selectedContainer}>
-                    <Text style={locationPickerStyles.selectedTitle}>
-                      Selected locations
-                    </Text>
-
-                    {pickupLocation.name && (
-                      <View style={locationPickerStyles.selectedLocation}>
-                        <View
-                          style={[
-                            locationPickerStyles.smallDot,
-                            locationPickerStyles.pickupDot,
-                          ]}
-                        />
-
-                        <View
-                          style={locationPickerStyles.selectedTextContainer}
-                        >
-                          <Text style={locationPickerStyles.selectedType}>
-                            PICKUP
-                          </Text>
-
-                          <Text
-                            style={locationPickerStyles.selectedAddress}
-                            numberOfLines={1}
+                          <View
+                            style={locationPickerStyles.selectedTextContainer}
                           >
-                            {pickupLocation.name}
-                          </Text>
+                            <Text style={locationPickerStyles.selectedType}>
+                              DROP-OFF
+                            </Text>
+
+                            <Text
+                              style={locationPickerStyles.selectedAddress}
+                              numberOfLines={1}
+                            >
+                              {dropoffLocation.name}
+                            </Text>
+                          </View>
+
+                          <MaterialIcons
+                            name="check-circle"
+                            size={20}
+                            color="#22C55E"
+                          />
                         </View>
-
-                        <MaterialIcons
-                          name="check-circle"
-                          size={20}
-                          color="#22C55E"
-                        />
-                      </View>
-                    )}
-
-                    {dropoffLocation.name && (
-                      <View style={locationPickerStyles.selectedLocation}>
-                        <View
-                          style={[
-                            locationPickerStyles.smallDot,
-                            locationPickerStyles.dropoffDot,
-                          ]}
-                        />
-
-                        <View
-                          style={locationPickerStyles.selectedTextContainer}
-                        >
-                          <Text style={locationPickerStyles.selectedType}>
-                            DROP-OFF
-                          </Text>
-
-                          <Text
-                            style={locationPickerStyles.selectedAddress}
-                            numberOfLines={1}
-                          >
-                            {dropoffLocation.name}
-                          </Text>
-                        </View>
-
-                        <MaterialIcons
-                          name="check-circle"
-                          size={20}
-                          color="#22C55E"
-                        />
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              </SafeAreaView>
+            </Modal>
           )}
         </>
       )}
@@ -1620,6 +1667,8 @@ const locationPickerStyles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 10,
+    zIndex: 1000,
+    position: "relative",
   },
 
   dragIndicator: {
@@ -1662,6 +1711,7 @@ const locationPickerStyles = StyleSheet.create({
   locationSection: {
     flexDirection: "row",
     marginBottom: 14,
+    zIndex: 1001,
   },
 
   locationIconColumn: {
@@ -1696,6 +1746,7 @@ const locationPickerStyles = StyleSheet.create({
   locationInputContainer: {
     flex: 1,
     marginLeft: 8,
+    zIndex: 1002,
   },
 
   inputLabel: {
@@ -1713,6 +1764,8 @@ const locationPickerStyles = StyleSheet.create({
     minHeight: 52,
     justifyContent: "center",
     overflow: "visible",
+    zIndex: 1003,
+    elevation: 12,
   },
 
   actionRow: {
@@ -1990,7 +2043,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   fullscreenOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 50,
     backgroundColor: "rgba(15, 23, 42, 0.35)",
     justifyContent: "flex-end",
@@ -2410,7 +2463,7 @@ const styles = StyleSheet.create({
 
   driverInitials: {
     flex: 1,
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: "700",
     color: "#4A90E2",
     textAlign: "center",

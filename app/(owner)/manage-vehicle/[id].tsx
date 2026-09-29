@@ -29,35 +29,7 @@ import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
-
-interface Vehicle {
-  id: string;
-  name: string;
-  license_plate: string;
-  model: string;
-  color?: string;
-  status?: string;
-  display_status?: string;
-  capacity?: number;
-  route_id?: string;
-  routes?: { name: string };
-  route_assignments?: {
-    id: string;
-    route_id: string;
-    is_active: boolean;
-    routes?: { id: string; route_name: string };
-  }[];
-  insurance_expiry?: string;
-  maintenance_due?: string;
-  images?: string[];
-  vehicle_images?: { url: string; fileName: string; uploadedAt: string }[];
-  drivers?: {
-    id: string;
-    vehicle_plate_number: string;
-    users?: { name: string };
-  };
-  vehicle_qr_code?: string | { dataUrl?: string; uri?: string };
-}
+import { SelectedVehicle } from "../ownerHelpers/interface/owner.interfece";
 
 export default function ManageVehicle() {
   const router = useRouter();
@@ -67,8 +39,18 @@ export default function ManageVehicle() {
   const { drivers, refreshDrivers } = useDrivers();
 
   // Vehicle state
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [vehicle, setVehicle] = useState<SelectedVehicle | null>(null);
   const [loading, setLoading] = useState(true);
+  // Driver modal state
+  const [showSwitchDriverModal, setShowSwitchDriverModal] = useState(false);
+  const [assigningDriver, setAssigningDriver] = useState(false);
+  const [selectedSwitchingDriverId, setSelectedSwitchingDriverId] = useState<
+    string | null
+  >(null);
+  // Carousel state
+  const [imageCarouselWidth, setImageCarouselWidth] = useState(0);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const imageScrollRef = useRef<ScrollView | null>(null);
   const [notification, setNotification] = useState<{
     visible: boolean;
     message: string;
@@ -78,18 +60,6 @@ export default function ManageVehicle() {
     message: "",
     type: "success",
   });
-
-  // Driver modal state
-  const [showSwitchDriverModal, setShowSwitchDriverModal] = useState(false);
-  const [assigningDriver, setAssigningDriver] = useState(false);
-  const [selectedSwitchingDriverId, setSelectedSwitchingDriverId] = useState<
-    string | null
-  >(null);
-
-  // Carousel state
-  const [imageCarouselWidth, setImageCarouselWidth] = useState(0);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const imageScrollRef = useRef<ScrollView | null>(null);
 
   // Action states
   const [deactivating, setDeactivating] = useState(false);
@@ -403,9 +373,35 @@ export default function ManageVehicle() {
   const handleSwitchDriver = useCallback(
     async (driver: any) => {
       if (!vehicle?.id || !user?.token || !owner) return;
-      let selectedDriverId = driver.driverProfileId || driver.id;
 
-      if (driver.is_owner_driver && selectedDriverId === owner.id) {
+      const resolveDriverSelectionId = (candidate: any) => {
+        if (!candidate) return null;
+
+        const candidateIds = [
+          candidate.driverProfileId,
+          candidate.id,
+          candidate.userId,
+          candidate.user_id,
+          candidate.driver_id,
+        ].filter(
+          (value) =>
+            value !== undefined &&
+            value !== null &&
+            value !== "" &&
+            String(value).trim() !== "",
+        );
+
+        return candidateIds[0] || null;
+      };
+
+      let selectedDriverId = resolveDriverSelectionId(driver);
+      const isPlaceholderOwnerDriver =
+        driver?.is_owner_driver === true &&
+        (!driver?.driverProfileId ||
+          String(driver.driverProfileId) === String(owner.id)) &&
+        (!driver?.userId || String(driver.userId) === String(user.userData.id));
+
+      if (isPlaceholderOwnerDriver) {
         setNotification({
           visible: true,
           message: "Creating your driver profile...",
@@ -471,7 +467,13 @@ export default function ManageVehicle() {
             );
           }
 
-          selectedDriverId = createdDriverId || selfDriver.id;
+          selectedDriverId =
+            createdDriverId ||
+            selfDriver?.driverProfileId ||
+            selfDriver?.id ||
+            selfDriver?.userId ||
+            selfDriver?.user_id ||
+            null;
         } catch (creationError) {
           console.error("Error creating owner driver record:", creationError);
           setNotification({
@@ -482,6 +484,15 @@ export default function ManageVehicle() {
           });
           return;
         }
+      }
+
+      if (!selectedDriverId) {
+        setNotification({
+          visible: true,
+          message: "Unable to resolve the selected driver. Please try again.",
+          type: "error",
+        });
+        return;
       }
 
       if (selectedDriverId === vehicle.drivers?.id) {

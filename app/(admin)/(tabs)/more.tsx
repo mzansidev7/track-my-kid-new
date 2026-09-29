@@ -1,280 +1,126 @@
-import React, { useContext } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useContext } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
+  Alert,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  Image,
+  View,
 } from "react-native";
-import { useTheme } from "../../../styles/theme";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
-
-const platformItems = [
-  { key: "users", label: "Users", sub: "Manage all users", icon: "person" },
-  { key: "schools", label: "Schools", sub: "Manage schools", icon: "school" },
-  { key: "parents", label: "Parents", sub: "Manage parents", icon: "people" },
-  {
-    key: "children",
-    label: "Children",
-    sub: "Manage children",
-    icon: "child-care",
-  },
-  {
-    key: "drivers",
-    label: "Drivers",
-    sub: "Manage drivers",
-    icon: "drive-eta",
-  },
-  {
-    key: "vehicles",
-    label: "Vehicles",
-    sub: "Manage vehicles",
-    icon: "directions-car",
-  },
-  {
-    key: "routes",
-    label: "Routes",
-    sub: "Manage routes",
-    icon: "settings-ethernet",
-  },
-  { key: "trips", label: "Trips", sub: "Manage trips", icon: "local-taxi" },
-];
-
-const operationsItems = [
-  {
-    key: "live",
-    label: "Live Tracking",
-    sub: "View live vehicles",
-    icon: "location-on",
-  },
-  {
-    key: "attendance",
-    label: "Attendance",
-    sub: "View attendance",
-    icon: "check-circle",
-  },
-  {
-    key: "incidents",
-    label: "Incidents",
-    sub: "Manage incidents",
-    icon: "report-problem",
-  },
-  {
-    key: "announcements",
-    label: "Announcements",
-    sub: "Send announcements",
-    icon: "campaign",
-  },
-  {
-    key: "notifications",
-    label: "Notifications",
-    sub: "System notifications",
-    icon: "notifications",
-  },
-  { key: "reports", label: "Reports", sub: "View reports", icon: "bar-chart" },
-  {
-    key: "support",
-    label: "Support Tickets",
-    sub: "Manage tickets",
-    icon: "support-agent",
-  },
-  {
-    key: "feedback",
-    label: "Feedback",
-    sub: "View feedback",
-    icon: "feedback",
-  },
-];
-
-const businessItems = [
-  {
-    key: "subscriptions",
-    label: "Subscriptions",
-    sub: "Manage plans",
-    icon: "credit-card",
-  },
-  {
-    key: "payments",
-    label: "Payments",
-    sub: "Transaction history",
-    icon: "account-balance-wallet",
-  },
-  {
-    key: "activity",
-    label: "Activity Logs",
-    sub: "System activities",
-    icon: "history",
-  },
-  {
-    key: "settings",
-    label: "Settings",
-    sub: "System settings",
-    icon: "settings",
-  },
-  {
-    key: "admins",
-    label: "Admins",
-    sub: "Manage admins",
-    icon: "admin-panel-settings",
-  },
-  {
-    key: "roles",
-    label: "Roles & Permissions",
-    sub: "Access control",
-    icon: "lock",
-  },
-  {
-    key: "appconfig",
-    label: "App Config",
-    sub: "App configuration",
-    icon: "tune",
-  },
-  {
-    key: "dataexport",
-    label: "Data Export",
-    sub: "Export data",
-    icon: "file-download",
-  },
-];
-
-const quickActions = [
-  { key: "add-school", label: "Add School", icon: "add" },
-  { key: "add-driver", label: "Add Driver", icon: "person-add" },
-  { key: "add-vehicle", label: "Add Vehicle", icon: "directions-car" },
-  { key: "create-route", label: "Create Route", icon: "settings-ethernet" },
-  { key: "send-notice", label: "Send Notice", icon: "send" },
-];
+import { useAdminProfile } from "../../../adminHelpers/hooks/useAdminProfile";
+import { useTheme } from "../../../styles/theme";
 
 export default function AdminMore() {
   const router = useRouter();
   const { colors } = useTheme();
   const { logout } = useContext(AuthContext);
+  const { admin } = useAdminProfile();
+  const adminName =
+    admin?.display_name || admin?.name || "Platform administrator";
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/(auth)/welcomeScreen" as never);
+  const destinations = [
+    {
+      title: "Dashboard",
+      subtitle: "Platform metrics and activity",
+      icon: "dashboard",
+      route: "/(admin)/(tabs)",
+    },
+    {
+      title: "Live trips",
+      subtitle: "Active tracking sessions and GPS",
+      icon: "location-on",
+      route: "/(admin)/(tabs)/live",
+    },
+    {
+      title: "Support tickets",
+      subtitle: "Review and update user requests",
+      icon: "support-agent",
+      route: "/(admin)/(tabs)/support",
+    },
+  ];
+
+  const confirmLogout = () => {
+    Alert.alert(
+      "Log out of Admin",
+      "You will need an authorized Admin account to sign in again.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            router.replace("/(auth)/home" as never);
+          },
+        },
+      ],
+    );
   };
-
-  const Tile = ({ item, onPress }: any) => (
-    <TouchableOpacity
-      style={[styles.tile, { backgroundColor: "#fff" }]}
-      onPress={onPress}
-    >
-      <View style={styles.tileIcon}>
-        <MaterialIcons name={item.icon as any} size={22} color="#10B981" />
-      </View>
-      <Text style={styles.tileLabel}>{item.label}</Text>
-      <Text style={styles.tileSub}>{item.sub}</Text>
-    </TouchableOpacity>
-  );
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.safe, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerRow}>
-          <Image
-            source={require("@/assets/images/logo.png")}
-            style={styles.logo}
-          />
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.title}>More</Text>
-            <Text style={styles.subtitle}>Admin Panel</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.kicker}>PLATFORM</Text>
+        <Text style={[styles.title, { color: colors.text.primary }]}>
+          Admin tools
+        </Text>
+        <View style={[styles.profileCard, { backgroundColor: colors.surface }]}>
+          <View style={styles.avatar}>
+            <MaterialIcons
+              name="admin-panel-settings"
+              size={24}
+              color="#2563EB"
+            />
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconRound}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name}>{adminName}</Text>
+            <Text style={styles.role}>
+              {admin?.admin_role
+                ? admin.admin_role.replaceAll("_", " ")
+                : "Authorized platform administrator"}
+            </Text>
+          </View>
+          <MaterialIcons name="verified-user" size={20} color="#059669" />
+        </View>
+        <Text style={styles.section}>AVAILABLE AREAS</Text>
+        {destinations.map((item) => (
+          <TouchableOpacity
+            key={item.route}
+            style={[styles.row, { backgroundColor: colors.surface }]}
+            onPress={() => router.push(item.route as never)}
+          >
+            <View style={styles.rowIcon}>
               <MaterialIcons
-                name="notifications-none"
-                size={20}
-                color="#0F172A"
+                name={item.icon as any}
+                size={21}
+                color="#2563EB"
               />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.avatarRound}>
-              <MaterialIcons name="account-circle" size={36} color="#0F172A" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.profileCard}>
-          <View style={styles.profileLeft}>
-            <View style={styles.profileIcon}>
-              <MaterialIcons name="verified" size={24} color="#10B981" />
             </View>
-            <View>
-              <Text style={styles.profileName}>Admin</Text>
-              <Text style={styles.profileRole}>Super Administrator</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>{item.title}</Text>
+              <Text style={styles.rowSub}>{item.subtitle}</Text>
             </View>
-          </View>
-          <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+            <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+          </TouchableOpacity>
+        ))}
+        <View style={styles.notice}>
+          <MaterialIcons name="info-outline" size={19} color="#B45309" />
+          <Text style={styles.noticeText}>
+            Other platform-management modules are not connected to live Admin
+            APIs yet, so they are omitted rather than showing fake data or
+            broken links.
+          </Text>
         </View>
-
-        <Text style={styles.sectionHeader}>PLATFORM MANAGEMENT</Text>
-        <View style={styles.grid}>
-          {platformItems.map((it) => (
-            <Tile
-              key={it.key}
-              item={it}
-              onPress={() => router.push(`/(admin)/pages/${it.key}` as never)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionHeader}>OPERATIONS</Text>
-        <View style={styles.grid}>
-          {operationsItems.map((it) => (
-            <Tile
-              key={it.key}
-              item={it}
-              onPress={() => router.push(`/(admin)/pages/${it.key}` as never)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionHeader}>BUSINESS & SYSTEM</Text>
-        <View style={styles.grid}>
-          {businessItems.map((it) => (
-            <Tile
-              key={it.key}
-              item={it}
-              onPress={() => router.push(`/(admin)/pages/${it.key}` as never)}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionHeader}>QUICK ACTIONS</Text>
-        <View style={styles.quickRow}>
-          {quickActions.map((a) => (
-            <TouchableOpacity
-              key={a.key}
-              style={styles.quickBtn}
-              onPress={() => router.push(`/(admin)/pages/${a.key}` as never)}
-            >
-              <MaterialIcons name={a.icon as any} size={18} color="#10B981" />
-              <Text style={styles.quickLabel}>{a.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={styles.helpRow}
-          onPress={() => router.push("/(admin)/pages/support" as never)}
-        >
-          <Text style={styles.helpText}>Help & Support</Text>
-          <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <MaterialIcons name="logout" size={20} color="#DC2626" />
-          <Text style={styles.logoutText}>Log Out</Text>
+        <TouchableOpacity style={styles.logout} onPress={confirmLogout}>
+          <MaterialIcons name="logout" size={19} color="#B91C1C" />
+          <Text style={styles.logoutText}>Log out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -282,124 +128,85 @@ export default function AdminMore() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 140 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  logo: { width: 64, height: 64 },
-  headerTitleWrap: { flex: 1, alignItems: "center" },
-  title: { fontSize: 20, fontWeight: "800" },
-  subtitle: { fontSize: 13, color: "#6B7280" },
-  headerActions: { flexDirection: "row", alignItems: "center" },
-  iconRound: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  avatarRound: { width: 40, height: 40, borderRadius: 20, overflow: "hidden" },
-  profileCard: {
-    backgroundColor: "#DCFCE7",
-    padding: 14,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  profileLeft: { flexDirection: "row", alignItems: "center" },
-  profileIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#E6F9ED",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  profileName: { fontSize: 16, fontWeight: "800" },
-  profileRole: { fontSize: 12, color: "#6B7280" },
-  sectionHeader: {
-    fontSize: 12,
+  safe: { flex: 1 },
+  content: { padding: 18, paddingBottom: 32, gap: 12 },
+  kicker: {
+    color: "#2563EB",
+    fontSize: 10,
     fontWeight: "800",
-    color: "#6B7280",
-    marginTop: 8,
-    marginBottom: 8,
+    letterSpacing: 1.1,
   },
-  grid: {
+  title: { fontSize: 25, fontWeight: "900", marginBottom: 4 },
+  profileCard: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    alignItems: "center",
+    gap: 11,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 13,
+    padding: 13,
+    marginVertical: 4,
   },
-  tile: {
-    width: "48%",
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 8,
-    minHeight: 100,
-    justifyContent: "center",
-  },
-  tileIcon: {
+  avatar: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: "#F0FDF4",
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
   },
-  tileLabel: { fontSize: 14, fontWeight: "800" },
-  tileSub: { fontSize: 12, color: "#6B7280", marginTop: 6 },
-  quickRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+  name: { color: "#0F172A", fontSize: 13, fontWeight: "800" },
+  role: {
+    color: "#64748B",
+    fontSize: 10,
+    marginTop: 3,
+    textTransform: "capitalize",
   },
-  quickBtn: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 8,
-  },
-  quickLabel: { marginLeft: 8, fontWeight: "700" },
-  helpRow: {
+  section: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
     marginTop: 8,
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 12,
+  },
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
   },
-  helpText: { fontSize: 14, fontWeight: "700" },
-  logoutButton: {
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowTitle: { color: "#1E293B", fontSize: 12, fontWeight: "800" },
+  rowSub: { color: "#64748B", fontSize: 10, marginTop: 3 },
+  notice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFFBEB",
+    padding: 11,
+    borderRadius: 10,
+    marginTop: 5,
+  },
+  noticeText: { color: "#92400E", fontSize: 10, lineHeight: 15, flex: 1 },
+  logout: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    backgroundColor: "#FEE2E2",
-    borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 16,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: "#FCD5D0",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 8,
   },
-  logoutText: {
-    color: "#DC2626",
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  logoutText: { color: "#B91C1C", fontSize: 12, fontWeight: "800" },
 });

@@ -1,10 +1,11 @@
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+const fs = require("fs");
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
-const appJson = require('./app.json');
+const appJson = require("./app.json");
 
-const extra = (appJson.expo && appJson.expo.extra) ? { ...appJson.expo.extra } : {};
+const extra =
+  appJson.expo && appJson.expo.extra ? { ...appJson.expo.extra } : {};
 
 // Inject Geoapify API key from .env into Expo extra so Constants.expoConfig.extra has it
 if (process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY) {
@@ -14,6 +15,17 @@ if (process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY) {
 module.exports = ({ config }) => {
   return {
     ...config,
+    plugins: [
+      ...(config.plugins || []),
+      [
+        "expo-build-properties",
+        {
+          android: {
+            usesCleartextTraffic: true,
+          },
+        },
+      ],
+    ],
     extra,
   };
 };

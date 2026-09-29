@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,13 @@ import AppNotification from "../../../../components/Notification";
 import ClientHeader from "../../components/ClientHeader";
 import { Child, useChildren } from "../../clientHelpers/hooks/useChildren";
 import { useClientProfile } from "../../clientHelpers/hooks/useClientProfile";
+import { AuthContext } from "../../../../context/authContext/auth-context";
+import { resolveWorkingBaseUrl } from "../../../../url";
+
+const getLocalDateKey = (date = new Date()) =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
 
 const formatTime = (value?: string) => {
   if (!value) return "—";
@@ -28,10 +35,21 @@ const formatTime = (value?: string) => {
   return value;
 };
 
+const hasAssignedVehicle = (child: Child) =>
+  Boolean(child.vehicle_id || child.vehicle?.id);
+
 const deriveChildStatus = (child: Child) => {
   const route = child.route;
   const pickupTime = route?.pickup_start_time || route?.departure_time;
   const dropoffTime = route?.dropoff_start_time;
+
+  if (!route) {
+    return {
+      label: "Upcoming",
+      accent: "#8B5CF6",
+      note: "Awaiting vehicle assignment",
+    };
+  }
 
   if (child.status) {
     return {
@@ -55,21 +73,53 @@ const deriveChildStatus = (child: Child) => {
   }
 
   return {
-    label: "At School",
-    accent: "#F59E0B",
-    note: "Checked in safely at school",
+    label: "Upcoming",
+    accent: "#8B5CF6",
+    note: "Awaiting vehicle assignment",
   };
 };
 
 const ChildrenScreen = () => {
   const router = useRouter();
   const { children: existingChildren, childrenLoading } = useChildren();
-  const { client } = useClientProfile();
+  const { client, refreshClient } = useClientProfile();
+  const { user } = useContext(AuthContext);
+  const [scheduledTrips, setScheduledTrips] = useState<Record<string, any[]>>(
+    {},
+  );
   const [profileNotification, setProfileNotification] = React.useState({
     visible: false,
     message: "",
     type: "warning" as const,
   });
+
+  useEffect(() => {
+    if (!user?.token || existingChildren.length === 0) return;
+
+    const loadScheduledTrips = async () => {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const entries = await Promise.all(
+        existingChildren.map(async (child) => {
+          try {
+            const response = await fetch(
+              `${baseUrl}/client/children/${child.id}/scheduled-trips`,
+              { headers: { Authorization: `Bearer ${user.token}` } },
+            );
+            const data = await response.json();
+            return [
+              child.id,
+              response.ok && Array.isArray(data) ? data : [],
+            ] as const;
+          } catch {
+            return [child.id, []] as const;
+          }
+        }),
+      );
+      setScheduledTrips(Object.fromEntries(entries));
+    };
+
+    loadScheduledTrips();
+  }, [existingChildren, user?.token]);
 
   const openAddChild = () => {
     const phone = (client?.phone || "").replace(/[\s()-]/g, "");
@@ -79,6 +129,7 @@ const ChildrenScreen = () => {
       /^\+?[0-9]{7,15}$/.test(phone) &&
       client?.relationship &&
       client?.home_address?.trim() &&
+      client?.avatar?.trim() &&
       client?.home_latitude !== null &&
       client?.home_latitude !== undefined &&
       client?.home_longitude !== null &&
@@ -93,7 +144,7 @@ const ChildrenScreen = () => {
         type: "warning",
       });
       setTimeout(() => {
-        router.push("/(client)/pages/personal-information");
+        router.push("/(client)/(tabs)/profile");
       }, 4000);
       return;
     }
@@ -145,12 +196,36 @@ const ChildrenScreen = () => {
             <Text style={styles.title}>My Children</Text>
             <Text style={styles.subtitle}>Manage and track your children</Text>
           </View>
-          <TouchableOpacity style={styles.bellButton}>
-            <Ionicons name="notifications-outline" size={23} color="#111827" />
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>2</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.bellButton}>
+              <Ionicons
+                name="notifications-outline"
+                size={23}
+                color="#111827"
+              />
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>2</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityLabel="Open profile"
+              style={styles.clientAvatarButton}
+              onPress={() => router.push("/(client)/(tabs)/profile")}
+            >
+              {client?.avatar ? (
+                <Image
+                  source={{ uri: client.avatar }}
+                  style={styles.clientAvatar}
+                />
+              ) : (
+                <Text style={styles.clientAvatarText}>
+                  {(client?.first_name || user?.userData?.name || "C")
+                    .charAt(0)
+                    .toUpperCase()}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.summaryCard}>
@@ -240,12 +315,25 @@ const ChildrenScreen = () => {
           ) : (
             existingChildren.map((child: Child) => {
               const status = deriveChildStatus(child);
-              const routeName = child.route?.route_name || "Route";
+              const childTrips = scheduledTrips[child.id] || [];
+              const today = getLocalDateKey();
+              const weekendTrip =
+                childTrips.find((trip) => trip.schedule_date === today) ||
+                childTrips.find((trip) => trip.schedule_date > today);
+              const vehicleAssigned = hasAssignedVehicle(child);
+              const routeName = !vehicleAssigned
+                ? "Vehicle not assigned"
+                : weekendTrip
+                  ? "Weekend transport"
+                  : child.route?.route_name || "Route";
               const pickupTime = formatTime(
-                child.route?.pickup_start_time || child.route?.departure_time,
+                weekendTrip?.pickup_time ||
+                  child.route?.pickup_start_time ||
+                  child.route?.departure_time,
               );
               const dropoffTime = formatTime(
-                child.route?.dropoff_start_time ||
+                weekendTrip?.dropoff_time ||
+                  child.route?.dropoff_start_time ||
                   child.route?.dropoff_end_time,
               );
 
@@ -288,20 +376,26 @@ const ChildrenScreen = () => {
                     </View>
 
                     <TouchableOpacity
-                      style={styles.trackButton}
-                      onPress={() =>
+                      style={[styles.trackButton]}
+                      onPress={() => {
                         router.push({
                           pathname: "/(client)/(tabs)/children/[childId]",
                           params: { childId: child.id },
-                        })
-                      }
+                        });
+                      }}
                     >
                       <Ionicons
-                        name="location-outline"
+                        name={
+                          vehicleAssigned
+                            ? "location-outline"
+                            : "create-outline"
+                        }
                         size={22}
                         color="#1D4ED8"
                       />
-                      <Text style={styles.trackText}>Track</Text>
+                      <Text style={[styles.trackText]}>
+                        {vehicleAssigned ? "Track" : "Update"}
+                      </Text>
                       <MaterialIcons
                         name="chevron-right"
                         size={20}
@@ -322,9 +416,13 @@ const ChildrenScreen = () => {
                     />
                     <Text style={styles.inlineStatusText}>{status.label}</Text>
                     <Text style={styles.inlineTimeText}>
-                      {status.label === "At School"
+                      {!vehicleAssigned
                         ? status.note
-                        : `${pickupTime} • ${dropoffTime}`}
+                        : weekendTrip
+                          ? `${weekendTrip.schedule_date === today ? "Today" : "Scheduled"} · ${pickupTime} · ${dropoffTime}`
+                          : status.label === "At School"
+                            ? status.note
+                            : `${pickupTime} • ${dropoffTime}`}
                     </Text>
                   </View>
                 </View>
@@ -428,6 +526,35 @@ const styles = StyleSheet.create({
     borderColor: "#DDE7F1",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  clientAvatarButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#D9EAFD",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#BFD5F2",
+  },
+
+  clientAvatar: {
+    width: "100%",
+    height: "100%",
+  },
+
+  clientAvatarText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#1E3A8A",
   },
 
   badge: {
@@ -741,11 +868,20 @@ const styles = StyleSheet.create({
     borderColor: "#D0DAF3",
   },
 
+  trackButtonDisabled: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
+  },
+
   trackText: {
     marginLeft: 3,
     fontSize: 10,
     color: "#1D4ED8",
     fontWeight: "700",
+  },
+
+  trackTextDisabled: {
+    color: "#64748B",
   },
 
   /* INLINE STATUS */

@@ -4,7 +4,7 @@ import { Tabs } from "expo-router";
 export default function AdminLayout() {
   return (
     <Tabs
-      tabBar={(props) => <AdminTabBar {...props} />}
+      tabBar={() => <AdminTabBar />}
       screenOptions={{
         headerShown: false,
       }}

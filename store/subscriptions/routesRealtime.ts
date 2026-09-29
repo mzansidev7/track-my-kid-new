@@ -104,6 +104,35 @@ export const subscribeToRoutesListUpdates = (
           }
         }
       },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_assignments",
+      },
+      async (payload: any) => {
+        if (payload.new?.route_id || payload.old?.route_id) {
+          const routeId = payload.new?.route_id || payload.old?.route_id;
+          const { data: route } = await client
+            .from("routes")
+            .select("owner_id")
+            .eq("id", routeId)
+            .single();
+
+          if (route?.owner_id === ownerId) onRoutesChange();
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "schools",
+      },
+      onRoutesChange,
     );
 
   channel.subscribe((status: string) => {

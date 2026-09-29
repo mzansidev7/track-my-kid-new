@@ -189,7 +189,7 @@ const SupportChatPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F5FBF7",
   },
   chatArea: {
     flex: 1,
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#061A3A",
+    backgroundColor: "#0F9D58",
   },
   supportBubble: {
     alignSelf: "flex-start",
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   sendButton: {
-    backgroundColor: "#061A3A",
+    backgroundColor: "#0F9D58",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,

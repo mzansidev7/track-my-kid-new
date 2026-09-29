@@ -3,7 +3,7 @@ import SchoolTabBar from "../components/SchoolTabBar";
 export default function SchoolLayout() {
   return (
     <Tabs
-      tabBar={(props) => <SchoolTabBar {...props} />}
+      tabBar={() => <SchoolTabBar />}
       screenOptions={{
         headerShown: false,
       }}

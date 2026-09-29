@@ -142,6 +142,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   rightAccessory: {
-    marginTop: 16,
+    position: "absolute",
+    top: 16,
+    right: 20,
   },
 });

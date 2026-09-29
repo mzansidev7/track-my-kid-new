@@ -1,11 +1,7 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useTheme } from "@/styles/theme";
 
 type Student = {
   id: string;
@@ -19,39 +15,47 @@ type Props = {
   onViewAll?: () => void;
 };
 
-const DriverStudentsCard = ({
-  students,
-  onViewAll,
-}: Props) => {
+const DriverStudentsCard = ({ students, onViewAll }: Props) => {
+  const { colors } = useTheme();
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Today&apos;s Students</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.primary }]}>
+            Today&apos;s Students
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.primary }]}>
             {students.length} students assigned
           </Text>
         </View>
 
         <TouchableOpacity onPress={onViewAll}>
-          <Text style={styles.viewAll}>View all</Text>
+          <Text style={[styles.viewAll, { color: colors.primary }]}>
+            View all
+          </Text>
         </TouchableOpacity>
       </View>
 
       {students.slice(0, 4).map((student) => (
-        <View key={student.id} style={styles.student}>
+        <View
+          key={student.id}
+          style={[styles.student, { borderTopColor: colors.border }]}
+        >
           <View style={styles.avatar}>
-            <MaterialIcons
-              name="person"
-              size={20}
-              color="#FFFFFF"
-            />
+            <MaterialIcons name="person" size={20} color={colors.primary} />
           </View>
 
           <View style={styles.studentInfo}>
-            <Text style={styles.name}>{student.name}</Text>
+            <Text style={[styles.name, { color: colors.primary }]}>
+              {student.name}
+            </Text>
 
-            <Text style={styles.school}>
+            <Text style={[styles.school, { color: colors.primary }]}>
               {student.school || "School not specified"}
             </Text>
           </View>
@@ -59,18 +63,16 @@ const DriverStudentsCard = ({
           <View
             style={[
               styles.status,
-              student.status === "picked_up" &&
-                styles.statusGreen,
-              student.status === "dropped_off" &&
-                styles.statusBlue,
+              student.status === "picked_up" && styles.statusGreen,
+              student.status === "dropped_off" && styles.statusBlue,
             ]}
           >
-            <Text style={styles.statusText}>
+            <Text style={[styles.statusText, { color: colors.primary }]}>
               {student.status === "picked_up"
                 ? "Picked up"
                 : student.status === "dropped_off"
-                ? "Dropped off"
-                : "Waiting"}
+                  ? "Dropped off"
+                  : "Waiting"}
             </Text>
           </View>
         </View>
@@ -81,12 +83,12 @@ const DriverStudentsCard = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#0D2850",
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 18,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "rgba(15, 157, 88, 0.16)",
   },
 
   header: {
@@ -97,19 +99,19 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 17,
     fontWeight: "700",
   },
 
   subtitle: {
-    color: "#7188A5",
+    color: "#4B5563",
     fontSize: 11,
     marginTop: 4,
   },
 
   viewAll: {
-    color: "#22C7D6",
+    color: "#0F9D58",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -119,14 +121,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#193B68",
+    borderTopColor: "#E5E7EB",
   },
 
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#0057FF",
+    backgroundColor: "#0F9D58",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -137,13 +139,13 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    color: "#FFFFFF",
+    color: "#0F172A",
     fontSize: 13,
     fontWeight: "600",
   },
 
   school: {
-    color: "#7188A5",
+    color: "#64748B",
     fontSize: 10,
     marginTop: 3,
   },

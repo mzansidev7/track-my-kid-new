@@ -1,14 +1,16 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import React from "react";
-import { StyleSheet, TouchableOpacity, View, Platform } from "react-native";
+import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../../styles/theme";
 
 export default function DriversTabBar({
   state,
   navigation,
-}: BottomTabBarProps) {
+}: {
+  state: any;
+  navigation: any;
+}) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -16,14 +18,19 @@ export default function DriversTabBar({
     switch (routeName) {
       case "index":
         return "dashboard";
+
       case "trips":
         return "navigation";
+
       case "students":
         return "people";
+
       case "messages":
         return "chat-bubble-outline";
+
       case "profile":
         return "person-outline";
+
       default:
         return "circle";
     }
@@ -31,17 +38,25 @@ export default function DriversTabBar({
 
   return (
     <View
+      pointerEvents="box-none"
       style={[
         styles.container,
         {
-          paddingBottom: Math.max(insets.bottom, 8),
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border || "#E8E8E8",
+          paddingBottom: Math.max(insets.bottom, 10),
         },
       ]}
     >
-      <View style={styles.tabBar}>
-        {state.routes.map((route, index) => {
+      <View
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: "#FFFFFF",
+            borderWidth: 1,
+            borderColor: "rgba(15, 157, 88, 0.16)",
+          },
+        ]}
+      >
+        {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
 
           const onPress = () => {
@@ -59,7 +74,7 @@ export default function DriversTabBar({
           return (
             <TouchableOpacity
               key={route.key}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
               onPress={onPress}
               style={styles.tab}
             >
@@ -67,7 +82,7 @@ export default function DriversTabBar({
                 style={[
                   styles.iconContainer,
                   isFocused && {
-                    backgroundColor: colors.primary + "12",
+                    backgroundColor: "rgba(15, 157, 88, 0.08)",
                   },
                 ]}
               >
@@ -100,50 +115,62 @@ export default function DriversTabBar({
 
 const styles = StyleSheet.create({
   container: {
-    width: "100%",
-    borderTopWidth: 1,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
 
-    // Modern Android/iOS elevation
+    paddingHorizontal: 14,
+
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: {
           width: 0,
-          height: -3,
+          height: 4,
         },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
       },
+
       android: {
-        elevation: 8,
+        elevation: 12,
       },
     }),
   },
 
   tabBar: {
-    height: 68,
+    height: 64,
+
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingHorizontal: 8,
+
+    paddingHorizontal: 6,
+
+    borderRadius: 22,
+
+    overflow: "hidden",
   },
 
   tab: {
     flex: 1,
-    height: 68,
+    height: 64,
+
     alignItems: "center",
     justifyContent: "center",
+
     position: "relative",
   },
 
   iconContainer: {
-    width: 46,
+    width: 44,
     height: 38,
 
     alignItems: "center",
     justifyContent: "center",
 
-    borderRadius: 14,
+    borderRadius: 13,
   },
 
   activeIndicator: {

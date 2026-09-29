@@ -9,7 +9,6 @@ import { Platform } from "react-native";
 const PRODUCTION_API = "https://track-my-kid-server-production.up.railway.app";
 const LOCAL_API_ANDROID = "http://10.0.2.2:4000";
 const LOCAL_API_IOS = "http://localhost:4000";
-const LOCAL_API_HOST = "http://10.0.2.2:4000";
 
 const extra =
   ((Constants.expoConfig as any)?.extra as Record<
@@ -36,8 +35,6 @@ const normalizeBaseUrl = (url: string) => {
 const fromEnvRaw =
   process.env.EXPO_PUBLIC_API_URL?.trim() || extra.EXPO_PUBLIC_API_URL?.trim();
 const fromEnv = fromEnvRaw ? normalizeBaseUrl(fromEnvRaw) : undefined;
-
-const shouldPreferLocalEmulatorHost = __DEV__ && Platform.OS === "android";
 
 const getDevHostUrl = () => {
   const hostUri =
@@ -66,12 +63,10 @@ const localFallback =
   (Platform.OS === "android" ? LOCAL_API_ANDROID : LOCAL_API_IOS);
 
 const resolvedBaseUrl =
-  fromEnv && fromEnv.length > 0 && !shouldPreferLocalEmulatorHost
+  fromEnv && fromEnv.length > 0
     ? fromEnv
     : __DEV__
-      ? shouldPreferLocalEmulatorHost
-        ? LOCAL_API_HOST
-        : localFallback
+      ? localFallback
       : PRODUCTION_API;
 
 const getCandidateUrls = () => {
@@ -138,8 +133,12 @@ export const DEBUG_API_CONFIG = {
 
 // Geoapify API key (EXPO_PUBLIC_ prefix so it's safe to embed in the app)
 export const GEOAPIFY_API_KEY =
-  process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY || extra.EXPO_PUBLIC_GEOAPIFY_API_KEY || "";
+  process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY ||
+  extra.EXPO_PUBLIC_GEOAPIFY_API_KEY ||
+  "";
 
 // Google Maps API key (EXPO_PUBLIC_ so it can be embedded safely)
 export const GOOGLE_API_KEY =
-  process.env.EXPO_PUBLIC_GOOGLE_API_KEY || extra.EXPO_PUBLIC_GOOGLE_API_KEY || "";
+  process.env.EXPO_PUBLIC_GOOGLE_API_KEY ||
+  extra.EXPO_PUBLIC_GOOGLE_API_KEY ||
+  "";

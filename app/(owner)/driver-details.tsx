@@ -249,6 +249,7 @@ const DriverDetails = ({
         await clearOwnerCache("drivers");
         await clearOwnerCache("driverDetails");
         await clearOwnerCache("vehicles");
+        await clearOwnerCache("routes");
 
         setNotification({
           visible: true,
@@ -499,6 +500,8 @@ const DriverDetails = ({
       );
 
       if (deleteResponse.ok) {
+        await clearOwnerCache("routes");
+        await clearOwnerCache("vehicles");
         setNotification({
           visible: true,
           message: "Vehicle unassigned successfully",
@@ -604,17 +607,71 @@ const DriverDetails = ({
             )}
           </View>
           <Text style={styles.driverName}>{driver.name || "Driver"}</Text>
-          <View style={styles.statusContainer}>
+          <View
+            style={[
+              styles.statusContainer,
+              { flexDirection: "row", alignItems: "center", gap: 10 },
+            ]}
+          >
             <Text
               style={[
                 styles.statusText,
                 driver.status === "active"
-                  ? styles.activeStatus
-                  : styles.inactiveStatus,
+                  ? [
+                      styles.activeStatus,
+                      {
+                        backgroundColor: "green",
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                      },
+                    ]
+                  : [
+                      styles.inactiveStatus,
+                      {
+                        backgroundColor: "red",
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                      },
+                    ],
               ]}
             >
-              {driver.status === "active" ? "🟢 Active" : "🔴 Inactive"}
+              {driver.status === "active"
+                ? "🟢 Active/Vehicle assigned"
+                : "🔴 Inactive"}
             </Text>
+            {driver.is_verified ? (
+              <Text
+                style={[
+                  styles.verifiedText,
+                  {
+                    backgroundColor: "green",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                  },
+                ]}
+              >
+                ✓ Verified
+              </Text>
+            ) : (
+              <Text
+                style={[
+                  styles.inactiveStatus,
+                  {
+                    backgroundColor: "red",
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 20,
+                    fontSize: 14,
+                    fontWeight: "600",
+                  },
+                ]}
+              >
+                ✗ Not Verified/Email not confirmed
+              </Text>
+            )}
           </View>
         </View>
 
@@ -649,37 +706,39 @@ const DriverDetails = ({
         <View style={styles.infoCard}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Assigned Vehicle</Text>
-            <TouchableOpacity
-              style={[
-                styles.assignButton,
-                assigningVehicle && styles.buttonDisabled,
-              ]}
-              onPress={openVehicleAssignment}
-              disabled={assigningVehicle}
-            >
-              {assigningVehicle ? (
-                <ActivityIndicator color="#7ED321" size="small" />
-              ) : (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 5,
-                  }}
-                >
-                  <MaterialIcons
-                    name="directions-car"
-                    size={20}
-                    color="#FFF"
-                    style={{ marginRight: 5 }}
-                  />
-                  <Text style={styles.assignButtonText}>
-                    {driver.vehicle ? "Change Vehicle" : "Assign Vehicle"}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {driver?.is_verified && (
+              <TouchableOpacity
+                style={[
+                  styles.assignButton,
+                  assigningVehicle && styles.buttonDisabled,
+                ]}
+                onPress={openVehicleAssignment}
+                disabled={assigningVehicle}
+              >
+                {assigningVehicle ? (
+                  <ActivityIndicator color="#7ED321" size="small" />
+                ) : (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <MaterialIcons
+                      name="directions-car"
+                      size={20}
+                      color="#FFF"
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={styles.assignButtonText}>
+                      {driver.vehicle ? "Change Vehicle" : "Assign Vehicle"}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           {driver.vehicle ? (
@@ -1079,12 +1138,12 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 24,
     color: "#FFF",
     fontWeight: "bold",
   },
   driverName: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 8,
@@ -1093,17 +1152,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#F0F0F0",
   },
   statusText: {
     fontSize: 14,
     fontWeight: "600",
   },
   activeStatus: {
-    color: "#28A745",
+    color: "white",
   },
   inactiveStatus: {
-    color: "#DC3545",
+    color: "white",
+  },
+  verifiedText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#7ED321",
+    marginTop: 4,
   },
 
   infoCard: {

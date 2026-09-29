@@ -21,7 +21,7 @@ export const useOwnerPageHeader = ({
   onBackPress,
 }: OwnerPageHeaderOptions) => {
   const router = useRouter();
-  const { colors, shadows } = useTheme();
+  const { colors } = useTheme();
 
   const handleBack = () => {
     if (onBackPress) {
@@ -78,8 +78,8 @@ export const useOwnerPageHeader = ({
 const styles = StyleSheet.create({
   safeArea: {},
   pageHeader: {
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
@@ -87,12 +87,12 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 10,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
@@ -101,20 +101,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageHeaderTitle: {
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: "800",
     color: "#FFF",
     marginBottom: 4,
   },
   pageHeaderSubtitle: {
-    fontSize: 13,
+    fontSize: 11,
     color: "rgba(255,255,255,0.9)",
   },
   addButton: {
-    marginTop: 20,
+    marginTop: 12,
     backgroundColor: "#FFF",
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: "#8B5CF6",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
 });

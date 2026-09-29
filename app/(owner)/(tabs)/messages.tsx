@@ -18,11 +18,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
 import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
-import { clearConversationsCache } from "../../../store/asyncStorage/messages.asyncStore";
+import {
+  clearConversationsCache,
+  getCachedMessages,
+} from "../../../store/asyncStorage/messages.asyncStore";
 import {
   ConversationData,
   fetchConversationsWithCache,
@@ -49,6 +53,7 @@ interface Message {
 export default function Messages({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);
   const userRole = user?.role || "client";
+  const insets = useSafeAreaInsets();
 
   // Color scheme based on user role
   const bubbleColors =
@@ -61,14 +66,17 @@ export default function Messages({ setActiveButton }: any) {
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [selectedConversation, setSelectedConversation] =
     useState<ConversationData | null>(null);
-  const [selectedConversationId, setSelectedConversationId] = useState<
-    string | null
-  >(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showDriversList, setShowDriversList] = useState(false);
+  const [showSchoolsList, setShowSchoolsList] = useState(false);
+  const [showParentsList, setShowParentsList] = useState(false);
+  const [schools, setSchools] = useState<any[]>([]);
+  const [parents, setParents] = useState<any[]>([]);
+  const [loadingSchools, setLoadingSchools] = useState(false);
+  const [loadingParents, setLoadingParents] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "chat">("list"); // Mobile view mode
   const [notification, setNotification] = useState<{
     visible: boolean;
@@ -85,15 +93,79 @@ export default function Messages({ setActiveButton }: any) {
     title: "Messages",
     subtitle: "",
   });
+
+  const loadSchools = useCallback(async () => {
+    if (!user?.token) return;
+    setLoadingSchools(true);
+    try {
+      const response = await fetch(`${BASE_URL}/owner/linked-schools`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      const data = await response.json();
+      setSchools(response.ok && Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error loading linked schools:", error);
+      setSchools([]);
+    } finally {
+      setLoadingSchools(false);
+    }
+  }, [user?.token]);
+
+  const loadParents = useCallback(async () => {
+    if (!user?.token) return;
+    setLoadingParents(true);
+    try {
+      const response = await fetch(`${BASE_URL}/owner/linked-clients`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      const data = await response.json();
+      const normalizedParents =
+        response.ok && Array.isArray(data)
+          ? data.map((item) => ({
+              id: item?.clients?.user_id || item?.clients?.id || item?.id,
+              userId: item?.clients?.user_id || item?.clients?.id || item?.id,
+              name: item?.clients?.users?.name || "Parent",
+              email: item?.clients?.users?.email || null,
+              phone: item?.clients?.users?.phone || null,
+              vehicleName: item?.vehicles?.name || "Vehicle",
+              vehiclePlate: item?.vehicles?.license_plate || "",
+              homeAddress: item?.clients?.home_address || "",
+            }))
+          : [];
+      setParents(normalizedParents);
+    } catch (error) {
+      console.error("Error loading linked parents:", error);
+      setParents([]);
+    } finally {
+      setLoadingParents(false);
+    }
+  }, [user?.token]);
+
+  useEffect(() => {
+    loadSchools();
+    loadParents();
+  }, [loadSchools, loadParents]);
   const flatListRef = useRef<FlatList>(null);
   const conversationsChannelRef = useRef<any>(null);
   const messagesChannelRef = useRef<any>(null);
+
+  const scrollMessagesToBottom = useCallback((animated = true) => {
+    if (!flatListRef.current) return;
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    }, 50);
+  }, []);
 
   const initializeConversations = useCallback(async () => {
     setLoading(true);
     try {
       const cachedConversations = await fetchConversationsWithCache(
         user?.userData?.id,
+        (cached) => {
+          setConversations(cached);
+          setLoading(false);
+        },
       );
       setConversations(cachedConversations);
 
@@ -113,6 +185,19 @@ export default function Messages({ setActiveButton }: any) {
       setLoading(false);
     }
   }, [user?.userData?.id]);
+
+  const markAsRead = async (conversationId: string) => {
+    try {
+      await fetch(`${BASE_URL}/owner/conversations/${conversationId}/read`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+    }
+  };
 
   useEffect(() => {
     if (user?.userData?.id) {
@@ -138,8 +223,15 @@ export default function Messages({ setActiveButton }: any) {
         // Realtime subscriptions in this app should not receive the backend auth token.
         clearAuthToken();
 
-        const cachedMessages = await fetchMessagesWithCache(conversationId);
-        setMessages(cachedMessages);
+        const cachedMessages = await getCachedMessages(conversationId);
+
+        if (cachedMessages.length > 0) {
+          setMessages(cachedMessages);
+        }
+
+        const freshMessages = await fetchMessagesWithCache(conversationId);
+        setMessages(freshMessages);
+        scrollMessagesToBottom(true);
 
         // Mark messages as read
         await markAsRead(conversationId);
@@ -149,17 +241,17 @@ export default function Messages({ setActiveButton }: any) {
           conversationId,
           (updated) => {
             setMessages(updated);
-            // Scroll to bottom when new messages arrive (scroll to index 0 with inverted list)
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({ index: 0, animated: true });
-            }, 50);
+            // Scroll to bottom when new messages arrive.
+            if (updated.length > 0) {
+              scrollMessagesToBottom(true);
+            }
           },
         );
 
         // Scroll to bottom
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index: 0, animated: false });
-        }, 50);
+        if (cachedMessages.length > 0) {
+          scrollMessagesToBottom(true);
+        }
       } catch (error) {
         console.error("Error initializing messages:", error);
       }
@@ -169,6 +261,8 @@ export default function Messages({ setActiveButton }: any) {
 
   useEffect(() => {
     if (selectedConversation) {
+      // Initialize the selected conversation from the server/realtime cache.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       initializeMessages(selectedConversation.id);
     }
 
@@ -179,19 +273,6 @@ export default function Messages({ setActiveButton }: any) {
       }
     };
   }, [selectedConversation, initializeMessages]);
-
-  const markAsRead = async (conversationId: string) => {
-    try {
-      await fetch(`${BASE_URL}/owner/conversations/${conversationId}/read`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-        },
-      });
-    } catch (error) {
-      console.error("Error marking messages as read:", error);
-    }
-  };
 
   const startConversationWithDriver = async (
     driverUserId: string,
@@ -231,7 +312,6 @@ export default function Messages({ setActiveButton }: any) {
 
         if (newConversation) {
           setSelectedConversation(newConversation);
-          setSelectedConversationId(newConversation.id);
           setViewMode("chat");
           const msgs = await fetchMessagesWithCache(newConversation.id);
           setMessages(msgs);
@@ -272,6 +352,101 @@ export default function Messages({ setActiveButton }: any) {
     }
   };
 
+  const startConversationWithSchool = async (school: any) => {
+    if (!school?.userId || !user?.token) return;
+    try {
+      const response = await fetch(`${BASE_URL}/owner/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          otherUserId: school.userId,
+          conversationType: "owner_school",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.conversation_id) {
+        throw new Error(data.error || "Could not start conversation");
+      }
+      await clearConversationsCache(user?.userData?.id);
+      const updatedConversations = await fetchConversationsWithCache(
+        user?.userData?.id,
+      );
+      setConversations(updatedConversations);
+      const newConversation = updatedConversations.find(
+        (conversation) => conversation.id === data.conversation_id,
+      );
+      if (newConversation) {
+        setSelectedConversation(newConversation);
+        setViewMode("chat");
+      }
+      setShowSchoolsList(false);
+    } catch (error) {
+      console.error("Error starting school conversation:", error);
+      setNotification({
+        visible: true,
+        message: "Could not start school conversation",
+        type: "error",
+      });
+    }
+  };
+
+  const startConversationWithParent = async (parent: any) => {
+    const parentUserId = parent?.userId || parent?.id;
+    if (!parentUserId || !user?.token) return;
+
+    try {
+      const response = await fetch(`${BASE_URL}/owner/conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          otherUserId: parentUserId,
+          conversationType: "client_owner",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.conversation_id) {
+        throw new Error(data.error || "Could not start conversation");
+      }
+
+      await clearConversationsCache(user?.userData?.id);
+      const updatedConversations = await fetchConversationsWithCache(
+        user?.userData?.id,
+      );
+      setConversations(updatedConversations);
+
+      const newConversation = updatedConversations.find(
+        (conversation) => conversation.id === data.conversation_id,
+      );
+
+      if (newConversation) {
+        setSelectedConversation(newConversation);
+        setViewMode("chat");
+      }
+
+      setShowParentsList(false);
+      setNotification({
+        visible: true,
+        message: `Started conversation with ${parent.name || "parent"}`,
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Error starting parent conversation:", error);
+      setNotification({
+        visible: true,
+        message: "Could not start parent conversation",
+        type: "error",
+      });
+    }
+  };
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || sending) return;
 
@@ -307,12 +482,7 @@ export default function Messages({ setActiveButton }: any) {
             if (updated.length > messages.length) {
               setMessages(updated);
               // Scroll to latest message
-              setTimeout(() => {
-                flatListRef.current?.scrollToIndex({
-                  index: 0,
-                  animated: true,
-                });
-              }, 50);
+              scrollMessagesToBottom(true);
             }
           } catch (err) {
             console.error("⚠️ Fallback refresh failed:", err);
@@ -379,6 +549,40 @@ export default function Messages({ setActiveButton }: any) {
     );
   };
 
+  const renderParentItem = ({ item }: { item: any }) => {
+    const conversationUserId = item.userId || item.id;
+    const alreadyConversing = conversations.some(
+      (conv) => conv.other_participant.id === conversationUserId,
+    );
+
+    return (
+      <TouchableOpacity
+        style={styles.driverListItem}
+        onPress={() => startConversationWithParent(item)}
+        disabled={alreadyConversing}
+      >
+        <View style={styles.conversationIcon}>
+          <MaterialIcons name="person" size={24} color="#7ED321" />
+        </View>
+        <View style={styles.conversationInfo}>
+          <Text style={styles.conversationName}>{item.name}</Text>
+          <Text style={styles.conversationRole}>
+            {item.vehicleName}{" "}
+            {item.vehiclePlate ? `(${item.vehiclePlate})` : ""}
+          </Text>
+          {item.homeAddress ? (
+            <Text style={styles.lastMessage} numberOfLines={1}>
+              {item.homeAddress}
+            </Text>
+          ) : null}
+        </View>
+        {!alreadyConversing && (
+          <MaterialIcons name="add-circle-outline" size={24} color="#7ED321" />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   const renderConversationItem = ({ item }: { item: ConversationData }) => (
     <TouchableOpacity
       style={[
@@ -411,7 +615,9 @@ export default function Messages({ setActiveButton }: any) {
             ? "Parent"
             : item.other_participant.role === "driver"
               ? "Driver"
-              : "Owner"}
+              : item.other_participant.role === "school"
+                ? `School admin - ${item.other_participant.profile?.school_name || "School"}`
+                : item.other_participant.role}
         </Text>
         {item.last_message && (
           <Text style={styles.lastMessage} numberOfLines={1}>
@@ -425,11 +631,13 @@ export default function Messages({ setActiveButton }: any) {
             : new Date(item.created_at).toLocaleDateString()}
         </Text>
       </View>
-      {item.last_message &&
-        !item.last_message.is_read &&
-        item.last_message.sender_id !== user?.userData?.id && (
-          <View style={styles.unreadIndicator} />
-        )}
+      {(item.unread_count ?? 0) > 0 && (
+        <View style={styles.unreadIndicator}>
+          <Text style={styles.unreadIndicatorText}>
+            {item.unread_count ?? 0}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -493,11 +701,11 @@ export default function Messages({ setActiveButton }: any) {
             ]}
           >
             {/* Sender name for group context */}
-            {/* {!isOwnMessage && (
+            {!isOwnMessage && (
               <Text style={styles.senderName}>
                 {item.users?.name || "Unknown"}
               </Text>
-            )} */}
+            )}
 
             <Text
               style={[
@@ -554,8 +762,18 @@ export default function Messages({ setActiveButton }: any) {
         <View style={styles.content}>
           <View style={styles.tabContainer}>
             <TouchableOpacity
-              style={[styles.tab, !showDriversList && styles.tabActive]}
-              onPress={() => setShowDriversList(false)}
+              style={[
+                styles.tab,
+                !showDriversList &&
+                  !showSchoolsList &&
+                  !showParentsList &&
+                  styles.tabActive,
+              ]}
+              onPress={() => {
+                setShowDriversList(false);
+                setShowSchoolsList(false);
+                setShowParentsList(false);
+              }}
             >
               <Text
                 style={[
@@ -563,12 +781,22 @@ export default function Messages({ setActiveButton }: any) {
                   !showDriversList && styles.tabTextActive,
                 ]}
               >
-                Conversations
+                {drivers.length === 0 ? "Conversations" : "All"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.tab, showDriversList && styles.tabActive]}
-              onPress={() => setShowDriversList(true)}
+              style={[
+                styles.tab,
+                showDriversList &&
+                  !showSchoolsList &&
+                  !showParentsList &&
+                  styles.tabActive,
+              ]}
+              onPress={() => {
+                setShowDriversList(true);
+                setShowSchoolsList(false);
+                setShowParentsList(false);
+              }}
             >
               <Text
                 style={[
@@ -579,9 +807,94 @@ export default function Messages({ setActiveButton }: any) {
                 Drivers
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                showSchoolsList &&
+                  !showDriversList &&
+                  !showParentsList &&
+                  styles.tabActive,
+              ]}
+              onPress={() => {
+                setShowSchoolsList(true);
+                setShowDriversList(false);
+                setShowParentsList(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  showSchoolsList && styles.tabTextActive,
+                ]}
+              >
+                Schools
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                showParentsList &&
+                  !showDriversList &&
+                  !showSchoolsList &&
+                  styles.tabActive,
+              ]}
+              onPress={() => {
+                setShowParentsList(true);
+                setShowDriversList(false);
+                setShowSchoolsList(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  showParentsList && styles.tabTextActive,
+                ]}
+              >
+                Parents
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {showDriversList ? (
+          {showSchoolsList ? (
+            loadingSchools ? (
+              <View style={styles.emptyContainer}>
+                <ActivityIndicator size="large" color="#7ED321" />
+              </View>
+            ) : (
+              <FlatList
+                data={schools}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.conversationsList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.driverListItem}
+                    onPress={() => startConversationWithSchool(item)}
+                  >
+                    <View style={styles.conversationIcon}>
+                      <MaterialIcons name="school" size={24} color="#7ED321" />
+                    </View>
+                    <View style={styles.conversationInfo}>
+                      <Text style={styles.conversationName}>{item.name}</Text>
+                      <Text style={styles.conversationRole}>
+                        {item.userName || "Primary school admin"}
+                      </Text>
+                    </View>
+                    <MaterialIcons
+                      name="add-circle-outline"
+                      size={24}
+                      color="#7ED321"
+                    />
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="school" size={48} color="#ccc" />
+                    <Text style={styles.emptyText}>No linked schools</Text>
+                  </View>
+                }
+              />
+            )
+          ) : showDriversList ? (
             loadingDrivers ? (
               <View style={styles.emptyContainer}>
                 <ActivityIndicator size="large" color="#7ED321" />
@@ -596,6 +909,25 @@ export default function Messages({ setActiveButton }: any) {
                   <View style={styles.emptyContainer}>
                     <MaterialIcons name="drive-eta" size={48} color="#ccc" />
                     <Text style={styles.emptyText}>No drivers assigned</Text>
+                  </View>
+                }
+              />
+            )
+          ) : showParentsList ? (
+            loadingParents ? (
+              <View style={styles.emptyContainer}>
+                <ActivityIndicator size="large" color="#7ED321" />
+              </View>
+            ) : (
+              <FlatList
+                data={parents}
+                renderItem={renderParentItem}
+                keyExtractor={(item) => item.userId || item.id}
+                contentContainerStyle={styles.conversationsList}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="people" size={48} color="#ccc" />
+                    <Text style={styles.emptyText}>No linked parents</Text>
                   </View>
                 }
               />
@@ -639,7 +971,10 @@ export default function Messages({ setActiveButton }: any) {
                       ? "Parent"
                       : selectedConversation.other_participant.role === "driver"
                         ? "Driver"
-                        : "Owner"}
+                        : selectedConversation.other_participant.role ===
+                            "school"
+                          ? "School admin"
+                          : "Owner"}
                   </Text>
                 </View>
               </View>
@@ -647,7 +982,6 @@ export default function Messages({ setActiveButton }: any) {
               <FlatList
                 ref={flatListRef}
                 data={messages}
-                inverted
                 renderItem={renderMessageItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.messagesList}
@@ -655,17 +989,20 @@ export default function Messages({ setActiveButton }: any) {
                 scrollsToTop={false}
                 onContentSizeChange={() => {
                   if (messages.length > 0) {
-                    flatListRef.current?.scrollToIndex({
-                      index: 0,
-                      animated: false,
-                    });
+                    flatListRef.current?.scrollToEnd({ animated: true });
                   }
                 }}
               />
 
               <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={styles.inputContainer}
+                keyboardVerticalOffset={Math.max(insets.bottom, 12)}
+                style={[
+                  styles.inputContainer,
+                  {
+                    paddingBottom: Math.max(insets.bottom, 12),
+                  },
+                ]}
               >
                 <TextInput
                   style={styles.messageInput}
@@ -818,15 +1155,24 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   unreadIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: "#7ED321",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  unreadIndicatorText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
   },
   chatViewContainer: {
     flex: 1,
     backgroundColor: "#fff",
     flexDirection: "column",
+    paddingBottom: 12,
   },
   chatHeaderWithBack: {
     flexDirection: "row",

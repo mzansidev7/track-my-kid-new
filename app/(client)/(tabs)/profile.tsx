@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,7 @@ import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { useChildren } from "../clientHelpers/hooks/useChildren";
 import { useClientProfile } from "../clientHelpers/hooks/useClientProfile";
+import ClientHeader from "../components/ClientHeader";
 
 const ClientProfile = () => {
   const router = useRouter();
@@ -47,7 +49,7 @@ const ClientProfile = () => {
   const handleLogout = async (logoutFn: () => void) => {
     logoutFn();
     await logout();
-    router.replace("/(auth)/" as never);
+    router.replace("/(auth)/home" as never);
   };
 
   const handlePickAvatar = async () => {
@@ -130,6 +132,24 @@ const ClientProfile = () => {
     typeof client?.avatar === "string" && client.avatar
       ? { uri: client.avatar }
       : require("@/assets/images/client.png");
+  const hasClientAvatar =
+    typeof client?.avatar === "string" && client.avatar.trim().length > 0;
+  const profilePhone = (client?.phone || user?.userData?.phone || "").replace(
+    /[\s()-]/g,
+    "",
+  );
+  const profileComplete = Boolean(
+    client?.first_name?.trim() &&
+    client?.last_name?.trim() &&
+    /^\+?[0-9]{7,15}$/.test(profilePhone) &&
+    client?.relationship &&
+    (client.relationship !== "other" || client?.relationship_other?.trim()) &&
+    client?.home_address?.trim() &&
+    client?.home_latitude !== null &&
+    client?.home_latitude !== undefined &&
+    client?.home_longitude !== null &&
+    client?.home_longitude !== undefined,
+  );
 
   const accountItems = [
     {
@@ -146,6 +166,16 @@ const ClientProfile = () => {
       label: "Notification Preferences",
       desc: "Manage your notification settings",
       icon: "notifications-none",
+    },
+    {
+      label: "Family & Safety",
+      desc: "Manage guardians, pickup contacts and emergency help",
+      icon: "family-restroom",
+    },
+    {
+      label: "Payments & Invoices",
+      desc: "View payments, invoices and transport billing",
+      icon: "payments",
     },
     {
       label: "Privacy & Security",
@@ -172,33 +202,90 @@ const ClientProfile = () => {
     },
   ];
 
+  const handleSupportAction = async (label: string) => {
+    if (label === "Help Center") {
+      Alert.alert(
+        "Help Center",
+        "Find help with children, trips, payments, and safety. Our support team is available 24/7 for emergencies.",
+        [
+          { text: "Close", style: "cancel" },
+          {
+            text: "Email support",
+            onPress: () => Linking.openURL("mailto:support@trackmykid.com"),
+          },
+        ],
+      );
+      return;
+    }
+
+    if (label === "Contact Us") {
+      const opened = await Linking.openURL(
+        "mailto:support@trackmykid.com?subject=Track%20My%20Kid%20support",
+      ).catch(() => false);
+      if (!opened) {
+        Alert.alert(
+          "Contact Us",
+          "Email support@trackmykid.com for assistance.",
+        );
+      }
+      return;
+    }
+
+    Alert.alert(
+      "Track My Kid",
+      "Version 1.0.0\nSafe, reliable school transport for every family.",
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <ClientHeader
+        title="My Profile"
+        subtitle=" Manage your account and preferences"
+        showBackButton={true}
+      />
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>My Profile</Text>
-            <Text style={styles.subtitle}>
-              Manage your account and preferences
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.notificationButton}
-          >
-            <Ionicons name="notifications-outline" size={25} color="#111827" />
-
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {!hasClientAvatar && (
+            <View style={styles.avatarBanner}>
+              <View style={styles.avatarBannerIcon}>
+                <MaterialIcons name="add-a-photo" size={22} color="#B45309" />
+              </View>
+              <View style={styles.avatarBannerContent}>
+                <Text style={styles.avatarBannerTitle}>
+                  Add a profile photo
+                </Text>
+                <Text style={styles.avatarBannerText}>
+                  Add your photo before adding a child.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {!profileComplete && (
+            <View style={styles.profileCompletionBanner}>
+              <View style={styles.profileCompletionIcon}>
+                <MaterialIcons
+                  name="assignment-late"
+                  size={22}
+                  color="#B45309"
+                />
+              </View>
+              <View style={styles.profileCompletionContent}>
+                <Text style={styles.profileCompletionTitle}>
+                  Complete your personal information
+                </Text>
+                <Text style={styles.profileCompletionText}>
+                  Finish your profile to unlock all account features.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Profile Hero Card */}
           <TouchableOpacity
             activeOpacity={0.9}
@@ -323,84 +410,98 @@ const ClientProfile = () => {
             <Text style={styles.sectionTitle}>Account</Text>
 
             <View style={styles.menuCard}>
-              {accountItems.map((item, index) => (
-                <TouchableOpacity
-                  key={item.label}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.menuRow,
-                    index === accountItems.length - 1 && styles.menuRowLast,
-                  ]}
-                  onPress={() => {
-                    if (item.label === "Personal Information") {
-                      router.push(
-                        "/(client)/pages/personal-information" as never,
-                      );
-                    }
-                  }}
-                >
-                  <View style={styles.menuIcon}>
+              {accountItems
+                .filter(
+                  (item) =>
+                    profileComplete || item.label === "Personal Information",
+                )
+                .map((item, index, visibleItems) => (
+                  <TouchableOpacity
+                    key={item.label}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.menuRow,
+                      index === visibleItems.length - 1 && styles.menuRowLast,
+                      item.label === "Personal Information" &&
+                        !profileComplete &&
+                        styles.incompleteProfileRow,
+                    ]}
+                    onPress={() => {
+                      if (item.label === "Personal Information") {
+                        router.push(
+                          "/(client)/pages/personal-information" as never,
+                        );
+                      } else if (item.label === "Family & Safety") {
+                        router.push("/(client)/pages/family-safety" as never);
+                      } else if (item.label === "Payments & Invoices") {
+                        router.push("/(client)/pages/payments" as never);
+                      }
+                    }}
+                  >
+                    <View style={styles.menuIcon}>
+                      <MaterialIcons
+                        name={item.icon as any}
+                        size={23}
+                        color="#2563EB"
+                      />
+                    </View>
+
+                    <View style={styles.menuContent}>
+                      <Text style={styles.menuTitle}>{item.label}</Text>
+
+                      <Text style={styles.menuDescription}>{item.desc}</Text>
+                    </View>
+
                     <MaterialIcons
-                      name={item.icon as any}
-                      size={23}
-                      color="#2563EB"
+                      name="chevron-right"
+                      size={26}
+                      color="#64748B"
                     />
-                  </View>
-
-                  <View style={styles.menuContent}>
-                    <Text style={styles.menuTitle}>{item.label}</Text>
-
-                    <Text style={styles.menuDescription}>{item.desc}</Text>
-                  </View>
-
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={26}
-                    color="#64748B"
-                  />
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                ))}
             </View>
           </View>
 
           {/* Support */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Support</Text>
+          {profileComplete && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Support</Text>
 
-            <View style={styles.menuCard}>
-              {supportItems.map((item, index) => (
-                <TouchableOpacity
-                  key={item.label}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.menuRow,
-                    index === supportItems.length - 1 && styles.menuRowLast,
-                  ]}
-                  onPress={() => {}}
-                >
-                  <View style={styles.menuIcon}>
+              <View style={styles.menuCard}>
+                {supportItems.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.label}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.menuRow,
+                      index === supportItems.length - 1 && styles.menuRowLast,
+                    ]}
+                    onPress={() => handleSupportAction(item.label)}
+                  >
+                    <View style={styles.menuIcon}>
+                      <MaterialIcons
+                        name={item.icon as any}
+                        size={23}
+                        color="#2563EB"
+                      />
+                    </View>
+
+                    <View style={styles.menuContent}>
+                      <Text style={styles.menuTitle}>{item.label}</Text>
+
+                      <Text style={styles.menuDescription}>{item.desc}</Text>
+                    </View>
+
                     <MaterialIcons
-                      name={item.icon as any}
-                      size={23}
-                      color="#2563EB"
+                      name="chevron-right"
+                      size={26}
+                      color="#64748B"
                     />
-                  </View>
-
-                  <View style={styles.menuContent}>
-                    <Text style={styles.menuTitle}>{item.label}</Text>
-
-                    <Text style={styles.menuDescription}>{item.desc}</Text>
-                  </View>
-
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={26}
-                    color="#64748B"
-                  />
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Logout */}
           <TouchableOpacity
@@ -500,6 +601,94 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingBottom: 20,
+  },
+
+  avatarBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+
+  avatarBannerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  avatarBannerContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+
+  avatarBannerTitle: {
+    color: "#92400E",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  avatarBannerText: {
+    color: "#78350F",
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  avatarBannerButton: {
+    backgroundColor: "#D97706",
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+
+  avatarBannerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  profileCompletionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+
+  profileCompletionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFEDD5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  profileCompletionContent: {
+    flex: 1,
+  },
+
+  profileCompletionTitle: {
+    color: "#9A3412",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  profileCompletionText: {
+    color: "#7C2D12",
+    fontSize: 11,
+    marginTop: 2,
   },
 
   /* Profile */
@@ -717,6 +906,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
 
+  incompleteProfileRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#FCD34D",
+  },
+
   menuIcon: {
     width: 46,
     height: 46,
@@ -761,10 +955,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-
     gap: 9,
-
     marginTop: 2,
+    marginBottom: 60,
   },
 
   logoutText: {

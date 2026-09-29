@@ -356,7 +356,7 @@ const SupportTicketPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F5FBF7",
   },
   content: {
     padding: 20,
@@ -405,8 +405,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   optionButtonSelected: {
-    backgroundColor: "#061A3A",
-    borderColor: "#061A3A",
+    backgroundColor: "#0F9D58",
+    borderColor: "#0F9D58",
   },
   optionButtonText: {
     color: "#111827",
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   submitButton: {
-    backgroundColor: "#061A3A",
+    backgroundColor: "#0F9D58",
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
@@ -530,7 +530,7 @@ const getStatusColor = (status: string) => {
     case "closed":
       return "#6B7280";
     default:
-      return "#061A3A";
+      return "#0F9D58";
   }
 };
 
@@ -545,7 +545,7 @@ const getPriorityBackgroundColor = (priority: string) => {
     case "urgent":
       return "#DC2626";
     default:
-      return "#061A3A";
+      return "#0F9D58";
   }
 };
 

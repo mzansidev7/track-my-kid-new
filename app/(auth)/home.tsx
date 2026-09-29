@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Constants from "expo-constants";
 // import ThemeToggle from "../../components/ThemeTggle";
 // import Login from "./login";
 // import Register from "./register";
@@ -20,20 +21,22 @@ import { useTheme } from "../../styles/theme";
 import { useWelcomeScreenStyles } from "../../styles/welcomeScreenStyles";
 import Login from "./login";
 import Register from "./register";
+import { appVersionStyles } from "@/styles/appVersioningStyles";
+const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 
 const WelcomeScreen = () => {
   const { colors, isDark } = useTheme();
 
   const styles = useWelcomeScreenStyles();
   const [userType, setUserType] = useState<
-    "client" | "owner" | "driver" | "school" | "admin" | null
+    "client" | "owner" | "driver" | "school" | null
   >(null);
 
   const [currentStep, setCurrentStep] = useState<"welcome" | "selectRole">(
     "welcome",
   );
   const [selectedRole, setSelectedRole] = useState<
-    "client" | "owner" | "driver" | "school" | "admin" | null
+    "client" | "owner" | "driver" | "school" | null
   >(null);
   const [visible, setVisible] = useState(false);
   const [signupVisible, setSignupVisible] = useState(false);
@@ -66,13 +69,6 @@ const WelcomeScreen = () => {
       description: "I manage students and transport from the school side.",
       icon: require("@/assets/images/school.jpeg"),
       background: "#6366F1",
-    },
-    {
-      role: "admin" as const,
-      title: "Admin",
-      description: "I oversee dashboard activity and support operations.",
-      icon: require("@/assets/images/owner.png"),
-      background: "#0F766E",
     },
   ];
 
@@ -116,9 +112,9 @@ const WelcomeScreen = () => {
           { backgroundColor: colors.background },
         ]}
       >
-        {/* <View style={styles.themeToggleContainer}>
+        <View style={styles.themeToggleContainer}>
           <ThemeToggle />
-        </View> */}
+        </View>
 
         <Animated.View
           style={[
@@ -459,6 +455,13 @@ const WelcomeScreen = () => {
               )}
             </View>
           )}
+          <View style={appVersionStyles.versionContainer}>
+            <Text style={appVersionStyles.appName}>Track My Kid</Text>
+
+            <View style={appVersionStyles.versionBadge}>
+              <Text style={appVersionStyles.versionText}>v{appVersion}</Text>
+            </View>
+          </View>
         </Animated.View>
       </ScrollView>
 

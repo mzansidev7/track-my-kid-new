@@ -20,54 +20,16 @@ import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
 import { useNotifications } from "../ownerHelpers/hooks/useNotifications";
 import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
 import { useOwnerVehicles } from "../ownerHelpers/hooks/useOwnerVehicles";
-import { useRoutes } from "../ownerHelpers/hooks/useRoutes";
+import { useActiveRoutes, useRoutes } from "../ownerHelpers/hooks/useRoutes";
 import { useOwnerStyles } from "../ownerHelpers/styles/ownerStyles";
 import { useSubscription } from "@/context/subscriptionContext/SubscriptionContext";
-
-type RouteStatus = {
-  text: string;
-  color: string;
-  bgColor: string;
-};
-
-const getRouteStatus = (item: any): RouteStatus => {
-  const childrenCount = item.route_children?.length ?? 0;
-  const stopsCount = item.route_stops?.length ?? 0;
-
-  // No route setup
-  if (childrenCount === 0 && stopsCount === 0) {
-    return {
-      text: "No stops",
-      color: "#6B7280",
-      bgColor: "#F3F4F6",
-    };
-  }
-
-  // Stops exist but no children assigned
-  if (stopsCount > 0 && childrenCount === 0) {
-    return {
-      text: "Waiting for Children",
-      color: "#F59E0B",
-      bgColor: "#FFFBEB",
-    };
-  }
-
-  // Children assigned but no stops
-  if (childrenCount > 0 && stopsCount === 0) {
-    return {
-      text: "Stops Not Added",
-      color: "#EF4444",
-      bgColor: "#FEF2F2",
-    };
-  }
-
-  // Route is ready
-  return {
-    text: "Ready",
-    color: "#10B981",
-    bgColor: "#ECFDF5",
-  };
-};
+import {
+  formatDateTime,
+  getRouteStatus,
+  getWeeklyTripsAndRevenueData,
+} from "../ownerHelpers/actionHelpers/actions";
+import RenderMetricCard from "../ownerHelpers/components/RenderMetricCard";
+import { ForceProfileUpdate } from "../ownerHelpers/components/Modals";
 
 export default function Home({ user }: any) {
   const router = useRouter();
@@ -87,16 +49,12 @@ export default function Home({ user }: any) {
   const { vehicles, fetchVehicles } = useOwnerVehicles();
   const { allRoutes, loadingRoutes, refreshRoutes } = useRoutes();
   const [startedHistories, setStartedHistories] = useState<any[]>([]);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const { unreadCount, refreshUnreadCount } = useNotifications();
-
   // Filter routes into active and inactive
-  const activeRoutes = (allRoutes || []).filter((route) => {
-    const hasVehicle = route.vehicle_id && route.vehicles;
-    const hasDriver = route.driver_id && route.drivers;
-    return hasVehicle && hasDriver;
-  });
-
-  console.log({ subscription });
+  const activeRoutes = useActiveRoutes(allRoutes);
+  const { weeklyTrips, revenueTrend } =
+    getWeeklyTripsAndRevenueData(dashboardData);
 
   const fetchOwnerRouteHistory = useCallback(async () => {
     try {
@@ -124,6 +82,35 @@ export default function Home({ user }: any) {
     }
   }, [user?.token]);
 
+  const fetchOwnerDashboard = useCallback(async () => {
+    if (!user?.token) {
+      setDashboardData(null);
+      return;
+    }
+
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const resp = await fetch(`${baseUrl}/owner/dashboard`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+      });
+
+      if (!resp.ok) {
+        setDashboardData(null);
+        return;
+      }
+
+      const data = await resp.json();
+      setDashboardData(data || null);
+    } catch (err) {
+      console.warn("Failed fetching owner dashboard:", err);
+      setDashboardData(null);
+    }
+  }, [user?.token]);
+
   useFocusEffect(
     useCallback(() => {
       refreshDrivers(true);
@@ -131,12 +118,14 @@ export default function Home({ user }: any) {
       refreshUnreadCount();
       fetchVehicles();
       fetchOwnerRouteHistory();
+      fetchOwnerDashboard();
     }, [
       fetchVehicles,
       refreshDrivers,
       refreshRoutes,
       refreshUnreadCount,
       fetchOwnerRouteHistory,
+      fetchOwnerDashboard,
     ]),
   );
 
@@ -224,62 +213,8 @@ export default function Home({ user }: any) {
     });
   }, [owner, missingOwnerFields, shouldForceProfileUpdate]);
 
-  // Format current date and time
-  const formatDateTime = () => {
-    const now = new Date();
-    const days = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    const dayName = days[now.getDay()];
-    const date = now.getDate();
-    const monthName = months[now.getMonth()];
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const mins = String(now.getMinutes()).padStart(2, "0");
-    return `${dayName}, ${date} ${monthName} ${year} ${hours}:${mins}`;
-  };
-
-  const weeklyTrips = [
-    { day: "Mon", morning: 5, afternoon: 3 },
-    { day: "Tue", morning: 4, afternoon: 4 },
-    { day: "Wed", morning: 6, afternoon: 2 },
-    { day: "Thu", morning: 5, afternoon: 3 },
-    { day: "Fri", morning: 7, afternoon: 4 },
-    { day: "Sat", morning: 4, afternoon: 5 },
-    { day: "Sun", morning: 3, afternoon: 3 },
-  ];
-
-  const revenueTrend = [
-    { month: "Jan", actual: 48, target: 54 },
-    { month: "Feb", actual: 51, target: 56 },
-    { month: "Mar", actual: 57, target: 58 },
-    { month: "Apr", actual: 60, target: 60 },
-    { month: "May", actual: 63, target: 62 },
-    { month: "Jun", actual: 71, target: 65 },
-  ];
-
   const fleetMarkers = (activeRoutes || [])
-    .map((route, index) => {
+    .map((route: any, index: any) => {
       const rawRoute = route?.raw || route || {};
       const latitude = Number(
         rawRoute.start_latitude ?? rawRoute.end_latitude ?? null,
@@ -299,15 +234,17 @@ export default function Home({ user }: any) {
         color: index % 2 === 0 ? "#4F46E5" : "#22C55E",
       };
     })
-    .filter((marker): marker is NonNullable<typeof marker> => marker !== null);
+    .filter(
+      (marker: any): marker is NonNullable<typeof marker> => marker !== null,
+    );
 
   const mapRegion = fleetMarkers.length
     ? (() => {
         const latitudes = fleetMarkers.map(
-          (marker) => marker.coordinate.latitude,
+          (marker: any) => marker.coordinate.latitude,
         );
         const longitudes = fleetMarkers.map(
-          (marker) => marker.coordinate.longitude,
+          (marker: any) => marker.coordinate.longitude,
         );
         const minLat = Math.min(...latitudes);
         const maxLat = Math.max(...latitudes);
@@ -327,45 +264,6 @@ export default function Home({ user }: any) {
         latitudeDelta: 0.08,
         longitudeDelta: 0.08,
       };
-
-  const renderMetricCard = (
-    icon: string,
-    label: string,
-    value: string,
-    subtext: string,
-    color: string,
-  ) => (
-    <View
-      style={[
-        styles.metricCard,
-        {
-          shadowColor: shadows.md.shadowColor,
-          backgroundColor: colors.surface,
-        },
-      ]}
-    >
-      <View style={styles.metricCardHeader}>
-        <View
-          style={[
-            styles.metricIconBox,
-            { backgroundColor: colors.primaryDark + "20" },
-          ]}
-        >
-          <MaterialIcons name={icon as any} size={24} color={color} />
-        </View>
-        <Text style={styles.metricPercentage}>↑ +8.3%</Text>
-      </View>
-      <Text style={[styles.metricValue, { color: colors.text.primary }]}>
-        {value}
-      </Text>
-      <Text style={[styles.metricLabel, { color: colors.text.tertiary }]}>
-        {label}
-      </Text>
-      <Text style={[styles.metricSubtext, { color: colors.text.tertiary }]}>
-        {subtext}
-      </Text>
-    </View>
-  );
 
   const renderRoute = ({ item }: any) => {
     const driverName = item.drivers?.users?.name || "No Driver";
@@ -441,22 +339,30 @@ export default function Home({ user }: any) {
     );
   };
 
-  const totalVehicles = vehicles?.length ?? 0;
+  const totalVehicles =
+    dashboardData?.summary?.totalVehicles ?? vehicles?.length ?? 0;
 
-  const totalDrivers = (drivers || []).filter(
-    (driver) => driver.status === "active" || driver.hasAssignedVehicle,
-  ).length;
-  const totalStudents = (allRoutes || []).reduce(
-    (total, route) => total + (route.route_children?.length || 0),
-    0,
-  );
+  const totalDrivers =
+    dashboardData?.summary?.totalDrivers ??
+    (drivers || []).filter(
+      (driver) => driver.status === "active" || driver.hasAssignedVehicle,
+    ).length;
+  const totalStudents =
+    dashboardData?.summary?.totalStudents ??
+    (allRoutes || []).reduce(
+      (total, route) => total + (route.route_children?.length || 0),
+      0,
+    );
 
-  const estimatedRevenue = (allRoutes || []).reduce(
-    (total, route) =>
-      total +
-      (route.per_child_amount_cents || 0) * (route.route_children?.length || 0),
-    0,
-  );
+  const estimatedRevenue =
+    dashboardData?.summary?.estimatedRevenueCents ??
+    (allRoutes || []).reduce(
+      (total, route) =>
+        total +
+        (route.per_child_amount_cents || 0) *
+          (route.route_children?.length || 0),
+      0,
+    );
 
   console.log({ totalVehicles });
 
@@ -467,125 +373,22 @@ export default function Home({ user }: any) {
       maximumFractionDigits: 0,
     }).format(amountInCents / 100);
 
-  const readyRoutes = activeRoutes.filter(
-    (route) => getRouteStatus(route).text === "Ready",
-  ).length;
+  const readyRoutes =
+    dashboardData?.summary?.readyRoutes ??
+    activeRoutes.filter((route: any) => getRouteStatus(route).text === "Ready")
+      .length;
 
-  const needsAttentionRoutes = activeRoutes.length - readyRoutes;
+  const needsAttentionRoutes =
+    dashboardData?.summary?.needsAttentionRoutes ??
+    activeRoutes.length - readyRoutes;
 
-  const onScheduleCount = readyRoutes;
+  const onScheduleCount =
+    dashboardData?.summary?.onScheduleCount ?? readyRoutes;
 
-  const delayedCount = 0;
+  const delayedCount = dashboardData?.summary?.delayedCount ?? 0;
 
   if (shouldForceProfileUpdate) {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        edges={["bottom"]}
-      >
-        <Modal
-          visible
-          transparent={false}
-          animationType="slide"
-          onRequestClose={() => undefined}
-        >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "#F8FAFC",
-              justifyContent: "center",
-              padding: 24,
-            }}
-          >
-            <View
-              style={{
-                backgroundColor: colors.surface,
-                borderRadius: 24,
-                padding: 24,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.12,
-                shadowRadius: 16,
-                elevation: 8,
-              }}
-            >
-              <View
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  backgroundColor: "#FEF2F2",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginBottom: 16,
-                }}
-              >
-                <MaterialIcons name="warning" size={32} color="#DC2626" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 24,
-                  fontWeight: "700",
-                  color: colors.text.primary,
-                  marginBottom: 8,
-                }}
-              >
-                Profile update required
-              </Text>
-              <Text
-                style={{
-                  fontSize: 15,
-                  lineHeight: 22,
-                  color: colors.text.secondary,
-                  marginBottom: 16,
-                }}
-              >
-                It has been 3 months or more since your profile was created.
-                Please complete the missing information below to continue using
-                the app.
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: colors.text.primary,
-                  marginBottom: 8,
-                }}
-              >
-                Missing fields:
-              </Text>
-              {missingOwnerFields.map((field) => (
-                <Text
-                  key={field}
-                  style={{
-                    fontSize: 14,
-                    color: colors.text.secondary,
-                    marginBottom: 6,
-                  }}
-                >
-                  • {field}
-                </Text>
-              ))}
-              <TouchableOpacity
-                style={{
-                  marginTop: 20,
-                  backgroundColor: colors.primaryDark,
-                  borderRadius: 14,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                }}
-                onPress={() => router.push("/(owner)/personal-info")}
-                activeOpacity={0.85}
-              >
-                <Text style={{ color: "#FFF", fontWeight: "700" }}>
-                  Update profile
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      </SafeAreaView>
-    );
+    return <ForceProfileUpdate missingOwnerFields={missingOwnerFields} />;
   }
 
   return (
@@ -606,6 +409,17 @@ export default function Home({ user }: any) {
             </Text>
           </View>
           <View style={styles.headerIcons}>
+            <TouchableOpacity
+              onPress={() => router.push("/(owner)/incident-report" as never)}
+              accessibilityLabel="Report an incident"
+              style={{ marginRight: 14 }}
+            >
+              <MaterialIcons
+                name="report-problem"
+                size={23}
+                color={colors.text.primary}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 router.push("/(owner)/notifications");
@@ -676,36 +490,36 @@ export default function Home({ user }: any) {
         {/* Metric Cards */}
         <View style={styles.metricsSection}>
           <View style={styles.metricsRow}>
-            {renderMetricCard(
-              "directions-car",
-              "Total Vehicles",
-              totalVehicles.toString(),
-              `${activeRoutes.length} routes assigned`,
-              "#4A90E2",
-            )}
-            {renderMetricCard(
-              "people",
-              "Active Drivers",
-              totalDrivers.toString(),
-              `${drivers.length} drivers on record`,
-              "#22C55E",
-            )}
+            <RenderMetricCard
+              icon="directions-car"
+              label="Total Vehicles"
+              value={totalVehicles.toString()}
+              subtext={`${activeRoutes.length} routes assigned`}
+              color="#4A90E2"
+            />
+            <RenderMetricCard
+              icon="people"
+              label="Active Drivers"
+              value={totalDrivers.toString()}
+              subtext={`${drivers.length} drivers on record`}
+              color="#22C55E"
+            />
           </View>
           <View style={styles.metricsRow}>
-            {renderMetricCard(
-              "school",
-              "Students Today",
-              totalStudents.toString(),
-              `${activeRoutes.length} routes with students`,
-              "#7C3AED",
-            )}
-            {renderMetricCard(
-              "attach-money",
-              "Revenue Estimate",
-              formatCurrency(estimatedRevenue),
-              `${totalStudents} students across routes`,
-              "#F59E0B",
-            )}
+            <RenderMetricCard
+              icon="school"
+              label="Students Today"
+              value={totalStudents.toString()}
+              subtext={`${activeRoutes.length} routes with students`}
+              color="#7C3AED"
+            />
+            <RenderMetricCard
+              icon="attach-money"
+              label="Revenue Estimate"
+              value={formatCurrency(estimatedRevenue)}
+              subtext={`${totalStudents} students across routes`}
+              color="#F59E0B"
+            />
           </View>
         </View>
 
@@ -801,7 +615,7 @@ export default function Home({ user }: any) {
                   if (markers.length === 0) {
                     return (
                       <CustomMap
-                        markers={fleetMarkers.map((m) => ({
+                        markers={fleetMarkers.map((m: any) => ({
                           latitude: m.coordinate.latitude,
                           longitude: m.coordinate.longitude,
                           title: m.title,
@@ -844,7 +658,7 @@ export default function Home({ user }: any) {
                 })()
               ) : (
                 <CustomMap
-                  markers={fleetMarkers.map((m) => ({
+                  markers={fleetMarkers.map((m: any) => ({
                     latitude: m.coordinate.latitude,
                     longitude: m.coordinate.longitude,
                     title: m.title,
@@ -989,7 +803,7 @@ export default function Home({ user }: any) {
             ]}
           >
             <View style={styles.chartBarsRow}>
-              {weeklyTrips.map((item) => (
+              {weeklyTrips.map((item: any) => (
                 <View key={item.day} style={styles.chartColumn}>
                   <View style={styles.barStack}>
                     <View
@@ -1019,7 +833,7 @@ export default function Home({ user }: any) {
         </View>
 
         {/* Revenue Trend Chart */}
-        <View style={styles.section}>
+        <View style={[styles.section, { marginBottom: 80 }]}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
               Revenue Trend
@@ -1054,7 +868,7 @@ export default function Home({ user }: any) {
             ]}
           >
             <View style={styles.revenueChartRow}>
-              {revenueTrend.map((item) => (
+              {revenueTrend.map((item: any) => (
                 <View key={item.month} style={styles.revenueChartColumn}>
                   <View style={styles.revenueBarStack}>
                     <View
@@ -1111,7 +925,7 @@ export default function Home({ user }: any) {
             showsScale={false}
             showsTraffic={false}
           >
-            {fleetMarkers.map((marker) => (
+            {fleetMarkers.map((marker: any) => (
               <Marker
                 key={marker.id}
                 coordinate={marker.coordinate}

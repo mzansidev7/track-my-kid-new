@@ -1,22 +1,24 @@
 import { useTheme } from "@/styles/theme";
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import {
-  Animated,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function OwnerTabBar({ state, navigation }: BottomTabBarProps) {
-  const { colors, shadows } = useTheme();
+type OwnerTabBarProps = {
+  state: {
+    routes: { key: string; name: string }[];
+    index: number;
+  };
+  navigation: {
+    navigate: (name: string) => void;
+  };
+};
+
+export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const getIcon = (routeName: string) => {
+  function getIcon(routeName: string) {
     switch (routeName) {
       case "index":
         return "home";
@@ -33,133 +35,138 @@ export default function OwnerTabBar({ state, navigation }: BottomTabBarProps) {
       default:
         return "circle";
     }
-  };
-
-  const getLabel = (routeName: string) => {
-    switch (routeName) {
-      case "index":
-        return "Home";
-      case "drivers":
-        return "Drivers";
-      case "vehicles":
-        return "Vehicles";
-      case "routes":
-        return "Routes";
-      case "messages":
-        return "Messages";
-      case "profile":
-        return "Profile";
-      default:
-        return routeName;
-    }
-  };
+  }
 
   return (
     <View
+      pointerEvents="box-none"
       style={[
-        styles.wrapper,
+        styles.container,
         {
-          paddingBottom: Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 10),
+          backgroundColor: colors.background,
         },
       ]}
     >
-      <LinearGradient
-        colors={[
-          colors.brands.owner.gradientEnd,
-          colors.brands.owner.gradientStart,
-        ]}
+      <View
         style={[
-          styles.container,
+          styles.tabBar,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            ...shadows.md,
+            backgroundColor: colors.brands.owner.primaryDark,
           },
         ]}
       >
         {state.routes.map((route, index) => {
           const focused = state.index === index;
+
           return (
             <TouchableOpacity
               key={route.key}
-              activeOpacity={0.85}
-              style={styles.tab}
+              activeOpacity={0.75}
+              style={styles.tabItem}
               onPress={() => navigation.navigate(route.name as never)}
             >
-              <Animated.View
+              <View
                 style={[
-                  styles.activeContainer,
+                  styles.iconWrapper,
                   focused && {
-                    backgroundColor: "#10B981",
+                    backgroundColor: colors.brands.owner.surface,
                   },
                 ]}
               >
                 <MaterialIcons
                   name={getIcon(route.name) as any}
-                  size={22}
-                  color={focused ? "#FFF" : "#10B981"}
+                  size={focused ? 23 : 22}
+                  color={
+                    focused
+                      ? colors.brands.owner.primary
+                      : colors.brands.owner.surface
+                  }
                 />
+              </View>
 
-                {/* {focused && (
-                  <Text
-                    style={styles.activeLabel}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {getLabel(route.name)}
-                  </Text> */}
-                {/* )} */}
-              </Animated.View>
+              {focused && (
+                <View
+                  style={[
+                    styles.activeIndicator,
+                    {
+                      backgroundColor: colors.brands.owner.primary,
+                    },
+                  ]}
+                />
+              )}
             </TouchableOpacity>
           );
         })}
-      </LinearGradient>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 0,
+  container: {
+    width: "100%",
+    paddingHorizontal: 14,
+
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+      },
+
+      android: {
+        elevation: 12,
+      },
+    }),
   },
 
-  container: {
+  tabBar: {
+    height: 64,
+
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
 
-    borderRadius: 28,
+    paddingHorizontal: 6,
 
-    borderWidth: 1,
+    borderRadius: 22,
 
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    overflow: "hidden",
   },
 
-  tab: {
+  tabItem: {
     flex: 1,
-    alignItems: "center",
-  },
+    height: 64,
 
-  activeContainer: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
 
-    paddingHorizontal: 18,
-    height: 48,
-
-    borderRadius: 24,
+    position: "relative",
   },
 
-  activeLabel: {
-    color: "#EC4899",
-    fontWeight: "700",
-    marginLeft: 8,
-    fontSize: 14,
-    flexShrink: 1,
+  iconWrapper: {
+    width: 44,
+    height: 38,
+
+    alignItems: "center",
+    justifyContent: "center",
+
+    borderRadius: 13,
+  },
+
+  activeIndicator: {
+    position: "absolute",
+
+    bottom: 5,
+
+    width: 20,
+    height: 3,
+
+    borderRadius: 10,
   },
 });

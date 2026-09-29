@@ -8,6 +8,7 @@ import {
 } from "../../../../store/asyncStorage/schoolCache";
 import { unsubscribeFromRealtime } from "../../../../store/subscriptions/realtimeUtils";
 import { subscribeToSchoolDashboardUpdates } from "../../../../store/subscriptions/schoolRealtime";
+import { RecentTrip } from "../interface/client.interfaces";
 
 const emptyDashboard: SchoolDashboardData = {
   school: null,
@@ -104,4 +105,22 @@ export const useSchoolDashboard = () => {
     error,
     refresh: () => refresh(true),
   };
+};
+
+export const useRecentTrips = (routes: any) => {
+  const recentTrips: RecentTrip[] = routes.slice(0, 3).map((route: any) => {
+    const assignment = route.assignments?.[0];
+    const driver = assignment?.drivers?.users;
+    return {
+      id: route.id,
+      route: route.route_name || "School route",
+      vehicle: assignment?.vehicle_id ? "Assigned vehicle" : "No vehicle",
+      driver: driver?.name || "No driver",
+      status: assignment?.is_active === false ? "Inactive" : "Scheduled",
+      statusColor: assignment?.is_active === false ? "#F39C12" : "#34A853",
+      time: route.pickup_start_time || "--:--",
+    };
+  });
+
+  return recentTrips;
 };

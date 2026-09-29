@@ -7,7 +7,6 @@
     "icon": "./assets/images/logo-light.png",
     "scheme": "trackmykid",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -19,9 +18,7 @@
         "backgroundImage": "./assets/images/logo-light.png",
         "monochromeImage": "./assets/images/logo-light.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -29,6 +26,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Track My Kid to use your location while you are driving a route."
+        }
+      ],
       [
         "expo-splash-screen",
         {

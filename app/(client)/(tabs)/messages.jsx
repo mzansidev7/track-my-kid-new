@@ -6,10 +6,14 @@ import React, {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   Alert,
 } from "react-native";
@@ -18,6 +22,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ClientHeader from "../components/ClientHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { BASE_URL } from "../../../url";
+import {
+  fetchConversationsWithCache,
+  fetchMessagesWithCache,
+  subscribeToConversations,
+  subscribeToMessages,
+  unsubscribeFromRealtime,
+} from "../../../store/subscriptions/messagesRealtime";
 
 const tabs = ["All", "Drivers", "Schools", "Owners"];
 
@@ -63,42 +74,38 @@ const formatConversationTime = (value) => {
 
 const ClientMessages = () => {
   const { user } = useContext(AuthContext);
+  const userId = user?.userData?.id || user?.userData?.user_id || "";
   const [selectedTab, setSelectedTab] = useState("All");
   const [conversations, setConversations] = useState([]);
   const [contactOptions, setContactOptions] = useState([]);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [conversationMessages, setConversationMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
 
   const fetchConversations = useCallback(async () => {
-    if (!user?.token) {
+    if (!user?.token || !userId) {
       setConversations([]);
       setLoading(false);
       return;
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/client/conversations`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
+      const data = await fetchConversationsWithCache(userId, (cached) => {
+        setConversations(cached);
+        setLoading(false);
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to load conversations");
-      }
-
-      const data = await response.json();
-      setConversations(Array.isArray(data) ? data : []);
+      setConversations(data);
     } catch (error) {
       console.error("Error loading client conversations:", error);
-      setConversations([]);
     } finally {
       setLoading(false);
     }
-  }, [user?.token]);
+  }, [user?.token, userId]);
 
   const fetchLinkedContacts = useCallback(async () => {
     if (!user?.token) {
@@ -168,7 +175,15 @@ const ClientMessages = () => {
   useEffect(() => {
     fetchConversations();
     fetchLinkedContacts();
-  }, [fetchConversations, fetchLinkedContacts]);
+
+    const conversationsChannel = userId
+      ? subscribeToConversations(userId, setConversations)
+      : null;
+
+    return () => {
+      if (conversationsChannel) unsubscribeFromRealtime(conversationsChannel);
+    };
+  }, [fetchConversations, fetchLinkedContacts, userId]);
 
   const startConversation = async (contact) => {
     if (!contact?.userId || !contact?.type || !user?.token) {
@@ -213,6 +228,72 @@ const ClientMessages = () => {
     }
   };
 
+  const openConversation = async (conversation) => {
+    setSelectedConversation(conversation);
+    setLoadingMessages(true);
+    try {
+      const data = await fetchMessagesWithCache(conversation.id, (cached) => {
+        setConversationMessages(cached);
+        setLoadingMessages(false);
+      });
+      setConversationMessages(data);
+
+      await fetch(`${BASE_URL}/client/conversations/${conversation.id}/read`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${user?.token || ""}` },
+      });
+      await fetchConversations();
+    } catch (error) {
+      console.error("Error opening client conversation:", error);
+      Alert.alert("Messages unavailable", "Unable to load this conversation.");
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedConversation) return undefined;
+
+    const messagesChannel = subscribeToMessages(
+      selectedConversation.id,
+      setConversationMessages,
+    );
+    return () => {
+      if (messagesChannel) unsubscribeFromRealtime(messagesChannel);
+    };
+  }, [selectedConversation]);
+
+  const sendMessage = async () => {
+    if (!draft.trim() || !selectedConversation || sending || !user?.token) {
+      return;
+    }
+
+    setSending(true);
+    try {
+      const response = await fetch(`${BASE_URL}/client/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          content: draft.trim(),
+        }),
+      });
+      if (!response.ok) throw new Error("Unable to send message");
+      setDraft("");
+      setConversationMessages(
+        await fetchMessagesWithCache(selectedConversation.id),
+      );
+    } catch (error) {
+      console.error("Error sending client message:", error);
+      Alert.alert("Message failed", "Unable to send this message.");
+    } finally {
+      setSending(false);
+    }
+  };
+
   const visibleConversations = useMemo(() => {
     if (selectedTab === "All") return conversations;
 
@@ -228,6 +309,116 @@ const ClientMessages = () => {
         roleMap[selectedTab],
     );
   }, [conversations, selectedTab]);
+
+  if (selectedConversation) {
+    const participant = selectedConversation.other_participant || {};
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.chatHeader}>
+          <TouchableOpacity
+            style={styles.chatBackButton}
+            onPress={() => setSelectedConversation(null)}
+          >
+            <MaterialIcons name="arrow-back" size={22} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.chatHeaderIdentity}>
+            <View style={styles.chatAvatar}>
+              <Text style={styles.avatarText}>
+                {getInitials(participant.name)}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.chatName}>
+                {participant.name || "Contact"}
+              </Text>
+              <Text style={styles.chatRole}>
+                {participant.role || "Contact"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {loadingMessages ? (
+          <View style={styles.chatLoading}>
+            <ActivityIndicator size="large" color="#2563EB" />
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.chatList}
+            contentContainerStyle={styles.chatListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {conversationMessages.length === 0 ? (
+              <View style={styles.chatEmpty}>
+                <Text style={styles.emptyText}>No messages yet.</Text>
+                <Text style={styles.emptySubtext}>
+                  Send the first message to start this conversation.
+                </Text>
+              </View>
+            ) : (
+              conversationMessages.map((message) => {
+                const own =
+                  message.sender_id ===
+                  (user?.userData?.id || user?.userData?.user_id);
+                return (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.chatMessageRow,
+                      own && styles.chatMessageRowOwn,
+                    ]}
+                  >
+                    <View
+                      style={[styles.chatBubble, own && styles.chatBubbleOwn]}
+                    >
+                      <Text
+                        style={own ? styles.chatMessageOwn : styles.chatMessage}
+                      >
+                        {message.content}
+                      </Text>
+                      <Text style={own ? styles.chatTimeOwn : styles.chatTime}>
+                        {formatConversationTime(message.sent_at)}
+                        {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.composer}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Write a message..."
+              placeholderTextColor="#94A3B8"
+              multiline
+              style={styles.composerInput}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !draft.trim() && styles.sendButtonDisabled,
+              ]}
+              onPress={sendMessage}
+              disabled={!draft.trim() || sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <MaterialIcons name="send" size={20} color="#FFFFFF" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -336,13 +527,15 @@ const ClientMessages = () => {
               const time = formatConversationTime(
                 item.last_message_at || lastMessage.sent_at,
               );
-              const unread = lastMessage.is_read === false ? 1 : 0;
+              const unread =
+                item.unread_count || (lastMessage.is_read === false ? 1 : 0);
 
               return (
                 <TouchableOpacity
                   key={item.id}
                   style={styles.messageRow}
                   activeOpacity={0.8}
+                  onPress={() => openConversation(item)}
                 >
                   <View
                     style={[
@@ -422,6 +615,140 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F5F7",
     paddingHorizontal: 14,
+  },
+  chatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  chatBackButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  chatHeaderIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  chatAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    backgroundColor: "#D9F2FF",
+  },
+  chatName: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  chatRole: {
+    marginTop: 2,
+    color: "#64748B",
+    fontSize: 12,
+    textTransform: "capitalize",
+  },
+  chatLoading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatList: {
+    flex: 1,
+    backgroundColor: "#F3F5F7",
+  },
+  chatListContent: {
+    padding: 14,
+    flexGrow: 1,
+    justifyContent: "flex-end",
+  },
+  chatEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  chatMessageRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    marginBottom: 10,
+  },
+  chatMessageRowOwn: {
+    justifyContent: "flex-end",
+  },
+  chatBubble: {
+    maxWidth: "82%",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 16,
+    borderBottomLeftRadius: 4,
+    backgroundColor: "#FFFFFF",
+  },
+  chatBubbleOwn: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 4,
+    backgroundColor: "#2563EB",
+  },
+  chatMessage: {
+    color: "#1F2937",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatMessageOwn: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatTime: {
+    marginTop: 4,
+    color: "#94A3B8",
+    fontSize: 10,
+  },
+  chatTimeOwn: {
+    marginTop: 4,
+    color: "#DBEAFE",
+    fontSize: 10,
+    textAlign: "right",
+  },
+  composer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+  },
+  composerInput: {
+    flex: 1,
+    maxHeight: 100,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#D7DFEA",
+    borderRadius: 14,
+    color: "#111827",
+    fontSize: 14,
+  },
+  sendButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: "#2563EB",
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#94A3B8",
   },
   topBar: {
     flexDirection: "row",

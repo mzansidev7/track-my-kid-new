@@ -2,6 +2,7 @@ import React, { useEffect, useState, useContext } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { MaterialIcons } from "@expo/vector-icons";
 import MapView, { Marker } from "react-native-maps";
 import { useRouter } from "expo-router";
@@ -31,6 +31,7 @@ type ProfileForm = {
   home_latitude: number | null;
   home_longitude: number | null;
   relationship: string;
+  relationship_other: string;
 };
 
 const emptyForm: ProfileForm = {
@@ -42,6 +43,21 @@ const emptyForm: ProfileForm = {
   home_latitude: null,
   home_longitude: null,
   relationship: "parent",
+  relationship_other: "",
+};
+
+const relationshipOptions = [
+  { label: "Parent", value: "parent" },
+  { label: "Guardian", value: "guardian" },
+  { label: "Grandparent", value: "grandparent" },
+  { label: "Other", value: "other" },
+];
+
+const getProfileValue = (...values: unknown[]) => {
+  const value = values.find(
+    (candidate) => typeof candidate === "string" && candidate.trim(),
+  );
+  return typeof value === "string" ? value : "";
 };
 
 const PersonalInformation = () => {
@@ -50,29 +66,71 @@ const PersonalInformation = () => {
   const { client, loading, refreshClient } = useClientProfile();
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [relationshipPickerVisible, setRelationshipPickerVisible] =
+    useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [notification, setNotification] = useState<{
     message: string;
     type: "success" | "error" | "warning";
     visible: boolean;
   }>({ message: "", type: "success", visible: false });
-
+  console.log({ user: user?.userData?.name });
   useEffect(() => {
     if (!client) return;
 
+    const profile = client.client || client;
+    const userData = user?.userData || user;
+
     setForm({
-      first_name: client.first_name || user?.userData?.first_name || "",
-      last_name: client.last_name || user?.userData?.last_name || "",
-      phone: client.phone || user?.userData?.phone || "",
-      alternate_phone: client.alternate_phone || "",
-      home_address: client.home_address || "",
-      home_latitude: client.home_latitude ?? null,
-      home_longitude: client.home_longitude ?? null,
-      relationship: client.relationship || "parent",
+      first_name: getProfileValue(
+        profile.first_name,
+        profile.firstName,
+        userData?.first_name,
+        userData?.firstName,
+        profile.name,
+      ),
+      last_name: getProfileValue(
+        profile.last_name,
+        profile.lastName,
+        userData?.last_name,
+        userData?.lastName,
+      ),
+      phone: getProfileValue(profile.phone, userData?.phone),
+      alternate_phone: getProfileValue(
+        profile.alternate_phone,
+        profile.alternatePhone,
+      ),
+      home_address: getProfileValue(profile.home_address, profile.homeAddress),
+      home_latitude: profile.home_latitude ?? profile.homeLatitude ?? null,
+      home_longitude: profile.home_longitude ?? profile.homeLongitude ?? null,
+      relationship: profile.relationship || "parent",
+      relationship_other: getProfileValue(
+        profile.relationship_other,
+        profile.relationshipOther,
+      ),
     });
   }, [client, user]);
 
   const updateField = (field: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const phone = form.phone.replace(/[\s()-]/g, "");
+  const alternatePhone = form.alternate_phone.replace(/[\s()-]/g, "");
+  const fieldHasError = (field: keyof ProfileForm) => {
+    if (!showValidationErrors) return false;
+
+    if (field === "phone") {
+      return !/^\+?[0-9]{7,15}$/.test(phone);
+    }
+    if (field === "alternate_phone") {
+      return (
+        !/^\+?[0-9]{7,15}$/.test(alternatePhone) || alternatePhone === phone
+      );
+    }
+
+    const value = form[field];
+    return typeof value !== "string" || !value.trim();
   };
 
   const selectedCoordinates =
@@ -152,13 +210,12 @@ const PersonalInformation = () => {
     if (!form.first_name.trim()) return "Enter your first name.";
     if (!form.last_name.trim()) return "Enter your last name.";
 
-    const phone = form.phone.replace(/[\s()-]/g, "");
     if (!phone) return "Enter your phone number.";
     if (!/^\+?[0-9]{7,15}$/.test(phone)) {
       return "Enter a valid phone number.";
     }
 
-    const alternatePhone = form.alternate_phone.replace(/[\s()-]/g, "");
+    if (!alternatePhone) return "Enter your alternate phone number.";
     if (alternatePhone && !/^\+?[0-9]{7,15}$/.test(alternatePhone)) {
       return "Enter a valid alternate phone number.";
     }
@@ -167,6 +224,9 @@ const PersonalInformation = () => {
     }
 
     if (!form.relationship) return "Select your relationship to the child.";
+    if (form.relationship === "other" && !form.relationship_other.trim()) {
+      return "Specify your relationship to the child.";
+    }
     if (!form.home_address.trim())
       return "Search and select your home address.";
     if (form.home_latitude === null || form.home_longitude === null) {
@@ -177,6 +237,7 @@ const PersonalInformation = () => {
   };
 
   const saveProfile = async () => {
+    setShowValidationErrors(true);
     const validationError = validateForm();
     if (validationError) {
       showNotification(validationError, "warning");
@@ -209,6 +270,7 @@ const PersonalInformation = () => {
       }
 
       await refreshClient();
+      setShowValidationErrors(false);
       showNotification("Your personal information has been saved.", "success");
     } catch (error) {
       showNotification(
@@ -264,38 +326,73 @@ const PersonalInformation = () => {
           <View style={styles.card}>
             <Field
               label="First name"
-              value={form.first_name || ""}
+              required
+              error={fieldHasError("first_name")}
+              value={form.first_name || user?.userData?.name || ""}
               onChangeText={(value) => updateField("first_name", value)}
             />
             <Field
               label="Last name"
+              required
+              error={fieldHasError("last_name")}
               value={form.last_name || ""}
               onChangeText={(value) => updateField("last_name", value)}
             />
-            <Text style={styles.label}>Relationship to child</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={form.relationship || client?.relationship}
-                onValueChange={(value) => updateField("relationship", value)}
-              >
-                <Picker.Item label="Parent" value="parent" />
-                <Picker.Item label="Guardian" value="guardian" />
-                <Picker.Item label="Grandparent" value="grandparent" />
-                <Picker.Item label="Other" value="other" />
-              </Picker>
-            </View>
+            <Text style={styles.label}>
+              Relationship to child{" "}
+              <Text style={styles.requiredMarker}> *</Text>
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Select relationship to child"
+              activeOpacity={0.7}
+              onPress={() => setRelationshipPickerVisible(true)}
+              style={[
+                styles.relationshipTrigger,
+                showValidationErrors && !form.relationship && styles.inputError,
+              ]}
+            >
+              <Text style={styles.relationshipValue}>
+                {relationshipOptions.find(
+                  (option) => option.value === form.relationship,
+                )?.label || "Select relationship"}
+              </Text>
+              <MaterialIcons
+                name="keyboard-arrow-down"
+                size={24}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+            {form.relationship === "other" && (
+              <View style={styles.otherRelationshipField}>
+                <Field
+                  label="Specify relationship"
+                  required
+                  error={fieldHasError("relationship_other")}
+                  value={form.relationship_other}
+                  onChangeText={(value) =>
+                    updateField("relationship_other", value)
+                  }
+                  placeholder="e.g. Aunt, sibling, or caregiver"
+                />
+              </View>
+            )}
           </View>
 
           <Text style={styles.sectionTitle}>Contact details</Text>
           <View style={styles.card}>
             <Field
               label="Phone number"
-              value={form.phone || ""}
+              required
+              error={fieldHasError("phone")}
+              value={form.phone || user?.userData?.phone || ""}
               onChangeText={(value) => updateField("phone", value)}
               keyboardType="phone-pad"
             />
             <Field
+              required
               label="Alternate phone"
+              error={fieldHasError("alternate_phone")}
               value={form.alternate_phone || ""}
               onChangeText={(value) => updateField("alternate_phone", value)}
               keyboardType="phone-pad"
@@ -304,13 +401,24 @@ const PersonalInformation = () => {
 
           <Text style={styles.sectionTitle}>Home address</Text>
           <View style={styles.card}>
-            <Text style={styles.label}>Search home address</Text>
-            <GooglePlacesAutoComplete
-              value={form.home_address}
-              onChangeText={(value) => updateField("home_address", value)}
-              onSelect={handleAddressSelected}
-              placeholder="Search for your home address"
-            />
+            <Text style={styles.label}>
+              Search home address <Text style={styles.requiredMarker}> *</Text>
+            </Text>
+            <View
+              style={[
+                styles.addressInput,
+                showValidationErrors &&
+                  (!form.home_address.trim() || !selectedCoordinates) &&
+                  styles.inputError,
+              ]}
+            >
+              <GooglePlacesAutoComplete
+                value={form.home_address}
+                onChangeText={(value) => updateField("home_address", value)}
+                onSelect={handleAddressSelected}
+                placeholder="Search for your home address"
+              />
+            </View>
             <MapView
               style={styles.map}
               region={mapRegion}
@@ -335,6 +443,54 @@ const PersonalInformation = () => {
             )}
           </TouchableOpacity>
         </ScrollView>
+        <Modal
+          visible={relationshipPickerVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setRelationshipPickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              accessibilityLabel="Close relationship selector"
+              style={styles.modalDismissArea}
+              onPress={() => setRelationshipPickerVisible(false)}
+            />
+            <View style={styles.relationshipSheet}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Relationship to child</Text>
+              {relationshipOptions.map((option) => {
+                const isSelected = form.relationship === option.value;
+
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      updateField("relationship", option.value);
+                      setRelationshipPickerVisible(false);
+                    }}
+                    style={[
+                      styles.relationshipOption,
+                      isSelected && styles.relationshipOptionSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.relationshipOptionText,
+                        isSelected && styles.relationshipOptionTextSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {isSelected && (
+                      <MaterialIcons name="check" size={22} color="#2563EB" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </Modal>
         <AppNotification
           message={notification.message}
           type={notification.type}
@@ -352,22 +508,32 @@ const PersonalInformation = () => {
 
 const Field = ({
   label,
+  required = false,
   value,
   onChangeText,
   keyboardType,
+  placeholder,
+  error = false,
 }: {
   label: string;
+  required?: boolean;
   value: string;
   onChangeText: (value: string) => void;
   keyboardType?: "default" | "phone-pad" | "number-pad";
+  placeholder?: string;
+  error?: boolean;
 }) => (
   <View style={styles.field}>
-    <Text style={styles.label}>{label}</Text>
+    <Text style={styles.label}>
+      {label}
+      {required && <Text style={styles.requiredMarker}> *</Text>}
+    </Text>
     <TextInput
       value={value}
       onChangeText={onChangeText}
       keyboardType={keyboardType}
-      style={styles.input}
+      placeholder={placeholder}
+      style={[styles.input, error && styles.inputError]}
       placeholderTextColor="#94A3B8"
     />
   </View>
@@ -421,6 +587,9 @@ const styles = StyleSheet.create({
   },
   field: { marginBottom: 13 },
   label: { color: "#475569", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  requiredMarker: { color: "#DC2626" },
+  addressInput: { borderRadius: 9 },
+  inputError: { borderColor: "#DC2626" },
   input: {
     height: 46,
     borderWidth: 1,
@@ -437,12 +606,57 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 14,
   },
-  pickerContainer: {
+  relationshipTrigger: {
+    minHeight: 50,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     borderRadius: 9,
-    overflow: "hidden",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
   },
+  relationshipValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
+  otherRelationshipField: { marginTop: 14, marginBottom: -2 },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  modalDismissArea: { flex: 1 },
+  relationshipSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    padding: 20,
+    paddingBottom: Platform.OS === "ios" ? 34 : 20,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    marginBottom: 18,
+  },
+  sheetTitle: {
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  relationshipOption: {
+    minHeight: 52,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  relationshipOptionSelected: { backgroundColor: "#EFF6FF" },
+  relationshipOptionText: { color: "#334155", fontSize: 15 },
+  relationshipOptionTextSelected: { color: "#2563EB", fontWeight: "700" },
   saveButton: {
     height: 52,
     borderRadius: 12,

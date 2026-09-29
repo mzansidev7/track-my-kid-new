@@ -11,22 +11,22 @@ import { getStoredTheme, saveTheme } from "../store/themeStore/themeStore";
 
 // Driver-specific color tokens requested by the designer
 export const DRIVER_COLORS = {
-  background: "#061A3A",
-  card: "#0D2850",
-  cardBorder: "#193B68",
+  background: "#F5FBF7",
+  card: "#FFFFFF",
+  cardBorder: "rgba(15, 157, 88, 0.18)",
 
-  primary: "#0057FF",
-  primaryDark: "#003FC1",
+  primary: "#0F9D58",
+  primaryDark: "#0A7A43",
 
-  cyan: "#22C7D6",
+  cyan: "#22C55E",
 
   success: "#25D6A2",
   warning: "#F59E0B",
   danger: "#EF5350",
 
   white: "#FFFFFF",
-  text: "#DCE6F3",
-  muted: "#7F94B1",
+  text: "#0F172A",
+  muted: "#4B5563",
 };
 
 export const CLIENT_COLORS = {
@@ -270,9 +270,11 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
   children,
 }): React.ReactElement => {
   const systemColorScheme = useColorScheme();
-  const [theme, setTheme] = useState<Theme>(() =>
-    systemColorScheme === "dark" ? "dark" : "light",
-  );
+  const resolvedSystemTheme: Theme =
+    systemColorScheme === "dark" || systemColorScheme === "light"
+      ? systemColorScheme
+      : "light";
+  const [theme, setTheme] = useState<Theme>(() => resolvedSystemTheme);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -280,14 +282,14 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
       const stored = await getStoredTheme();
       if (stored) {
         setTheme(stored);
-      } else if (systemColorScheme) {
-        setTheme(systemColorScheme);
+      } else {
+        setTheme(resolvedSystemTheme);
       }
       setIsReady(true);
     };
 
     loadTheme();
-  }, [systemColorScheme]);
+  }, [resolvedSystemTheme]);
 
   useEffect(() => {
     if (!isReady) {
@@ -303,9 +305,9 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
     }
 
     if (isReady && !theme) {
-      setTheme(systemColorScheme || "light");
+      setTheme(resolvedSystemTheme);
     }
-  }, [systemColorScheme, isReady, theme]);
+  }, [resolvedSystemTheme, isReady, theme]);
 
   const colors = theme === "dark" ? darkTheme.colors : lightTheme.colors;
   const shadows = theme === "dark" ? darkTheme.shadows : lightTheme.shadows;

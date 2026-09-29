@@ -74,7 +74,9 @@ export default function Login({
       setNotification({
         visible: true,
         message:
-          error?.response?.data?.message || "Login failed. Please try again.",
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          "Login failed. Please try again.",
         type: "error",
       });
     } finally {

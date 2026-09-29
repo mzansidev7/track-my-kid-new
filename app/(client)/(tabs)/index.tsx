@@ -1,5 +1,6 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   Image,
   ScrollView,
   StyleSheet,
@@ -9,14 +10,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import { useTheme } from "../../../styles/theme";
 import { AuthContext } from "../../../context/authContext/auth-context";
+import { resolveWorkingBaseUrl } from "../../../url";
 import { Child, useChildren } from "../clientHelpers/hooks/useChildren";
 import { useClientNotifications } from "../clientHelpers/hooks/useClientNotifications";
 import { useClientProfile } from "../clientHelpers/hooks/useClientProfile";
+import {
+  getClientDate,
+  useClientAttendance,
+} from "../clientHelpers/hooks/useClientAttendance";
 import { ClientMainHeader } from "../components/ClientMainHeader";
+
+type RouteStop = {
+  id: string;
+  route_id?: string;
+  child_id?: string;
+  stop_type?: "pickup" | "dropoff";
+  status?: "pending" | "in_progress" | "completed" | "skipped";
+};
 
 const formatTime = (value?: string) => {
   if (!value) return "—";
@@ -26,18 +40,79 @@ const formatTime = (value?: string) => {
     : parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
-const getChildStatus = (child: Child) => {
-  if (!child.route) return child.status?.toLowerCase() || "upcoming";
+const formatScheduleTime = (value?: string | null) => {
+  if (!value) return "Not set";
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return "Not set";
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
-  const toMinutes = (value?: string) => {
-    if (!value) return null;
-    const [hours, minutes] = value.split(":").map(Number);
-    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-    return hours * 60 + minutes;
-  };
+const hasAssignedVehicle = (child: Child) =>
+  Boolean(child.vehicle_id || child.vehicle?.id);
 
-  const currentDate = new Date();
+const toMinutes = (value?: string) => {
+  if (!value) return null;
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+const isWithinWindow = (
+  currentMinutes: number,
+  start?: string,
+  end?: string,
+) => {
+  const startMinutes = toMinutes(start);
+  const endMinutes = toMinutes(end);
+  if (startMinutes === null || currentMinutes < startMinutes) return false;
+  return endMinutes === null || currentMinutes <= endMinutes;
+};
+
+const getChildStatus = (
+  child: Child,
+  stops: RouteStop[] = [],
+  timestamp = Date.now(),
+) => {
+  if (!hasAssignedVehicle(child) || !child.route) {
+    return "upcoming";
+  }
+
+  const currentDate = new Date(timestamp);
   const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
+  const pickupStop = stops.find((stop) => stop.stop_type === "pickup");
+  const dropoffStop = stops.find((stop) => stop.stop_type === "dropoff");
+
+  if (stops.some((stop) => stop.status === "in_progress")) return "on a trip";
+
+  if (
+    pickupStop &&
+    pickupStop.status !== "completed" &&
+    pickupStop.status !== "skipped" &&
+    isWithinWindow(
+      currentMinutes,
+      child.route.pickup_start_time || child.route.departure_time,
+      child.route.pickup_end_time,
+    )
+  ) {
+    return "on a trip";
+  }
+
+  if (
+    dropoffStop &&
+    dropoffStop.status !== "completed" &&
+    dropoffStop.status !== "skipped" &&
+    isWithinWindow(
+      currentMinutes,
+      child.route.dropoff_start_time,
+      child.route.dropoff_end_time,
+    )
+  ) {
+    return "on a trip";
+  }
+
   const pickupStart = toMinutes(
     child.route.pickup_start_time || child.route.departure_time,
   );
@@ -126,43 +201,188 @@ const ClientHomeScreen = () => {
   const clientBrand = getBrandColors("client");
 
   const { user } = useContext(AuthContext);
-  const { client } = useClientProfile();
-  const { children, childrenLoading } = useChildren();
-  const { unreadCount: unreadNotifications } = useClientNotifications();
+  const { client, refreshClient } = useClientProfile();
+  const { children, isWeekend } = useChildren();
+  const [attendanceDate, setAttendanceDate] = useState(() => getClientDate());
+  const { attendance: attendanceItems } = useClientAttendance(attendanceDate);
+  const { notifications, unreadCount: unreadNotifications } =
+    useClientNotifications();
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [stopsByChild, setStopsByChild] = useState<Record<string, RouteStop[]>>(
+    {},
+  );
+  const [schoolTrips, setSchoolTrips] = useState<any[]>([]);
+  const [schoolTripsLoading, setSchoolTripsLoading] = useState(true);
+  const notificationTicker = useRef(new Animated.Value(0)).current;
+  const latestUnreadNotification = notifications.find(
+    (notification) => notification.is_read !== true,
+  );
+
+  useEffect(() => {
+    notificationTicker.stopAnimation();
+    notificationTicker.setValue(0);
+    if (!latestUnreadNotification) return undefined;
+
+    const ticker = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1000),
+        Animated.timing(notificationTicker, {
+          toValue: -180,
+          duration: 6000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(notificationTicker, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    ticker.start();
+
+    return () => ticker.stop();
+  }, [latestUnreadNotification, notificationTicker]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
-  const clientName = client?.name || user?.userData?.name || "Logged in user";
+  useEffect(() => {
+    let active = true;
+    const loadSchoolTrips = async () => {
+      if (!user?.token) {
+        setSchoolTripsLoading(false);
+        return;
+      }
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/client/school-trips`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        const data = await response.json();
+        if (active && response.ok) setSchoolTrips(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Failed to load school trips on parent dashboard", error);
+      } finally {
+        if (active) setSchoolTripsLoading(false);
+      }
+    };
+    void loadSchoolTrips();
+    const timer = setInterval(loadSchoolTrips, 30000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [user?.token]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRouteStops = async () => {
+      if (!user?.token) return;
+
+      const assignedChildren = children.filter(
+        (child) => child.route?.id && hasAssignedVehicle(child),
+      );
+      if (assignedChildren.length === 0) {
+        setStopsByChild({});
+        return;
+      }
+
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const stopEntries = await Promise.all(
+          assignedChildren.map(async (child) => {
+            const response = await fetch(
+              `${baseUrl}/client/children/${child.id}/route-stops`,
+              { headers: { Authorization: `Bearer ${user.token}` } },
+            );
+            if (!response.ok) return [child.id, []] as const;
+            const data = await response.json();
+            const stops = (Array.isArray(data) ? data : []).filter(
+              (stop: RouteStop) =>
+                !child.route?.id || stop.route_id === child.route.id,
+            );
+            return [child.id, stops] as const;
+          }),
+        );
+
+        if (!cancelled) setStopsByChild(Object.fromEntries(stopEntries));
+      } catch (error) {
+        if (!cancelled) setStopsByChild({});
+        console.error("Failed to load client route stops", error);
+      }
+    };
+
+    loadRouteStops();
+    return () => {
+      cancelled = true;
+    };
+  }, [children, user?.token]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshClient();
+    }, [refreshClient]),
+  );
+
+  const clientName =
+    [client?.first_name, client?.last_name].filter(Boolean).join(" ") ||
+    client?.name ||
+    user?.userData?.name ||
+    "Logged in user";
   const onTripChildren = useMemo(
-    () => children.filter((child) => getChildStatus(child) === "on a trip"),
-    [children, currentTime],
+    () =>
+      children.filter(
+        (child) =>
+          getChildStatus(child, stopsByChild[child.id], currentTime) ===
+          "on a trip",
+      ),
+    [children, currentTime, stopsByChild],
   );
   const atSchoolChildren = useMemo(
-    () => children.filter((child) => getChildStatus(child) === "at school"),
-    [children, currentTime],
-  );
-  const upcomingChildren = useMemo(
-    () => children.filter((child) => getChildStatus(child) === "upcoming"),
-    [children, currentTime],
-  );
-  const upcomingTripCount = useMemo(() => {
-    const tripKeys = new Set(
-      upcomingChildren.map(
+    () =>
+      children.filter(
         (child) =>
-          child.route?.id ||
-          child.vehicle_id ||
-          child.vehicle?.id ||
-          `child:${child.id}`,
+          getChildStatus(child, stopsByChild[child.id], currentTime) ===
+          "at school",
       ),
-    );
-    return tripKeys.size;
-  }, [upcomingChildren]);
+    [children, currentTime, stopsByChild],
+  );
   const activeChild = onTripChildren[0];
-  const scheduledChildren = children.filter((child) => child.route);
+  const scheduledChildren = children.filter(hasAssignedVehicle);
+  const todayDate = getClientDate();
+
+  const getAttendanceDisplay = (item: (typeof attendanceItems)[number]) => {
+    const child = children.find((candidate) => candidate.id === item.childId);
+    const isToday = attendanceDate === todayDate;
+    const childTripStatus = child
+      ? getChildStatus(child, stopsByChild[child.id], currentTime)
+      : "upcoming";
+
+    if (isToday && child && childTripStatus === "on a trip") {
+      if (getTripDirection(child) === "On the way to school") {
+        return { label: "On route", color: "#2563EB" };
+      }
+      if (item.status === "present" || item.status === "late") {
+        return { label: "Present", color: "#16A34A" };
+      }
+    }
+
+    if (item.status === "not_recorded") {
+      return { label: "Not recorded", color: colors.text.secondary };
+    }
+    return {
+      label: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+      color:
+        item.status === "present"
+          ? "#16A34A"
+          : item.status === "late"
+            ? "#D97706"
+            : "#DC2626",
+    };
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -188,6 +408,28 @@ const ClientHomeScreen = () => {
           greeting={getGreeting()}
           subtitle="Here’s what’s happening with your children today."
           avatarStatusColor="#22C55E"
+          rightAccessory={
+            <TouchableOpacity
+              style={styles.headerNotificationButton}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push("/(client)/pages/notifications" as never)
+              }
+            >
+              <MaterialIcons
+                name="notifications-none"
+                size={25}
+                color={colors.text.primary}
+              />
+              {unreadNotifications > 0 && (
+                <View style={styles.headerNotificationBadge}>
+                  <Text style={styles.headerNotificationCount}>
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          }
         />
 
         {/* SAFETY STATUS */}
@@ -241,7 +483,19 @@ const ClientHomeScreen = () => {
             Today
           </Text>
 
-          <TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.replace("/(client)/(tabs)/trips")}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <MaterialIcons
+              name="view-list"
+              size={18}
+              color={clientBrand.primary}
+            />
             <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>
               View all
             </Text>
@@ -359,6 +613,13 @@ const ClientHomeScreen = () => {
           >
             <View style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}>
               <MaterialIcons name="notifications" size={20} color="#2563EB" />
+              {unreadNotifications > 0 && (
+                <View style={styles.notificationStatBadge}>
+                  <Text style={styles.notificationStatBadgeText}>
+                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <Text style={[styles.statNumber, { color: colors.text.primary }]}>
@@ -369,8 +630,157 @@ const ClientHomeScreen = () => {
               Notifications
             </Text>
 
-            <Text style={styles.statLink}>View</Text>
+            <View style={styles.notificationTicker}>
+              <Animated.Text
+                numberOfLines={1}
+                style={[
+                  styles.notificationTickerText,
+                  { color: colors.text.secondary },
+                  { transform: [{ translateX: notificationTicker }] },
+                ]}
+              >
+                {latestUnreadNotification
+                  ? `${latestUnreadNotification.title}: ${latestUnreadNotification.message}`
+                  : "No unread notifications"}
+              </Animated.Text>
+            </View>
           </TouchableOpacity>
+        </View>
+
+        {/* ATTENDANCE */}
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              School attendance
+            </Text>
+            <Text
+              style={[
+                styles.sectionDescription,
+                { color: colors.text.secondary },
+              ]}
+            >
+              Today&apos;s attendance updates
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.attendanceDateButton}
+            onPress={() => {
+              const next = new Date(`${attendanceDate}T12:00:00`);
+              next.setDate(next.getDate() - 1);
+              setAttendanceDate(getClientDate(next));
+            }}
+          >
+            <MaterialIcons
+              name="chevron-left"
+              size={18}
+              color={clientBrand.primary}
+            />
+            <Text
+              style={[
+                styles.attendanceDateText,
+                { color: clientBrand.primary },
+              ]}
+            >
+              {new Date(`${attendanceDate}T12:00:00`).toLocaleDateString([], {
+                month: "short",
+                day: "numeric",
+              })}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                const next = new Date(`${attendanceDate}T12:00:00`);
+                next.setDate(next.getDate() + 1);
+                setAttendanceDate(getClientDate(next));
+              }}
+            >
+              <MaterialIcons
+                name="chevron-right"
+                size={18}
+                color={clientBrand.primary}
+              />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+        <View
+          style={[
+            styles.attendanceCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          {attendanceItems.length === 0 ? (
+            <Text
+              style={[styles.attendanceEmpty, { color: colors.text.secondary }]}
+            >
+              No attendance records yet.
+            </Text>
+          ) : (
+            attendanceItems.map((item) => {
+              const { label: statusLabel, color: statusColor } =
+                getAttendanceDisplay(item);
+              return (
+                <View
+                  key={item.childId}
+                  style={[
+                    styles.attendanceRow,
+                    { borderBottomColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.attendanceChildIcon}>
+                    <MaterialIcons
+                      name="person"
+                      size={18}
+                      color={statusColor}
+                    />
+                  </View>
+                  <View style={styles.attendanceChildInfo}>
+                    <Text
+                      style={[
+                        styles.attendanceChildName,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {item.childName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.attendanceChildTime,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {item.arrivalTime
+                        ? `Arrival ${formatTime(item.arrivalTime)}`
+                        : "No arrival time"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.attendanceChildTime,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {item.schoolName} ·{" "}
+                      {formatScheduleTime(item.schoolStartTime)} -{" "}
+                      {formatScheduleTime(item.schoolEndTime)}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.attendanceStatusBadge,
+                      { backgroundColor: `${statusColor}18` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.attendanceStatusText,
+                        { color: statusColor },
+                      ]}
+                    >
+                      {statusLabel}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </View>
 
         {/* ACTIVE TRIPS */}
@@ -390,7 +800,15 @@ const ClientHomeScreen = () => {
             </Text>
           </View>
 
-          <TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.replace("/(client)/(tabs)/trips")}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <MaterialIcons
+              name="chevron-right"
+              size={18}
+              color={clientBrand.primary}
+            />
             <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>
               See all
             </Text>
@@ -671,7 +1089,20 @@ const ClientHomeScreen = () => {
             </Text>
           </View>
 
-          <TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.replace("/(client)/(tabs)/trips")}
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <MaterialIcons
+              name="schedule"
+              size={18}
+              color={clientBrand.primary}
+            />
             <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>
               Schedule
             </Text>
@@ -772,8 +1203,52 @@ const ClientHomeScreen = () => {
               color={colors.text.secondary}
             />
             <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
-              No upcoming trips scheduled.
+              {isWeekend
+                ? "It’s the weekend. No transport scheduled."
+                : "No upcoming trips scheduled."}
             </Text>
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>School Trips</Text>
+            <Text style={[styles.sectionDescription, { color: colors.text.secondary }]}>Activities involving your children</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push("/(client)/(tabs)/trips" as never)}>
+            <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>View all</Text>
+          </TouchableOpacity>
+        </View>
+        {schoolTripsLoading ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Loading school trips…</Text>
+          </View>
+        ) : schoolTrips.length ? schoolTrips.slice(0, 2).map((trip) => (
+          <TouchableOpacity
+            key={trip.id}
+            activeOpacity={0.85}
+            onPress={() => router.push("/(client)/(tabs)/trips" as never)}
+            style={[styles.upcomingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <View style={[styles.dateBox, { backgroundColor: `${clientBrand.primary}10` }]}>
+              <Text style={[styles.dateMonth, { color: clientBrand.primary }]}>{new Date(trip.departure_at).toLocaleString([], { month: "short" }).toUpperCase()}</Text>
+              <Text style={[styles.dateNumber, { color: colors.text.primary }]}>{new Date(trip.departure_at).getDate()}</Text>
+              <Text style={[styles.dateDay, { color: colors.text.secondary }]}>{new Date(trip.departure_at).toLocaleString([], { weekday: "short" }).toUpperCase()}</Text>
+            </View>
+            <View style={styles.upcomingContent}>
+              <View style={styles.upcomingTopRow}>
+                <Text style={[styles.upcomingTime, { color: colors.text.primary }]}>{trip.name}</Text>
+                <View style={styles.scheduledPill}><Text style={styles.scheduledText}>{trip.status.replaceAll("_", " ")}</Text></View>
+              </View>
+              <Text numberOfLines={1} style={[styles.upcomingRoute, { color: colors.text.secondary }]}>{trip.destination}</Text>
+              <Text style={[styles.upcomingDriver, { color: colors.text.secondary }]}>{trip.learners?.map((item: any) => item.child?.name).filter(Boolean).join(", ")}</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.text.secondary} />
+          </TouchableOpacity>
+        )) : (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <MaterialIcons name="event-busy" size={22} color={colors.text.secondary} />
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No school trips announced for your children.</Text>
           </View>
         )}
 
@@ -888,6 +1363,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  headerNotificationButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.72)",
+  },
+
+  headerNotificationBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+
+  headerNotificationCount: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
   content: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -988,41 +1493,80 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 22,
   },
 
   statCard: {
     width: "48%",
-    minHeight: 108,
-    borderRadius: 14,
-    padding: 11,
+    minHeight: 118,
+    borderRadius: 20,
+    padding: 14,
     borderWidth: 1,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
   },
 
   statIcon: {
-    width: 31,
-    height: 31,
-    borderRadius: 9,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 7,
+    marginBottom: 10,
   },
 
-  statNumber: {
-    fontSize: 21,
+  notificationStatBadge: {
+    position: "absolute",
+    top: -7,
+    right: -9,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+
+  notificationStatBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
     fontWeight: "800",
   },
 
+  statNumber: {
+    fontSize: 25,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+
   statLabel: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     marginTop: 1,
   },
 
   statLink: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
     marginTop: 4,
+  },
+
+  notificationTicker: {
+    width: "100%",
+    overflow: "hidden",
+    marginTop: 4,
+  },
+
+  notificationTickerText: {
+    fontSize: 9,
+    lineHeight: 13,
+    minWidth: 260,
   },
 
   /* ACTIVE TRIP */
@@ -1350,6 +1894,76 @@ const styles = StyleSheet.create({
   quickLabel: {
     fontSize: 9,
     fontWeight: "700",
+  },
+
+  attendanceCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    marginBottom: 22,
+  },
+
+  attendanceDateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 4,
+    backgroundColor: "#EFF6FF",
+  },
+
+  attendanceDateText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  attendanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+
+  attendanceChildIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    marginRight: 10,
+  },
+
+  attendanceChildInfo: {
+    flex: 1,
+  },
+
+  attendanceChildName: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  attendanceChildTime: {
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  attendanceStatusBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+
+  attendanceStatusText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  attendanceEmpty: {
+    paddingVertical: 18,
+    fontSize: 13,
+    textAlign: "center",
   },
 
   /* BOTTOM NAV */

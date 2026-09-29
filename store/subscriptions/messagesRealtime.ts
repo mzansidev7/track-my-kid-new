@@ -18,6 +18,7 @@ export interface ConversationData {
     profile: any;
   };
   last_message: any | null;
+  unread_count?: number;
   created_at: string;
   last_message_at: string;
 }
@@ -42,6 +43,7 @@ export interface MessageData {
 
 export const fetchConversationsWithCache = async (
   userId: string,
+  onCached?: (conversations: ConversationData[]) => void,
 ): Promise<ConversationData[]> => {
   if (!userId) {
     return [];
@@ -49,7 +51,8 @@ export const fetchConversationsWithCache = async (
 
   try {
     // Get cached conversations first
-    const cachedConversations = await getCachedConversations();
+    const cachedConversations = await getCachedConversations(userId);
+    if (cachedConversations.length > 0) onCached?.(cachedConversations);
 
     // Fetch fresh conversations
     const { data, error } = await client
@@ -155,13 +158,13 @@ export const fetchConversationsWithCache = async (
     );
 
     // Cache fresh conversations
-    await cacheConversations(conversationsWithDetails);
+    await cacheConversations(conversationsWithDetails, userId);
 
     return conversationsWithDetails;
   } catch (err) {
     console.error("❌ Error in fetchConversationsWithCache:", err);
 
-    return await getCachedConversations();
+    return await getCachedConversations(userId);
   }
 };
 
@@ -225,6 +228,7 @@ export const subscribeToConversations = (
 
 export const fetchMessagesWithCache = async (
   conversationId: string,
+  onCached?: (messages: MessageData[]) => void,
 ): Promise<MessageData[]> => {
   if (!conversationId) {
     return [];
@@ -233,6 +237,7 @@ export const fetchMessagesWithCache = async (
   try {
     // Get cached messages first
     const cachedMessages = await getCachedMessages(conversationId);
+    if (cachedMessages.length > 0) onCached?.(cachedMessages);
 
     // Fetch fresh messages
     const { data, error } = await client

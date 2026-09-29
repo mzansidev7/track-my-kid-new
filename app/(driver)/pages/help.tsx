@@ -83,7 +83,7 @@ const DriverHelpPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F5FBF7",
   },
   content: {
     flex: 1,

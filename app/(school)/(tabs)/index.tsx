@@ -10,113 +10,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../../context/authContext/auth-context";
-import { useSchoolDashboard } from "../schoolHelpers/hooks/useSchoolDashboard";
-
-type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
-
-type DashboardAction = {
-  title: string;
-  icon: IoniconName;
-  color: string;
-  screen: string;
-};
-
-type RecentTrip = {
-  id: string;
-  route: string;
-  vehicle: string;
-  driver: string;
-  status: string;
-  statusColor: string;
-  time: string;
-};
+import {
+  useRecentTrips,
+  useSchoolDashboard,
+} from "../schoolHelpers/hooks/useSchoolDashboard";
+import ComingSoon from "../components/ComingSoon";
+import { RecentTrip } from "../schoolHelpers/interface/client.interfaces";
+import {
+  getUserName,
+  schoolQuickActions,
+  schoolStats,
+} from "../schoolHelpers/actionHelpers/actions";
 
 const SchoolDashboard = () => {
   const { user } = useAuth();
   const { school, students, routes, drivers, loading } = useSchoolDashboard();
-  const userName =
-    user?.userData?.first_name || user?.userData?.name || "there";
-
-  console.log({ user: user?.userData, school, students, routes, drivers });
-  const stats: (DashboardAction & { value: string })[] = [
-    {
-      title: "Students",
-      value: String(students.length),
-      icon: "people-outline",
-      color: "#4285F4",
-      screen: "Students",
-    },
-    {
-      title: "Vehicles",
-      value: String(
-        routes.reduce(
-          (count: number, route: any) =>
-            count +
-            (Array.isArray(route.assignments) ? route.assignments.length : 0),
-          0,
-        ),
-      ),
-      icon: "bus-outline",
-      color: "#34A853",
-      screen: "Vehicles",
-    },
-    {
-      title: "Drivers",
-      value: String(drivers.length),
-      icon: "person-outline",
-      color: "#FB8C00",
-      screen: "Drivers",
-    },
-    {
-      title: "Routes",
-      value: String(routes.length),
-      icon: "map-outline",
-      color: "#8E44AD",
-      screen: "Routes",
-    },
-  ];
-
-  const quickActions: DashboardAction[] = [
-    {
-      title: "Students",
-      icon: "people-outline",
-      color: "#4285F4",
-      screen: "Students",
-    },
-    {
-      title: "Routes",
-      icon: "map-outline",
-      color: "#8E44AD",
-      screen: "Routes",
-    },
-    {
-      title: "Attendance",
-      icon: "checkmark-circle-outline",
-      color: "#34A853",
-      screen: "Attendance",
-    },
-    {
-      title: "Drivers",
-      icon: "person-outline",
-      color: "#FB8C00",
-      screen: "Drivers",
-    },
-  ];
-
-  const recentTrips: RecentTrip[] = routes.slice(0, 3).map((route: any) => {
-    const assignment = route.assignments?.[0];
-    const driver = assignment?.drivers?.users;
-    return {
-      id: route.id,
-      route: route.route_name || "School route",
-      vehicle: assignment?.vehicle_id ? "Assigned vehicle" : "No vehicle",
-      driver: driver?.name || "No driver",
-      status: assignment?.is_active === false ? "Inactive" : "Scheduled",
-      statusColor: assignment?.is_active === false ? "#F39C12" : "#34A853",
-      time: route.pickup_start_time || "--:--",
-    };
-  });
-
+  const quickActions = schoolQuickActions();
+  const stats = schoolStats(school, routes, drivers);
+  const userName = getUserName(user);
+  const recentTrips = useRecentTrips(routes);
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -174,7 +86,7 @@ const SchoolDashboard = () => {
             )}
           </View>
         </View>
-        <Text>{JSON.stringify(school)}</Text>
+        {/* <Text>{JSON.stringify(school)}</Text> */}
 
         {school?.is_active && school?.status === "pending" ? (
           <View

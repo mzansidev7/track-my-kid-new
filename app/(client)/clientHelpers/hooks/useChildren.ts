@@ -15,6 +15,7 @@ interface School {
   name: string;
   address?: string;
   phone?: string;
+  school_email?: string;
   created_at?: string;
   latitude?: number;
   longitude?: number;
@@ -66,6 +67,7 @@ interface Child {
     pickup_end_time?: string;
     dropoff_start_time?: string;
     dropoff_end_time?: string;
+    time_scope?: string;
     start_latitude?: number;
     start_longitude?: number;
     end_latitude?: number;
@@ -101,8 +103,41 @@ interface UseChildrenReturn {
   childrenLoading: boolean;
   schoolsError?: string;
   childrenError?: string;
+  isWeekend: boolean;
   refetch: () => Promise<void>;
 }
+
+const isWeekendDay = (date: Date) => [0, 6].includes(date.getDay());
+
+const getLocalDate = (value?: string) => {
+  if (!value) return undefined;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+
+  return [parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
+};
+
+const applyWeekendRouteVisibility = (children: Child[], date = new Date()) => {
+  if (!isWeekendDay(date)) return children;
+
+  const today = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
+
+  return children.map((child) => {
+    const routeDate = getLocalDate(child.route?.departure_time);
+    if (routeDate && routeDate === today) return child;
+
+    return {
+      ...child,
+      route: undefined,
+      status: "Weekend",
+    };
+  });
+};
 
 export const useChildren = (): UseChildrenReturn => {
   const { user } = useContext(AuthContext);
@@ -113,13 +148,14 @@ export const useChildren = (): UseChildrenReturn => {
   const [childrenLoading, setChildrenLoading] = useState(false);
   const [schoolsError, setSchoolsError] = useState<string>();
   const [childrenError, setChildrenError] = useState<string>();
+  const [isWeekend] = useState(() => isWeekendDay(new Date()));
 
   const fetchData = useCallback(async () => {
     if (!user?.token) return;
 
     const cachedChildren = await loadChildren();
     if (Array.isArray(cachedChildren)) {
-      setChildren(cachedChildren);
+      setChildren(applyWeekendRouteVisibility(cachedChildren));
     }
 
     const baseUrl = await resolveWorkingBaseUrl();
@@ -184,8 +220,9 @@ export const useChildren = (): UseChildrenReturn => {
         ...child,
         school: schoolsById.get(child.school_id),
       }));
-      setChildren(childrenList);
-      await saveChildren(childrenList);
+      const visibleChildren = applyWeekendRouteVisibility(childrenList);
+      setChildren(visibleChildren);
+      await saveChildren(visibleChildren);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to fetch children";
@@ -221,6 +258,7 @@ export const useChildren = (): UseChildrenReturn => {
     childrenLoading,
     schoolsError,
     childrenError,
+    isWeekend,
     refetch: fetchData,
   };
 };

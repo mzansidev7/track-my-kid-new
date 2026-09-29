@@ -100,7 +100,7 @@ export const useDriverProfile = () => {
 
   useEffect(() => {
     fetchDriverProfile();
-  }, [fetchDriverProfile]);
+  }, [user?.token]);
 
   useEffect(() => {
     if (!user?.token || !user?.userData?.id) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Text } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import * as Location from "expo-location";
@@ -10,16 +11,32 @@ type Props = {
     latitude: number;
     longitude: number;
     title?: string;
-    type?: "pickup" | "dropoff";
+    type?: "pickup" | "dropoff" | "driver" | "start" | "end";
+    endpoint?: "start" | "end";
   }[];
   origin?: { latitude: number; longitude: number } | null;
   destination?: { latitude: number; longitude: number } | null;
+  waypoints?: { latitude: number; longitude: number }[];
+  returnWaypoints?: { latitude: number; longitude: number }[];
+  showReturnDirection?: boolean;
   style?: any;
   centerOnUser?: boolean;
   focus?: { latitude: number; longitude: number } | null;
+  showMarkerLabels?: boolean;
 };
 
-const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null, style, centerOnUser = false, focus = null }) => {
+const Map: React.FC<Props> = ({
+  markers = [],
+  origin = null,
+  destination = null,
+  waypoints = [],
+  returnWaypoints = [],
+  showReturnDirection = false,
+  style,
+  centerOnUser = false,
+  focus = null,
+  showMarkerLabels = false,
+}) => {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [userRegion, setUserRegion] = useState<any | null>(null);
   const mapRef = React.useRef<any>(null);
@@ -30,7 +47,6 @@ const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null,
     latitudeDelta: 0.08,
     longitudeDelta: 0.08,
   };
-
 
   useEffect(() => {
     let mounted = true;
@@ -64,14 +80,21 @@ const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null,
       : initialRegion;
 
   useEffect(() => {
-    if (focus && mapRef.current && typeof mapRef.current.animateToRegion === "function") {
+    if (
+      focus &&
+      mapRef.current &&
+      typeof mapRef.current.animateToRegion === "function"
+    ) {
       try {
-        mapRef.current.animateToRegion({
-          latitude: focus.latitude,
-          longitude: focus.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 400);
+        mapRef.current.animateToRegion(
+          {
+            latitude: focus.latitude,
+            longitude: focus.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          },
+          400,
+        );
       } catch (e) {
         // ignore
       }
@@ -97,7 +120,10 @@ const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null,
 
       if (typeof mapRef.current.fitToCoordinates === "function") {
         mapRef.current.fitToCoordinates(
-          markers.map((m) => ({ latitude: m.latitude, longitude: m.longitude })),
+          markers.map((m) => ({
+            latitude: m.latitude,
+            longitude: m.longitude,
+          })),
           {
             edgePadding: { top: 80, right: 40, bottom: 220, left: 40 },
             animated: true,
@@ -126,7 +152,7 @@ const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null,
         // ignore
       }
     }
-  }, [origin, destination]);
+  }, [origin, destination, waypoints]);
 
   return (
     <View style={[styles.container, style]}>
@@ -139,39 +165,87 @@ const Map: React.FC<Props> = ({ markers = [], origin = null, destination = null,
         showsUserLocation={true}
       >
         {markers.map((m, i) => {
+          const isStart = m.endpoint === "start";
+          const isEnd = m.endpoint === "end";
           const isPickup = m.type === "pickup";
-          const glyph = isPickup ? "▶" : "■";
-          const iconColor = isPickup ? "#22C55E" : "#EF4444";
+          const iconColor = isStart
+            ? "#16A34A"
+            : isEnd
+              ? "#DC2626"
+              : isPickup
+                ? "#22C55E"
+                : "#EF4444";
 
           return (
             <Marker
               key={`m-${i}`}
               coordinate={{ latitude: m.latitude, longitude: m.longitude }}
               title={m.title}
-              tracksViewChanges={false}
+              tracksViewChanges={showMarkerLabels}
               anchor={{ x: 0.5, y: 0.5 }}
             >
-              <View style={[styles.markerPin, { backgroundColor: iconColor }]}>
-                <Text style={styles.markerGlyph}>{glyph}</Text>
+              <View
+                style={[
+                  styles.markerPin,
+                  {
+                    backgroundColor: iconColor + "55",
+                    borderColor: iconColor + "33",
+                  },
+                ]}
+              >
+                <MaterialIcons
+                  name={
+                    isStart
+                      ? "play-arrow"
+                      : isEnd
+                        ? "flag"
+                        : isPickup
+                          ? "home"
+                          : m.type === "driver"
+                            ? "directions-car"
+                            : "school"
+                  }
+                  size={20}
+                  color={iconColor}
+                />
               </View>
+              {showMarkerLabels && m.title ? (
+                <View style={styles.markerLabel}>
+                  <Text style={styles.markerLabelText} numberOfLines={1}>
+                    {m.title}
+                  </Text>
+                </View>
+              ) : null}
             </Marker>
           );
         })}
 
         {origin && destination && GOOGLE_API_KEY ? (
-          <MapViewDirections
-            origin={origin}
-            destination={destination}
-            apikey={GOOGLE_API_KEY}
-            strokeWidth={4}
-            strokeColor="#1E90FF"
-            onReady={(result) => {
-              if (result && typeof result.distance === "number") {
-                // result.distance is in kilometers
-                setDistanceKm(Number(result.distance.toFixed(2)));
-              }
-            }}
-          />
+          <>
+            <MapViewDirections
+              origin={origin}
+              destination={destination}
+              waypoints={waypoints.length > 0 ? waypoints : undefined}
+              apikey={GOOGLE_API_KEY}
+              strokeWidth={4}
+              strokeColor="#1E90FF"
+              onReady={(result) => {
+                if (result && typeof result.distance === "number") {
+                  setDistanceKm(Number(result.distance.toFixed(2)));
+                }
+              }}
+            />
+            {showReturnDirection ? (
+              <MapViewDirections
+                origin={destination}
+                destination={origin}
+                waypoints={returnWaypoints}
+                apikey={GOOGLE_API_KEY}
+                strokeWidth={4}
+                strokeColor="#F59E0B"
+              />
+            ) : null}
+          </>
         ) : null}
       </MapView>
 
@@ -200,7 +274,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   markerPin: {
     width: 42,
@@ -209,7 +283,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#fff",
+    // borderColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.4,
@@ -221,6 +295,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
     lineHeight: 18,
+    textAlign: "center",
+  },
+  markerLabel: {
+    maxWidth: 150,
+    marginTop: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.92)",
+  },
+  markerLabelText: {
+    color: "#111827",
+    fontSize: 10,
+    fontWeight: "700",
     textAlign: "center",
   },
   keyWarning: {

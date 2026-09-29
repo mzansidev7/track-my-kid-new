@@ -95,7 +95,6 @@ const Notifications = () => {
       setLoading(false);
     }
   }, [
-    owner?.id,
     owner?.user_id,
     user?.id,
     user?.token,
@@ -491,7 +490,7 @@ const styles = StyleSheet.create({
   modalCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
-    padding: 22,
+    padding: 16,
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.2,
@@ -536,15 +535,15 @@ const styles = StyleSheet.create({
   modalTitle: {
     marginTop: 7,
     color: "#0F172A",
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 19,
+    lineHeight: 24,
     fontWeight: "800",
   },
   modalMessage: {
     marginTop: 12,
     color: "#475569",
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 13,
+    lineHeight: 19,
   },
   modalDivider: {
     height: 1,

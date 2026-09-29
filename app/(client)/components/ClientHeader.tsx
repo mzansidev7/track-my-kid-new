@@ -82,7 +82,7 @@ const ClientHeader = ({
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleBack}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             <MaterialIcons name="arrow-back" size={23} color="#FFFFFF" />
           </TouchableOpacity>
@@ -111,7 +111,7 @@ const ClientHeader = ({
             {showNotifications && (
               <TouchableOpacity
                 style={styles.iconButton}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
                 onPress={onRightPress}
               >
                 <MaterialIcons
@@ -133,7 +133,7 @@ const ClientHeader = ({
             {rightIcon && (
               <TouchableOpacity
                 style={styles.iconButton}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
                 onPress={onRightPress}
               >
                 <MaterialIcons name={rightIcon} size={23} color="#FFFFFF" />
@@ -150,14 +150,22 @@ export default ClientHeader;
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 58,
+    minHeight: 68,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     position: "relative",
     backgroundColor: "#061A3A",
-    padding: 10,
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E40AF",
+    shadowColor: "#172554",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+    marginBottom: 20,
   },
 
   leftSection: {
@@ -168,36 +176,40 @@ const styles = StyleSheet.create({
 
   centerSection: {
     position: "absolute",
-    left: 70,
-    right: 70,
+    left: 76,
+    right: 76,
     alignItems: "center",
     justifyContent: "center",
   },
 
   title: {
     color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "700",
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: "800",
     textAlign: "center",
   },
 
   subtitle: {
-    color: "#7F94B1",
+    color: "#DBEAFE",
     fontSize: 11,
-    marginTop: 3,
+    marginTop: 2,
     textAlign: "center",
   },
 
   backButton: {
     width: 42,
     height: 42,
-    borderRadius: 13,
-    backgroundColor: "#0D2850",
+    borderRadius: 14,
+    backgroundColor: "#1E40AF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "#60A5FA",
+    shadowColor: "#172554",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   rightSection: {
@@ -211,13 +223,18 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 42,
     height: 42,
-    borderRadius: 13,
-    backgroundColor: "#0D2850",
+    borderRadius: 14,
+    backgroundColor: "#1E40AF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#193B68",
+    borderColor: "#60A5FA",
     position: "relative",
+    shadowColor: "#172554",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   notificationBadge: {
@@ -228,11 +245,11 @@ const styles = StyleSheet.create({
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: "#EF5350",
+    backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#061A3A",
+    borderColor: "#1D4ED8",
   },
 
   notificationText: {

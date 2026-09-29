@@ -1,5 +1,4 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -7,13 +6,28 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const navItems = [
   { key: "home", icon: "home", label: "Home", route: "/(admin)/(tabs)" },
-  { key: "live", icon: "location-on", label: "Live", route: "/(admin)/(tabs)/live" },
-//   { key: "fab", icon: "add", label: "Create", route: "/(client)/(tabs)/children" },
-  { key: "support", icon: "support-agent", label: "Support", route: "/(admin)/(tabs)/support" },
-  { key: "more", icon: "more-horiz", label: "More", route: "/(admin)/(tabs)/more" },
+  {
+    key: "live",
+    icon: "location-on",
+    label: "Live",
+    route: "/(admin)/(tabs)/live",
+  },
+  //   { key: "fab", icon: "add", label: "Create", route: "/(client)/(tabs)/children" },
+  {
+    key: "support",
+    icon: "support-agent",
+    label: "Support",
+    route: "/(admin)/(tabs)/support",
+  },
+  {
+    key: "more",
+    icon: "more-horiz",
+    label: "More",
+    route: "/(admin)/(tabs)/more",
+  },
 ];
 
-export default function AdminTabBar(_props: BottomTabBarProps) {
+export default function AdminTabBar() {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
@@ -21,19 +35,18 @@ export default function AdminTabBar(_props: BottomTabBarProps) {
   const activeSegment = String(segments[segments.length - 1] || "admin");
 
   const getActiveKey = () => {
-    if (activeSegment === "" || activeSegment === "index") return "index";
+    if (activeSegment === "" || activeSegment === "index") return "home";
     if (activeSegment === "live") return "live";
-    if (activeSegment === "support" || activeSegment === "support") return "support";
-    if (activeSegment === "more" || activeSegment === "more") return "more";
-    return "index";
+    if (activeSegment === "support") return "support";
+    if (activeSegment === "more") return "more";
+    return "home";
   };
-
 
   const activeKey = getActiveKey();
 
   return (
     <View style={styles.container} pointerEvents="box-none">
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 12 }]}> 
+      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 12 }]}>
         {navItems.map((item) => {
           const isFab = item.key === "fab";
           const isActive = item.key === activeKey;
@@ -47,7 +60,11 @@ export default function AdminTabBar(_props: BottomTabBarProps) {
                 onPress={() => router.push(item.route as any)}
               >
                 <View style={styles.fabButton}>
-                  <MaterialIcons name={item.icon as any} size={28} color="#fff" />
+                  <MaterialIcons
+                    name={item.icon as any}
+                    size={28}
+                    color="#fff"
+                  />
                 </View>
               </TouchableOpacity>
             );
@@ -60,8 +77,14 @@ export default function AdminTabBar(_props: BottomTabBarProps) {
               style={styles.tabItem}
               onPress={() => router.push(item.route as any)}
             >
-              <MaterialIcons name={item.icon as any} size={24} color={isActive ? "#10B981" : "#6B7280"} />
-              <Text style={[styles.navText, isActive && styles.navTextActive]}>{item.label}</Text>
+              <MaterialIcons
+                name={item.icon as any}
+                size={24}
+                color={isActive ? "#10B981" : "#6B7280"}
+              />
+              <Text style={[styles.navText, isActive && styles.navTextActive]}>
+                {item.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -98,5 +121,13 @@ const styles = StyleSheet.create({
   navText: { fontSize: 12, color: "#6B7280", marginTop: 4 },
   navTextActive: { color: "#10B981", fontWeight: "700" },
   fabWrapper: { position: "absolute", alignSelf: "center", top: -28 },
-  fabButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#10B981", justifyContent: "center", alignItems: "center", elevation: 8 },
+  fabButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+  },
 });

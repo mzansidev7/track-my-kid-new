@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   routeStatValue: {
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: "800",
     color: "#111827",
   },

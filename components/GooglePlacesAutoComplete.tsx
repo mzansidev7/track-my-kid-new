@@ -153,13 +153,18 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
 
       const coordinates =
         location &&
-        typeof location.lat === "number" &&
-        typeof location.lng === "number"
+        Number.isFinite(Number(location.lat)) &&
+        Number.isFinite(Number(location.lng))
           ? {
-              latitude: location.lat,
-              longitude: location.lng,
+              latitude: Number(location.lat),
+              longitude: Number(location.lng),
             }
           : null;
+
+      console.log("[places] selected", {
+        address,
+        coordinates,
+      });
 
       /**
        * IMPORTANT:

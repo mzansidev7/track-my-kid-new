@@ -31,6 +31,7 @@ const AddDriver = ({ setActiveButton }: any) => {
   const [showVehiclePicker, setShowVehiclePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetchingVehicles, setFetchingVehicles] = useState(true);
+  const [disableSubmit, setDisableSubmit] = useState(false);
   // Notification state
   const [notification, setNotification] = useState<{
     visible: boolean;
@@ -52,6 +53,14 @@ const AddDriver = ({ setActiveButton }: any) => {
     if (!user?.token) return;
     fetchVehicles();
   }, [user?.token]);
+
+  const openDriver = (driver: any) => {
+    const driverId = typeof driver === "object" ? driver?.id : driver;
+
+    if (driverId == null) return;
+
+    router.push(`/(owner)/driver-details?driverId=${driverId}`);
+  };
 
   const fetchVehicles = async () => {
     if (!user?.token) {
@@ -112,7 +121,7 @@ const AddDriver = ({ setActiveButton }: any) => {
     }
 
     // Phone validation (basic)
-    const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
+    const phoneRegex = /^\+?[\d\s\-()]+$/;
     if (!phoneRegex.test(formData.phone)) {
       setNotification({
         visible: true,
@@ -153,11 +162,17 @@ const AddDriver = ({ setActiveButton }: any) => {
         throw new Error(data.error || data.message || "Failed to add driver");
       }
 
-      setNotification({
-        visible: true,
-        message: "Driver added successfully",
-        type: "success",
-      });
+      const createdDriverId =
+        data?.driver?.id ?? data?.driverId ?? data?.id ?? null;
+
+      setTimeout(() => {
+        setDisableSubmit(true);
+        setNotification({
+          visible: true,
+          message: "Driver added successfully",
+          type: "success",
+        });
+      }, 1000);
 
       // Clear cached driver and vehicle entries so the vehicle list refreshes correctly.
       try {
@@ -178,12 +193,17 @@ const AddDriver = ({ setActiveButton }: any) => {
         vehicleId: "",
       });
 
-      // Navigate to the drivers list when the driver is added successfully.
+      if (createdDriverId != null) {
+        openDriver(createdDriverId);
+        return createdDriverId;
+      }
+
+      // Fallback navigation when no driver id is returned.
       if (typeof setActiveButton === "function") {
         setActiveButton("dashboard");
-      } else {
-        // router.push("/(owner)/drivers");
       }
+
+      return createdDriverId ?? null;
     } catch (error: any) {
       setNotification({
         visible: true,
@@ -192,6 +212,7 @@ const AddDriver = ({ setActiveButton }: any) => {
       });
     } finally {
       setLoading(false);
+      setDisableSubmit(false);
     }
   };
 
@@ -316,7 +337,7 @@ const AddDriver = ({ setActiveButton }: any) => {
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || disableSubmit}
           >
             {loading ? (
               <ActivityIndicator color="#FFF" />

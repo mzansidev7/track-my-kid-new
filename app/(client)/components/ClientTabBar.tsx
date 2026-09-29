@@ -1,5 +1,4 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -39,7 +38,8 @@ const tabs = [
   },
 ];
 
-export default function ClientTabBar(_props: BottomTabBarProps) {
+export default function ClientTabBar(props: any) {
+  void props;
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
@@ -68,24 +68,30 @@ export default function ClientTabBar(_props: BottomTabBarProps) {
 
   return (
     <View
+      pointerEvents="box-none"
       style={[
         styles.container,
         {
-          paddingBottom: Math.max(insets.bottom, 8),
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border || "#E8E8E8",
+          paddingBottom: Math.max(insets.bottom, 10),
+          backgroundColor: colors.background,
         },
       ]}
-      pointerEvents="box-none"
     >
-      <View style={styles.tabBar}>
+      <View
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: "#061A3A",
+          },
+        ]}
+      >
         {tabs.map((tab) => {
           const isActive = tab.key === activeKey;
 
           return (
             <TouchableOpacity
               key={tab.key}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
               style={styles.tabItem}
               onPress={() => router.push(tab.route as any)}
             >
@@ -93,7 +99,7 @@ export default function ClientTabBar(_props: BottomTabBarProps) {
                 style={[
                   styles.iconWrapper,
                   isActive && {
-                    backgroundColor: colors.primary + "12",
+                    backgroundColor: colors.primary + "18",
                   },
                 ]}
               >
@@ -127,53 +133,67 @@ export default function ClientTabBar(_props: BottomTabBarProps) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    borderTopWidth: 1,
+    paddingHorizontal: 14,
+
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: {
           width: 0,
-          height: -3,
+          height: 4,
         },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
       },
+
       android: {
-        elevation: 8,
+        elevation: 12,
       },
     }),
   },
 
   tabBar: {
-    height: 68,
+    height: 64,
+
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingHorizontal: 8,
-    backgroundColor: "#061A3A",
+
+    paddingHorizontal: 6,
+
+    borderRadius: 22,
+
+    overflow: "hidden",
   },
 
   tabItem: {
     flex: 1,
-    height: 68,
+    height: 64,
+
     alignItems: "center",
     justifyContent: "center",
+
     position: "relative",
   },
 
   iconWrapper: {
-    width: 46,
+    width: 44,
     height: 38,
+
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+
+    borderRadius: 13,
   },
 
   activeIndicator: {
     position: "absolute",
+
     bottom: 5,
+
     width: 20,
     height: 3,
+
     borderRadius: 10,
   },
 });

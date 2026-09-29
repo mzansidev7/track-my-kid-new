@@ -168,8 +168,10 @@ export const useVehicleDetails = (vehicleId?: string | string[]) => {
         return;
       }
 
+      const resolvedDriverId = driverId || (vehicle?.drivers?.id ?? null);
+
       setAssigningDriver(true);
-      setSelectedSwitchingDriverId(driverId);
+      setSelectedSwitchingDriverId(resolvedDriverId);
 
       try {
         const baseUrl = await resolveWorkingBaseUrl();
@@ -181,7 +183,7 @@ export const useVehicleDetails = (vehicleId?: string | string[]) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${user.token}`,
             },
-            body: JSON.stringify({ driverId }),
+            body: JSON.stringify({ driverId: resolvedDriverId }),
           },
         );
         const data = await response.json();

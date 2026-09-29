@@ -17,35 +17,7 @@ import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
-
-interface Vehicle {
-  id: string;
-  name: string;
-  license_plate: string;
-  model: string;
-  color?: string;
-  driver_id?: string;
-  driverId?: string;
-  images?: string[];
-  vehicle_images?: { url: string; fileName: string; uploadedAt: string }[];
-  drivers?: {
-    id: string;
-    vehicle_plate_number: string;
-    users?: { name: string };
-  };
-  status?: string;
-  capacity?: number;
-  route_id?: string;
-  routes?: { name: string };
-  route_assignments?: {
-    id: string;
-    route_id: string;
-    is_active: boolean;
-    routes?: { id: string; route_name: string };
-  }[];
-  insurance_expiry?: string;
-  maintenance_due?: string;
-}
+import { Vehicle } from "../ownerHelpers/interface/owner.interfece";
 
 export default function Vehicles({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);
@@ -53,6 +25,7 @@ export default function Vehicles({ setActiveButton }: any) {
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notification, setNotification] = useState<{
     visible: boolean;
     message: string;
@@ -62,7 +35,6 @@ export default function Vehicles({ setActiveButton }: any) {
     message: "",
     type: "success",
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch vehicles on component mount and focus
   const fetchVehicles = useCallback(async () => {
@@ -428,7 +400,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "bold",
     marginBottom: 4,
   },
