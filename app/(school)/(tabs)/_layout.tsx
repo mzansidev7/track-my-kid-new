@@ -11,6 +11,7 @@ export default function SchoolLayout() {
       <Tabs.Screen name="index" />
       <Tabs.Screen name="students" />
       <Tabs.Screen name="routes" />
+      <Tabs.Screen name="trips" />
       <Tabs.Screen name="messages" />
       <Tabs.Screen name="more" />
     </Tabs>

@@ -19,11 +19,13 @@ export type ClientNotification = {
   sender_name?: string | null;
   related_child_id?: string | null;
   related_route_id?: string | null;
+  related_school_trip_id?: string | null;
   related_stop_id?: string | null;
 };
 
 export const useClientNotifications = () => {
   const { user } = useContext(AuthContext);
+  const userToken = user?.token;
   const [notifications, setNotifications] = useState<ClientNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +35,7 @@ export const useClientNotifications = () => {
 
   const refresh = useCallback(
     async (isRefresh = false) => {
-      if (!user?.token) {
+      if (!userToken) {
         setLoading(false);
         return;
       }
@@ -47,7 +49,7 @@ export const useClientNotifications = () => {
         const response = await fetch(
           `${baseUrl}/client/notifications?limit=100`,
           {
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: `Bearer ${userToken}` },
           },
         );
         const data = await response.json();
@@ -66,7 +68,7 @@ export const useClientNotifications = () => {
         setRefreshing(false);
       }
     },
-    [user?.token],
+    [userToken],
   );
 
   const markAsRead = useCallback(
@@ -81,7 +83,7 @@ export const useClientNotifications = () => {
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${user?.token}`,
+            Authorization: `Bearer ${userToken}`,
             "Content-Type": "application/json",
           },
         },
@@ -94,11 +96,12 @@ export const useClientNotifications = () => {
         ),
       );
     },
-    [user?.token, userId],
+    [userToken, userId],
   );
 
   useEffect(() => {
-    refresh();
+    const timeout = setTimeout(() => void refresh(), 0);
+    return () => clearTimeout(timeout);
   }, [refresh]);
 
   useEffect(() => {

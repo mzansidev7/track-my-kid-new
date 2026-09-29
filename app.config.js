@@ -11,10 +11,33 @@ const extra =
 if (process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY) {
   extra.EXPO_PUBLIC_GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY;
 }
+if (process.env.EXPO_PUBLIC_GOOGLE_API_KEY) {
+  extra.EXPO_PUBLIC_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_API_KEY;
+}
 
 module.exports = ({ config }) => {
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_API_KEY;
+  const android = { ...(config.android || {}) };
+  const ios = { ...(config.ios || {}) };
+
+  if (googleMapsApiKey) {
+    android.config = {
+      ...(android.config || {}),
+      googleMaps: {
+        ...(android.config?.googleMaps || {}),
+        apiKey: googleMapsApiKey,
+      },
+    };
+    ios.config = {
+      ...(ios.config || {}),
+      googleMapsApiKey,
+    };
+  }
+
   return {
     ...config,
+    android,
+    ios,
     plugins: [
       ...(config.plugins || []),
       [

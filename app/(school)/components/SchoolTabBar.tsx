@@ -22,6 +22,11 @@ const tabs = [
     route: "/(school)/(tabs)/routes",
   },
   {
+    key: "trips",
+    icon: "directions-bus",
+    route: "/(school)/(tabs)/trips",
+  },
+  {
     key: "messages",
     icon: "chat-bubble-outline",
     route: "/(school)/(tabs)/messages",
@@ -48,6 +53,9 @@ export default function SchoolTabBar() {
 
       case "routes":
         return "routes";
+
+      case "trips":
+        return "trips";
 
       case "messages":
         return "messages";

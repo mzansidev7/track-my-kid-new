@@ -175,6 +175,29 @@ const Notifications = () => {
                 ? new Date(selected.created_at).toLocaleString()
                 : "Just now"}
             </Text>
+            {selected?.type === "school_trip" &&
+              selected.related_school_trip_id && (
+                <TouchableOpacity
+                  style={styles.tripNotificationAction}
+                  onPress={() => {
+                    const schoolTripId = selected.related_school_trip_id;
+                    setSelected(null);
+                    router.push({
+                      pathname: "/(client)/(tabs)/school-trip/[tripId]",
+                      params: { tripId: schoolTripId },
+                    } as never);
+                  }}
+                >
+                  <Text style={styles.tripNotificationActionText}>
+                    View trip details
+                  </Text>
+                  <MaterialIcons
+                    name="arrow-forward"
+                    size={17}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -324,4 +347,19 @@ const styles = StyleSheet.create({
   },
   divider: { height: 1, backgroundColor: "#E2E8F0", marginVertical: 18 },
   modalMeta: { color: "#64748B", fontSize: 13, marginTop: 5 },
+  tripNotificationAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: "#2563EB",
+  },
+  tripNotificationActionText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 });

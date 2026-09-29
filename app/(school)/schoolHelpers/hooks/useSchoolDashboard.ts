@@ -10,6 +10,29 @@ import { unsubscribeFromRealtime } from "../../../../store/subscriptions/realtim
 import { subscribeToSchoolDashboardUpdates } from "../../../../store/subscriptions/schoolRealtime";
 import { RecentTrip } from "../interface/client.interfaces";
 
+export type AssignedSchoolTrip = {
+  id: string;
+  trip_id: string;
+  assigned_role: "driver" | "coordinator" | "driver_and_coordinator";
+  learner_count: number;
+  trip: {
+    name: string;
+    destination: string;
+    departure_at: string;
+    return_at: string;
+    status: string;
+  };
+  vehicle?: {
+    name?: string;
+    registration_number?: string;
+  } | null;
+  tracking?: {
+    latitude: number;
+    longitude: number;
+    recorded_at: string;
+  } | null;
+};
+
 const emptyDashboard: SchoolDashboardData = {
   school: null,
   students: [],
@@ -24,6 +47,8 @@ export const useSchoolDashboard = () => {
     useState<SchoolDashboardData>(emptyDashboard);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [assignedTrips, setAssignedTrips] = useState<AssignedSchoolTrip[]>([]);
+  const [assignedTripsLoading, setAssignedTripsLoading] = useState(true);
   const channelRef = useRef<any>(null);
   const userId = user?.userData?.id || user?.userData?.user_id || "";
 
@@ -70,12 +95,45 @@ export const useSchoolDashboard = () => {
         setLoading(false);
       }
     },
-    [user?.token, userId],
+    [user, userId],
   );
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!user?.token) {
+      return undefined;
+    }
+
+    let active = true;
+    const loadAssignedTrips = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/school/trips/assigned`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load assigned trips.");
+        }
+        if (active) {
+          setAssignedTrips(Array.isArray(data) ? data : []);
+          setAssignedTripsLoading(false);
+        }
+      } catch {
+        if (active) setAssignedTripsLoading(false);
+      }
+    };
+
+    void loadAssignedTrips();
+    const interval = setInterval(() => void loadAssignedTrips(), 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [user]);
 
   useEffect(() => {
     if (channelRef.current) {
@@ -101,6 +159,8 @@ export const useSchoolDashboard = () => {
   return {
     user: user?.userData || null,
     ...dashboard,
+    assignedTrips: user?.token ? assignedTrips : [],
+    assignedTripsLoading: user?.token ? assignedTripsLoading : false,
     loading,
     error,
     refresh: () => refresh(true),

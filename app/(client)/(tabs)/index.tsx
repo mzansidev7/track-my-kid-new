@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   Animated,
   Image,
@@ -213,7 +213,7 @@ const ClientHomeScreen = () => {
   );
   const [schoolTrips, setSchoolTrips] = useState<any[]>([]);
   const [schoolTripsLoading, setSchoolTripsLoading] = useState(true);
-  const notificationTicker = useRef(new Animated.Value(0)).current;
+  const [notificationTicker] = useState(() => new Animated.Value(0));
   const latestUnreadNotification = notifications.find(
     (notification) => notification.is_read !== true,
   );
@@ -261,7 +261,8 @@ const ClientHomeScreen = () => {
           headers: { Authorization: `Bearer ${user.token}` },
         });
         const data = await response.json();
-        if (active && response.ok) setSchoolTrips(Array.isArray(data) ? data : []);
+        if (active && response.ok)
+          setSchoolTrips(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Failed to load school trips on parent dashboard", error);
       } finally {
@@ -1212,43 +1213,138 @@ const ClientHomeScreen = () => {
 
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>School Trips</Text>
-            <Text style={[styles.sectionDescription, { color: colors.text.secondary }]}>Activities involving your children</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              School Trips
+            </Text>
+            <Text
+              style={[
+                styles.sectionDescription,
+                { color: colors.text.secondary },
+              ]}
+            >
+              Activities involving your children
+            </Text>
           </View>
-          <TouchableOpacity onPress={() => router.push("/(client)/(tabs)/trips" as never)}>
-            <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>View all</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(client)/(tabs)/trips" as never)}
+          >
+            <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>
+              View all
+            </Text>
           </TouchableOpacity>
         </View>
         {schoolTripsLoading ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>Loading school trips…</Text>
-          </View>
-        ) : schoolTrips.length ? schoolTrips.slice(0, 2).map((trip) => (
-          <TouchableOpacity
-            key={trip.id}
-            activeOpacity={0.85}
-            onPress={() => router.push("/(client)/(tabs)/trips" as never)}
-            style={[styles.upcomingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          <View
+            style={[
+              styles.emptyCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
           >
-            <View style={[styles.dateBox, { backgroundColor: `${clientBrand.primary}10` }]}>
-              <Text style={[styles.dateMonth, { color: clientBrand.primary }]}>{new Date(trip.departure_at).toLocaleString([], { month: "short" }).toUpperCase()}</Text>
-              <Text style={[styles.dateNumber, { color: colors.text.primary }]}>{new Date(trip.departure_at).getDate()}</Text>
-              <Text style={[styles.dateDay, { color: colors.text.secondary }]}>{new Date(trip.departure_at).toLocaleString([], { weekday: "short" }).toUpperCase()}</Text>
-            </View>
-            <View style={styles.upcomingContent}>
-              <View style={styles.upcomingTopRow}>
-                <Text style={[styles.upcomingTime, { color: colors.text.primary }]}>{trip.name}</Text>
-                <View style={styles.scheduledPill}><Text style={styles.scheduledText}>{trip.status.replaceAll("_", " ")}</Text></View>
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              Loading school trips…
+            </Text>
+          </View>
+        ) : schoolTrips.length ? (
+          schoolTrips.slice(0, 2).map((trip) => (
+            <TouchableOpacity
+              key={trip.id}
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push({
+                  pathname: "/(client)/(tabs)/school-trip/[tripId]",
+                  params: { tripId: trip.id },
+                } as never)
+              }
+              style={[
+                styles.upcomingCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <View
+                style={[
+                  styles.dateBox,
+                  { backgroundColor: `${clientBrand.primary}10` },
+                ]}
+              >
+                <Text
+                  style={[styles.dateMonth, { color: clientBrand.primary }]}
+                >
+                  {new Date(trip.departure_at)
+                    .toLocaleString([], { month: "short" })
+                    .toUpperCase()}
+                </Text>
+                <Text
+                  style={[styles.dateNumber, { color: colors.text.primary }]}
+                >
+                  {new Date(trip.departure_at).getDate()}
+                </Text>
+                <Text
+                  style={[styles.dateDay, { color: colors.text.secondary }]}
+                >
+                  {new Date(trip.departure_at)
+                    .toLocaleString([], { weekday: "short" })
+                    .toUpperCase()}
+                </Text>
               </View>
-              <Text numberOfLines={1} style={[styles.upcomingRoute, { color: colors.text.secondary }]}>{trip.destination}</Text>
-              <Text style={[styles.upcomingDriver, { color: colors.text.secondary }]}>{trip.learners?.map((item: any) => item.child?.name).filter(Boolean).join(", ")}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={colors.text.secondary} />
-          </TouchableOpacity>
-        )) : (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialIcons name="event-busy" size={22} color={colors.text.secondary} />
-            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>No school trips announced for your children.</Text>
+              <View style={styles.upcomingContent}>
+                <View style={styles.upcomingTopRow}>
+                  <Text
+                    style={[
+                      styles.upcomingTime,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    {trip.name}
+                  </Text>
+                  <View style={styles.scheduledPill}>
+                    <Text style={styles.scheduledText}>
+                      {trip.status.replaceAll("_", " ")}
+                    </Text>
+                  </View>
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.upcomingRoute,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  {trip.destination}
+                </Text>
+                <Text
+                  style={[
+                    styles.upcomingDriver,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  {trip.vehicles?.[0]?.vehicle?.name || "Vehicle pending"}
+                  {trip.vehicles?.[0]?.coordinator
+                    ? ` · Coordinator ${trip.vehicles[0].coordinator.first_name || ""} ${trip.vehicles[0].coordinator.last_name || ""}`.trim()
+                    : ""}
+                </Text>
+              </View>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={colors.text.secondary}
+              />
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View
+            style={[
+              styles.emptyCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <MaterialIcons
+              name="event-busy"
+              size={22}
+              color={colors.text.secondary}
+            />
+            <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
+              No school trips announced for your children.
+            </Text>
           </View>
         )}
 

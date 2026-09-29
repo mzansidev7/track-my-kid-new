@@ -43,10 +43,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 }) => {
   const defaultRegion = useMemo(
     () => ({
-      latitude: 0,
-      longitude: 0,
-      latitudeDelta: 100,
-      longitudeDelta: 100,
+      latitude: -29,
+      longitude: 24,
+      latitudeDelta: 30,
+      longitudeDelta: 30,
     }),
     [],
   );
@@ -63,44 +63,66 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
     null,
   );
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const initialLatitude = initialCoordinates?.latitude;
+  const initialLongitude = initialCoordinates?.longitude;
+  const hasInitialCoordinates =
+    initialLatitude !== null &&
+    initialLatitude !== undefined &&
+    initialLongitude !== null &&
+    initialLongitude !== undefined;
 
   useEffect(() => {
-    if (forceFullScreen) setIsFullScreen(true);
+    let active = true;
     const requestLocationPermission = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!active) return;
         setLocationPermission(status === "granted");
 
         if (status === "granted") {
           const location = await Location.getCurrentPositionAsync({});
+          if (!active) return;
           const coords = {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
           };
-          setRegion({
-            ...coords,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          });
+          if (!hasInitialCoordinates) {
+            setRegion({ ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 });
+          }
         } else {
-          setRegion(defaultRegion);
+          if (!hasInitialCoordinates) setRegion(defaultRegion);
         }
       } catch (error) {
+        if (!active) return;
         console.error("Error getting location permission:", error);
         setLocationPermission(false);
-        setRegion(defaultRegion);
+        if (!hasInitialCoordinates) setRegion(defaultRegion);
       }
     };
 
     requestLocationPermission();
-  }, [defaultRegion, forceFullScreen]);
+    return () => {
+      active = false;
+    };
+  }, [defaultRegion, hasInitialCoordinates]);
 
   useEffect(() => {
-    if (initialCoordinates) {
-      setSelectedCoordinates(initialCoordinates);
+    const latitude = Number(initialLatitude);
+    const longitude = Number(initialLongitude);
+    if (
+      initialLatitude != null &&
+      initialLongitude != null &&
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180
+    ) {
+      const coordinates = { latitude, longitude };
+      setSelectedCoordinates(coordinates);
       setRegion({
-        latitude: initialCoordinates.latitude,
-        longitude: initialCoordinates.longitude,
+        ...coordinates,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
@@ -116,7 +138,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
         setSelectedCoordinates({ latitude: lat, longitude: lng });
       }
     }
-  }, [selectedLocation, initialCoordinates]);
+  }, [selectedLocation, initialLatitude, initialLongitude]);
 
   useEffect(() => {
     if (!selectedCoordinates) return;
@@ -182,11 +204,30 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         };
+        setSelectedCoordinates(coords);
         setRegion({
           ...coords,
           latitudeDelta: region?.latitudeDelta ?? 0.01,
           longitudeDelta: region?.longitudeDelta ?? 0.01,
         });
+
+        try {
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${coords.latitude}&longitude=${coords.longitude}&localityLanguage=en`,
+          );
+          const data = await response.json();
+          const address =
+            data.localityInfo?.administrative?.[2]?.name ||
+            data.city ||
+            data.locality ||
+            `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+          onLocationSelect(address, coords);
+        } catch {
+          onLocationSelect(
+            `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`,
+            coords,
+          );
+        }
       } catch (error) {
         console.error("Error centering on current location:", error);
       }
@@ -282,6 +323,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
                 }
               : region || defaultRegion
           }
+          onRegionChangeComplete={(nextRegion) => {
+            if (!locked) setRegion(nextRegion);
+          }}
           ref={mapRef}
           onPress={handleMapPress}
           showsUserLocation={locationPermission === true}

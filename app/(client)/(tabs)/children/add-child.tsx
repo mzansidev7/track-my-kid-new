@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -15,24 +15,71 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { File as ExpoFile } from "expo-file-system";
 import { useTheme } from "../../../../styles/theme";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import LocationPicker from "../../../../components/LocationPicker.native";
 import GooglePlacesAutoComplete from "../../../../components/GooglePlacesAutoComplete";
 import AppNotification from "../../../../components/Notification";
 import { resolveWorkingBaseUrl } from "@/url";
-import { useChildren } from "../../clientHelpers/hooks/useChildren";
+import { useChildren, type Child } from "../../clientHelpers/hooks/useChildren";
 import { useClientProfile } from "../../clientHelpers/hooks/useClientProfile";
+
+type ChildFormValues = {
+  name: string;
+  lastname: string;
+  grade: string;
+  school_name: string;
+  school_address: string;
+  school_id: string;
+  school_latitude: number | null;
+  school_longitude: number | null;
+  vehicle_id: string;
+};
+
+type SelectedLocation = {
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+const toCoordinate = (value: unknown, minimum: number, maximum: number) => {
+  if (value === null || value === undefined || value === "") return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) &&
+    coordinate >= minimum &&
+    coordinate <= maximum
+    ? coordinate
+    : null;
+};
 
 const AddChildScreen = () => {
   const router = useRouter();
   const { colors } = useTheme();
   const { user } = useContext(AuthContext);
-  const { schools, children: existingChildren, schoolsLoading, childrenLoading } = useChildren();
+  const {
+    schools,
+    children: existingChildren,
+    schoolsLoading,
+    childrenLoading,
+  } = useChildren();
   const { client } = useClientProfile();
+  const assignedVehicleOptions = useMemo(
+    () =>
+      existingChildren.reduce<NonNullable<Child["vehicle"]>[]>(
+        (vehicles, child) => {
+          const vehicle = child.vehicle;
+          if (vehicle && !vehicles.some((item) => item.id === vehicle.id)) {
+            vehicles.push(vehicle);
+          }
+          return vehicles;
+        },
+        [],
+      ),
+    [existingChildren],
+  );
 
-
-  const [formValues, setFormValues] = useState({
+  const [formValues, setFormValues] = useState<ChildFormValues>({
     name: "",
     lastname: "",
     grade: "",
@@ -44,51 +91,41 @@ const AddChildScreen = () => {
     vehicle_id: "",
   });
 
-  const [avatar, setAvatar] = useState(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [schoolQuery, setSchoolQuery] = useState("");
   const [showSchoolSuggestions, setShowSchoolSuggestions] = useState(false);
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
   const [childNameQuery, setChildNameQuery] = useState("");
   const [showChildSuggestions, setShowChildSuggestions] = useState(false);
-  const [schoolSelectionLocked, setSchoolSelectionLocked] = useState(false);
   const [locationPickerResetKey, setLocationPickerResetKey] = useState(0);
-  const [pickupLocation, setPickupLocation] = useState({
+  const [pickupLocation, setPickupLocation] = useState<SelectedLocation>({
     address: "",
     latitude: null,
     longitude: null,
   });
-  const [dropoffLocation, setDropoffLocation] = useState({
+  const [dropoffLocation, setDropoffLocation] = useState<SelectedLocation>({
     address: "",
     latitude: null,
     longitude: null,
   });
   const [loading, setLoading] = useState(false);
-  const [profileNotification, setProfileNotification] = useState({
+  const [profileNotification, setProfileNotification] = useState<{
+    visible: boolean;
+    message: string;
+    type: "warning" | "error" | "success";
+  }>({
     visible: false,
     message: "",
     type: "warning",
   });
 
-  const [assignedVehicleOptions, setAssignedVehicleOptions] = useState([]);
-
-  const showNotification = (message, type) => {
+  const showNotification = (
+    message: string,
+    type: "warning" | "error" | "success",
+  ) => {
     setProfileNotification({ visible: true, message, type });
   };
-
-  useEffect(() => {
-    const vehicles = existingChildren
-      .map((child) => child.vehicle)
-      .filter(Boolean)
-      .reduce((acc, vehicle) => {
-        if (!acc.some((item) => item.id === vehicle.id)) {
-          acc.push(vehicle);
-        }
-        return acc;
-      }, []);
-
-    setAssignedVehicleOptions(vehicles);
-  }, [existingChildren]);
 
   useEffect(() => {
     if (!client) return;
@@ -100,8 +137,12 @@ const AddChildScreen = () => {
 
     setPickupLocation((current) => ({
       address: current.address || client.home_address || "",
-      latitude: current.latitude ?? client.home_latitude ?? null,
-      longitude: current.longitude ?? client.home_longitude ?? null,
+      latitude:
+        toCoordinate(current.latitude, -90, 90) ??
+        toCoordinate(client.home_latitude, -90, 90),
+      longitude:
+        toCoordinate(current.longitude, -180, 180) ??
+        toCoordinate(client.home_longitude, -180, 180),
     }));
   }, [client]);
 
@@ -133,24 +174,20 @@ const AddChildScreen = () => {
     }
   };
 
-  const uploadChildAvatar = async (uri) => {
+  const uploadChildAvatar = async (uri: string) => {
     setAvatarUploading(true);
     try {
       const baseUrl = await resolveWorkingBaseUrl();
       const fileName = uri.split("/").pop() || `child-${Date.now()}.jpg`;
-      const lowerName = fileName.toLowerCase();
-      const contentType = lowerName.endsWith(".png")
-        ? "image/png"
-        : lowerName.endsWith(".webp")
-          ? "image/webp"
-          : "image/jpeg";
 
       const formData = new FormData();
-      formData.append("avatar", {
-        uri,
-        name: fileName,
-        type: contentType,
-      });
+      if (Platform.OS === "web") {
+        const imageResponse = await fetch(uri);
+        formData.append("avatar", await imageResponse.blob(), fileName);
+      } else {
+        const imageFile = new ExpoFile(uri);
+        formData.append("avatar", imageFile, fileName);
+      }
 
       const uploadResponse = await fetch(
         `${baseUrl}/client/upload-child-avatar`,
@@ -195,8 +232,8 @@ const AddChildScreen = () => {
     setShowChildSuggestions(false);
     setPickupLocation({
       address: client?.home_address || "",
-      latitude: client?.home_latitude ?? null,
-      longitude: client?.home_longitude ?? null,
+      latitude: toCoordinate(client?.home_latitude, -90, 90),
+      longitude: toCoordinate(client?.home_longitude, -180, 180),
     });
     setDropoffLocation({ address: "", latitude: null, longitude: null });
     setLocationPickerResetKey((prev) => prev + 1);
@@ -206,45 +243,55 @@ const AddChildScreen = () => {
     const phone = (client?.phone || "").replace(/[\s()-]/g, "");
     const profileComplete = Boolean(
       client?.first_name?.trim() &&
-        client?.last_name?.trim() &&
-        /^\+?[0-9]{7,15}$/.test(phone) &&
-        client?.relationship &&
-        client?.home_address?.trim() &&
-        client?.home_latitude !== null &&
-        client?.home_latitude !== undefined &&
-        client?.home_longitude !== null &&
-        client?.home_longitude !== undefined,
+      client?.last_name?.trim() &&
+      /^\+?[0-9]{7,15}$/.test(phone) &&
+      client?.relationship &&
+      client?.home_address?.trim() &&
+      toCoordinate(client?.home_latitude, -90, 90) !== null &&
+      toCoordinate(client?.home_longitude, -180, 180) !== null,
     );
 
     if (!profileComplete) {
       setProfileNotification({
         visible: true,
-        message: "Please complete your personal information before adding a child.",
+        message:
+          "Please complete your personal information before adding a child.",
         type: "warning",
       });
       return;
     }
 
     if (!formValues.name.trim()) {
-      return showNotification("Please enter your child's first name.", "warning");
+      return showNotification(
+        "Please enter your child's first name.",
+        "warning",
+      );
     }
     if (!formValues.lastname.trim()) {
-      return showNotification("Please enter your child's last name.", "warning");
+      return showNotification(
+        "Please enter your child's last name.",
+        "warning",
+      );
     }
     if (!formValues.grade.trim()) {
       return showNotification("Please enter your child's grade.", "warning");
     }
     if (!formValues.school_name.trim()) {
-      return showNotification("Please enter your child's school name.", "warning");
+      return showNotification(
+        "Please enter your child's school name.",
+        "warning",
+      );
     }
 
     setLoading(true);
     try {
       const baseUrl = await resolveWorkingBaseUrl();
       const selectedSchoolLatitude =
-        formValues.school_latitude ?? dropoffLocation.latitude ?? null;
+        toCoordinate(formValues.school_latitude, -90, 90) ??
+        toCoordinate(dropoffLocation.latitude, -90, 90);
       const selectedSchoolLongitude =
-        formValues.school_longitude ?? dropoffLocation.longitude ?? null;
+        toCoordinate(formValues.school_longitude, -180, 180) ??
+        toCoordinate(dropoffLocation.longitude, -180, 180);
       const selectedSchoolAddress =
         dropoffLocation.address?.trim() ||
         formValues.school_address?.trim() ||
@@ -270,8 +317,8 @@ const AddChildScreen = () => {
           school_address: selectedSchoolAddress,
           school_latitude: selectedSchoolLatitude,
           school_longitude: selectedSchoolLongitude,
-          pickup_latitude: pickupLocation.latitude,
-          pickup_longitude: pickupLocation.longitude,
+          pickup_latitude: toCoordinate(pickupLocation.latitude, -90, 90),
+          pickup_longitude: toCoordinate(pickupLocation.longitude, -180, 180),
           dropoff_latitude: selectedSchoolLatitude,
           dropoff_longitude: selectedSchoolLongitude,
           vehicle_id: formValues.vehicle_id || null,
@@ -287,10 +334,12 @@ const AddChildScreen = () => {
       showNotification("Your child was added successfully.", "success");
       resetChildForm();
       router.replace("/(client)/(tabs)/children");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Add child error:", error);
       showNotification(
-        error?.message || "Unable to add child. Please try again.",
+        error instanceof Error
+          ? error.message
+          : "Unable to add child. Please try again.",
         "error",
       );
     } finally {
@@ -299,13 +348,11 @@ const AddChildScreen = () => {
   };
 
   const inputField = (
-    key,
-    label,
-    placeholder,
-    icon,
+    key: "lastname" | "grade",
+    label: string,
+    placeholder: string,
+    icon: React.ComponentProps<typeof MaterialIcons>["name"],
     required = true,
-    onChangeTextOverride = null,
-    valueOverride = null,
   ) => (
     <View key={key} style={styles.inputGroup}>
       <Text style={[styles.label, { color: colors.text.primary }]}>
@@ -324,14 +371,10 @@ const AddChildScreen = () => {
           style={styles.inputIcon}
         />
         <TextInput
-          value={valueOverride !== null ? valueOverride : formValues[key] || ""}
-          onChangeText={(value) => {
-            if (onChangeTextOverride) {
-              onChangeTextOverride(value);
-            } else {
-              setFormValues((prev) => ({ ...prev, [key]: value }));
-            }
-          }}
+          value={formValues[key] || ""}
+          onChangeText={(value) =>
+            setFormValues((prev) => ({ ...prev, [key]: value }))
+          }
           placeholder={placeholder}
           placeholderTextColor={colors.text.secondary}
           style={[styles.input, { color: colors.text.primary }]}
@@ -344,22 +387,21 @@ const AddChildScreen = () => {
 
   const filteredSchools = normalizedSchoolQuery
     ? schools.filter((school) =>
-        school?.name?.toLowerCase().includes(normalizedSchoolQuery.toLowerCase()),
+        school?.name
+          ?.toLowerCase()
+          .includes(normalizedSchoolQuery.toLowerCase()),
       )
     : schools.slice(0, 8);
 
   const shouldShowSchoolAutocomplete =
-    showSchoolSuggestions &&
-    normalizedSchoolQuery.length >= 1 &&
-    !schoolSelectionLocked;
+    showSchoolSuggestions && normalizedSchoolQuery.length >= 1;
 
   const isKnownSchoolSelected =
     Boolean(formValues.school_id) &&
     schools.some((school) => school?.id === formValues.school_id);
 
-  const selectedSchoolNameForLookup = (formValues.school_name || "").trim();
-
-  const matchingExistingChildren = existingChildren.length > 0 ? existingChildren : [];
+  const matchingExistingChildren =
+    existingChildren.length > 0 ? existingChildren : [];
 
   const filteredChildren =
     formValues.school_id && (childNameQuery || "").trim()
@@ -379,6 +421,15 @@ const AddChildScreen = () => {
           );
         })
       : [];
+
+  const pickupLatitude = toCoordinate(pickupLocation.latitude, -90, 90);
+  const pickupLongitude = toCoordinate(pickupLocation.longitude, -180, 180);
+  const schoolLatitude =
+    toCoordinate(formValues.school_latitude, -90, 90) ??
+    toCoordinate(dropoffLocation.latitude, -90, 90);
+  const schoolLongitude =
+    toCoordinate(formValues.school_longitude, -180, 180) ??
+    toCoordinate(dropoffLocation.longitude, -180, 180);
 
   return (
     <SafeAreaView
@@ -446,7 +497,9 @@ const AddChildScreen = () => {
 
           {matchingExistingChildren.length > 0 && (
             <View style={[styles.section, { marginBottom: 12 }]}>
-              <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+              <Text
+                style={[styles.sectionTitle, { color: colors.text.primary }]}
+              >
                 {`Use child information : "Todo"`}
               </Text>
               {matchingExistingChildren.map((child) => {
@@ -466,27 +519,43 @@ const AddChildScreen = () => {
                       },
                     ]}
                     onPress={() => {
-                      const reusedSchoolLatitude =
+                      const reusedSchoolLatitude = toCoordinate(
                         child.school_latitude ??
-                        child.school_location?.latitude ??
-                        null;
-                      const reusedSchoolLongitude =
+                          child.school_location?.latitude,
+                        -90,
+                        90,
+                      );
+                      const reusedSchoolLongitude = toCoordinate(
                         child.school_longitude ??
-                        child.school_location?.longitude ??
-                        null;
+                          child.school_location?.longitude,
+                        -180,
+                        180,
+                      );
                       const reusedSchoolAddress =
                         child.school_address ||
                         child.school_location?.address ||
                         child.school_name ||
                         "";
-                      const reusedPickupLatitude =
-                        child.pickup_latitude ?? reusedSchoolLatitude ?? null;
-                      const reusedPickupLongitude =
-                        child.pickup_longitude ?? reusedSchoolLongitude ?? null;
-                      const reusedDropoffLatitude =
-                        child.dropoff_latitude ?? reusedSchoolLatitude ?? null;
-                      const reusedDropoffLongitude =
-                        child.dropoff_longitude ?? reusedSchoolLongitude ?? null;
+                      const reusedPickupLatitude = toCoordinate(
+                        child.pickup_latitude ?? reusedSchoolLatitude,
+                        -90,
+                        90,
+                      );
+                      const reusedPickupLongitude = toCoordinate(
+                        child.pickup_longitude ?? reusedSchoolLongitude,
+                        -180,
+                        180,
+                      );
+                      const reusedDropoffLatitude = toCoordinate(
+                        child.dropoff_latitude ?? reusedSchoolLatitude,
+                        -90,
+                        90,
+                      );
+                      const reusedDropoffLongitude = toCoordinate(
+                        child.dropoff_longitude ?? reusedSchoolLongitude,
+                        -180,
+                        180,
+                      );
 
                       setFormValues((prev) => ({
                         ...prev,
@@ -499,7 +568,9 @@ const AddChildScreen = () => {
                         vehicle_id: child.vehicle_id || prev.vehicle_id,
                       }));
 
-                      setSchoolQuery(child.school_name || formValues.school_name || "");
+                      setSchoolQuery(
+                        child.school_name || formValues.school_name || "",
+                      );
                       setDropoffLocation({
                         address: reusedSchoolAddress,
                         latitude: reusedDropoffLatitude,
@@ -538,73 +609,71 @@ const AddChildScreen = () => {
                 School <Text style={styles.required}>*</Text>
               </Text>
 
-<GooglePlacesAutoComplete
-  value={schoolQuery}
-  placeholder="Search or select school"
-  debounce={400}
-  onChangeText={(value) => {
-    const nextValue = value || "";
+              <GooglePlacesAutoComplete
+                value={schoolQuery}
+                placeholder="Search or select school"
+                debounce={400}
+                onChangeText={(value) => {
+                  const nextValue = value || "";
 
-    setSchoolQuery(nextValue);
+                  setSchoolQuery(nextValue);
 
-    setFormValues((prev) => ({
-      ...prev,
-      school_name: nextValue,
-      school_address: nextValue,
-      school_id: "",
-      school_latitude: null,
-      school_longitude: null,
-    }));
+                  setFormValues((prev) => ({
+                    ...prev,
+                    school_name: nextValue,
+                    school_address: nextValue,
+                    school_id: "",
+                    school_latitude: null,
+                    school_longitude: null,
+                  }));
 
-    if (!nextValue.trim()) {
-      setDropoffLocation({
-        address: "",
-        latitude: null,
-        longitude: null,
-      });
+                  if (!nextValue.trim()) {
+                    setDropoffLocation({
+                      address: "",
+                      latitude: null,
+                      longitude: null,
+                    });
 
-      setShowSchoolSuggestions(false);
-      return;
-    }
+                    setShowSchoolSuggestions(false);
+                    return;
+                  }
 
-    setShowSchoolSuggestions(true);
-  }}
-  onSelect={(name, coords, details) => {
-    const selectedName =
-      details?.name || name || "";
+                  setShowSchoolSuggestions(true);
+                }}
+                onSelect={(name, coords, details) => {
+                  const selectedName = details?.name || name || "";
 
-    const selectedAddress =
-      details?.address || name || "";
+                  const selectedAddress = details?.address || name || "";
 
-    console.log("SELECTED SCHOOL:", {
-      selectedName,
-      selectedAddress,
-      coords,
-    });
+                  console.log("SELECTED SCHOOL:", {
+                    selectedName,
+                    selectedAddress,
+                    coords,
+                  });
 
-    // This is the value that should appear in the input.
-    setSchoolQuery(selectedName);
+                  // This is the value that should appear in the input.
+                  setSchoolQuery(selectedName);
 
-    setFormValues((prev) => ({
-      ...prev,
-      school_name: selectedName,
-      school_address: selectedAddress,
-      school_id: "",
-      school_latitude: coords?.latitude ?? null,
-      school_longitude: coords?.longitude ?? null,
-    }));
+                  setFormValues((prev) => ({
+                    ...prev,
+                    school_name: selectedName,
+                    school_address: selectedAddress,
+                    school_id: "",
+                    school_latitude: coords?.latitude ?? null,
+                    school_longitude: coords?.longitude ?? null,
+                  }));
 
-    setDropoffLocation({
-      address: selectedAddress,
-      latitude: coords?.latitude ?? null,
-      longitude: coords?.longitude ?? null,
-    });
+                  setDropoffLocation({
+                    address: selectedAddress,
+                    latitude: coords?.latitude ?? null,
+                    longitude: coords?.longitude ?? null,
+                  });
 
-    setShowSchoolSuggestions(false);
-    setChildNameQuery("");
-    setShowChildSuggestions(false);
-  }}
-/>
+                  setShowSchoolSuggestions(false);
+                  setChildNameQuery("");
+                  setShowChildSuggestions(false);
+                }}
+              />
 
               {schoolsLoading ? (
                 <View style={styles.schoolLoadingRow}>
@@ -620,15 +689,27 @@ const AddChildScreen = () => {
                 </View>
               ) : null}
 
-              {formValues.school_latitude && formValues.school_longitude ? (
+              {schoolLatitude !== null && schoolLongitude !== null ? (
                 <View
                   style={[
                     styles.mapPinHint,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
-                  <MaterialIcons name="my-location" size={16} color={colors.primary} />
-                  <Text style={[styles.mapPinHintText, { color: colors.text.secondary }]}>
+                  <MaterialIcons
+                    name="my-location"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.mapPinHintText,
+                      { color: colors.text.secondary },
+                    ]}
+                  >
                     School location selected on map
                   </Text>
                 </View>
@@ -920,18 +1001,22 @@ const AddChildScreen = () => {
                   title="Select Pickup Location"
                   selectedLocation={pickupLocation.address}
                   initialCoordinates={
-                    pickupLocation.latitude && pickupLocation.longitude
+                    pickupLatitude !== null && pickupLongitude !== null
                       ? {
-                          latitude: pickupLocation.latitude,
-                          longitude: pickupLocation.longitude,
+                          latitude: pickupLatitude,
+                          longitude: pickupLongitude,
                         }
                       : null
                   }
                   onLocationSelect={(address, coordinates) => {
                     setPickupLocation({
                       address,
-                      latitude: coordinates.latitude,
-                      longitude: coordinates.longitude,
+                      latitude: address
+                        ? toCoordinate(coordinates.latitude, -90, 90)
+                        : null,
+                      longitude: address
+                        ? toCoordinate(coordinates.longitude, -180, 180)
+                        : null,
                     });
                   }}
                   placeholder="Tap to select pickup"
@@ -965,21 +1050,23 @@ const AddChildScreen = () => {
                   title="Select Drop-off Location"
                   selectedLocation={dropoffLocation.address}
                   initialCoordinates={
-                    formValues.school_latitude && formValues.school_longitude
+                    schoolLatitude !== null && schoolLongitude !== null
                       ? {
-                          latitude: formValues.school_latitude,
-                          longitude: formValues.school_longitude,
+                          latitude: schoolLatitude,
+                          longitude: schoolLongitude,
                         }
                       : null
                   }
-                  locked={Boolean(
-                    formValues.school_latitude && formValues.school_longitude,
-                  )}
+                  locked={schoolLatitude !== null && schoolLongitude !== null}
                   onLocationSelect={(address, coordinates) => {
                     setDropoffLocation({
                       address,
-                      latitude: coordinates.latitude,
-                      longitude: coordinates.longitude,
+                      latitude: address
+                        ? toCoordinate(coordinates.latitude, -90, 90)
+                        : null,
+                      longitude: address
+                        ? toCoordinate(coordinates.longitude, -180, 180)
+                        : null,
                     });
                   }}
                   placeholder="Tap to select dropoff"
@@ -1277,6 +1364,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  row: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  halfColumn: {
+    flex: 1,
+  },
+
   label: {
     fontSize: 12,
     fontWeight: "700",
@@ -1408,6 +1504,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     marginLeft: 6,
+  },
+
+  mapPinHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+
+  mapPinHintText: {
+    flex: 1,
+    fontSize: 12,
   },
 
   locationsRow: {

@@ -7,14 +7,18 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  MaterialIcons,
+} from "@expo/vector-icons";
 import { useAuth } from "../../../context/authContext/auth-context";
 import {
   useRecentTrips,
   useSchoolDashboard,
 } from "../schoolHelpers/hooks/useSchoolDashboard";
-import ComingSoon from "../components/ComingSoon";
 import { RecentTrip } from "../schoolHelpers/interface/client.interfaces";
 import {
   getUserName,
@@ -23,8 +27,10 @@ import {
 } from "../schoolHelpers/actionHelpers/actions";
 
 const SchoolDashboard = () => {
+  const router = useRouter();
   const { user } = useAuth();
-  const { school, students, routes, drivers, loading } = useSchoolDashboard();
+  const { school, routes, drivers, loading, assignedTrips } =
+    useSchoolDashboard();
   const quickActions = schoolQuickActions();
   const stats = schoolStats(school, routes, drivers);
   const userName = getUserName(user);
@@ -87,6 +93,29 @@ const SchoolDashboard = () => {
           </View>
         </View>
         {/* <Text>{JSON.stringify(school)}</Text> */}
+
+        {assignedTrips.length > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push("/(school)/(tabs)/trips" as never)}
+            style={styles.tripStartAlert}
+          >
+            <View style={styles.tripStartIcon}>
+              <MaterialIcons name="my-location" size={20} color="#FFFFFF" />
+            </View>
+            <View style={styles.tripStartCopy}>
+              <Text style={styles.tripStartTitle}>Trip starting now</Text>
+              <Text style={styles.tripStartText} numberOfLines={2}>
+                {assignedTrips[0].trip?.name || "An assigned school trip"} is in
+                progress. You are the{" "}
+                {assignedTrips[0].assigned_role?.replaceAll("_", " ") ||
+                  "assigned staff member"}
+                . Tap to go online and share your location.
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#166534" />
+          </TouchableOpacity>
+        )}
 
         {school?.is_active && school?.status === "pending" ? (
           <View
@@ -408,6 +437,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 18,
   },
+
+  tripStartAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    marginTop: -8,
+    marginBottom: 16,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    backgroundColor: "#F0FDF4",
+  },
+  tripStartIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#16A34A",
+  },
+  tripStartCopy: { flex: 1, gap: 3 },
+  tripStartTitle: { color: "#166534", fontSize: 12, fontWeight: "800" },
+  tripStartText: { color: "#3F644C", fontSize: 10, lineHeight: 15 },
 
   schoolIcon: {
     width: 42,

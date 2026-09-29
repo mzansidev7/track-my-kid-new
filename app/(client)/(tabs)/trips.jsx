@@ -77,6 +77,7 @@ const Trips = () => {
   const router = useRouter();
   const [tab, setTab] = useState("upcoming");
   const { user } = React.useContext(AuthContext);
+  const userToken = user?.token;
   const { children, childrenLoading } = useChildren();
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -87,14 +88,14 @@ const Trips = () => {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const loadSchoolTrips = useCallback(async () => {
-    if (!user?.token) {
+    if (!userToken) {
       setSchoolTripsLoading(false);
       return;
     }
     try {
       const baseUrl = await resolveWorkingBaseUrl();
       const response = await fetch(`${baseUrl}/client/school-trips`, {
-        headers: { Authorization: `Bearer ${user.token}` },
+        headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await response.json();
       if (response.ok) setSchoolTrips(Array.isArray(data) ? data : []);
@@ -103,14 +104,16 @@ const Trips = () => {
     } finally {
       setSchoolTripsLoading(false);
     }
-  }, [user?.token]);
+  }, [userToken]);
 
   useEffect(() => {
-    loadSchoolTrips();
+    const timeout = setTimeout(() => void loadSchoolTrips(), 0);
+    return () => clearTimeout(timeout);
   }, [loadSchoolTrips]);
 
   useEffect(() => {
-    if (!schoolTrips.some((trip) => trip.status === "in_progress")) return undefined;
+    if (!schoolTrips.some((trip) => trip.status === "in_progress"))
+      return undefined;
     const interval = setInterval(loadSchoolTrips, 10000);
     return () => clearInterval(interval);
   }, [loadSchoolTrips, schoolTrips]);
@@ -295,12 +298,12 @@ const Trips = () => {
   ].filter(Boolean);
 
   const fetchHistory = useCallback(async () => {
-    if (!user?.token) return;
+    if (!userToken) return;
     setHistoryLoading(true);
     try {
       const baseUrl = await resolveWorkingBaseUrl();
       const response = await fetch(`${baseUrl}/client/route-history`, {
-        headers: { Authorization: `Bearer ${user.token}` },
+        headers: { Authorization: `Bearer ${userToken}` },
       });
       const data = await response.json();
       if (response.ok) setHistory(Array.isArray(data) ? data : []);
@@ -309,10 +312,11 @@ const Trips = () => {
     } finally {
       setHistoryLoading(false);
     }
-  }, [user?.token]);
+  }, [userToken]);
 
   useEffect(() => {
-    fetchHistory();
+    const timeout = setTimeout(() => void fetchHistory(), 0);
+    return () => clearTimeout(timeout);
   }, [fetchHistory]);
 
   const upcomingTrips = useMemo(() => {
@@ -459,70 +463,194 @@ const Trips = () => {
               <View style={styles.schoolTripsSection}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>School Trips</Text>
-                  <Text style={styles.tripCount}>{schoolTrips.length} trips</Text>
+                  <Text style={styles.tripCount}>
+                    {schoolTrips.length} trips
+                  </Text>
                 </View>
                 {schoolTripsLoading ? (
                   <Text style={styles.tripCount}>Loading school trips…</Text>
                 ) : schoolTrips.length === 0 ? (
                   <View style={styles.schoolTripEmpty}>
                     <MaterialIcons name="school" size={22} color="#2563EB" />
-                    <Text style={styles.schoolTripEmptyText}>No upcoming school trips for your children.</Text>
+                    <Text style={styles.schoolTripEmptyText}>
+                      No upcoming school trips for your children.
+                    </Text>
                   </View>
-                ) : schoolTrips.map((trip) => {
-                  const tripVehicles = trip.vehicles || [];
-                  const locations = tripVehicles
-                    .map((assignment) => assignment.tracking)
-                    .filter((location) => Number.isFinite(Number(location?.latitude)) && Number.isFinite(Number(location?.longitude)));
-                  const destination = Number.isFinite(Number(trip.destination_latitude)) && Number.isFinite(Number(trip.destination_longitude))
-                    ? { latitude: Number(trip.destination_latitude), longitude: Number(trip.destination_longitude), title: trip.destination, type: "end" }
-                    : null;
-                  const markers = [
-                    ...locations.map((location) => ({ latitude: Number(location.latitude), longitude: Number(location.longitude), title: "School trip vehicle", type: "driver" })),
-                    ...(destination ? [destination] : []),
-                  ];
-                  return (
-                    <View style={styles.schoolTripCard} key={trip.id}>
-                      <View style={styles.schoolTripHeading}>
-                        <View style={styles.schoolTripIcon}><MaterialIcons name="school" size={20} color="#2563EB" /></View>
-                        <View style={styles.schoolTripHeadingText}>
-                          <Text style={styles.schoolTripName}>{trip.name}</Text>
-                          <Text style={styles.schoolTripDestination}>{trip.destination}</Text>
-                        </View>
-                        <Text style={[styles.schoolTripStatus, trip.status === "in_progress" && styles.schoolTripStatusLive]}>{trip.status.replaceAll("_", " ")}</Text>
-                      </View>
-                      <View style={styles.schoolTripFacts}>
-                        <Text style={styles.schoolTripFact}>Departure · {new Date(trip.departure_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</Text>
-                        <Text style={styles.schoolTripFact}>Return · {new Date(trip.return_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</Text>
-                        <Text style={styles.schoolTripFact}>Price · {trip.is_free ? "Free" : `${trip.currency || "ZAR"} ${Number(trip.price || 0).toFixed(2)}`}</Text>
-                        {trip.learners?.map((learner) => <Text style={styles.schoolTripFact} key={learner.child_id}>Child · {learner.child?.name} {learner.child?.lastname}</Text>)}
-                      </View>
-                      {tripVehicles.map((assignment) => (
-                        <View key={assignment.id} style={styles.schoolTripVehicle}>
-                          <MaterialIcons name="directions-bus" size={18} color="#2563EB" />
-                          <Text style={styles.schoolTripVehicleText}>
-                            {assignment.vehicle?.name || "School vehicle"} · {assignment.vehicle?.registration_number || "Registration unavailable"}
-                            {assignment.driver ? ` · Driver ${assignment.driver.first_name} ${assignment.driver.last_name || ""}` : ""}
-                            {assignment.coordinator ? ` · Coordinator ${assignment.coordinator.first_name} ${assignment.coordinator.last_name || ""}` : ""}
+                ) : (
+                  schoolTrips.map((trip) => {
+                    const tripVehicles = trip.vehicles || [];
+                    const locations = tripVehicles
+                      .map((assignment) => assignment.tracking)
+                      .filter(
+                        (location) =>
+                          Number.isFinite(Number(location?.latitude)) &&
+                          Number.isFinite(Number(location?.longitude)),
+                      );
+                    const destination =
+                      Number.isFinite(Number(trip.destination_latitude)) &&
+                      Number.isFinite(Number(trip.destination_longitude))
+                        ? {
+                            latitude: Number(trip.destination_latitude),
+                            longitude: Number(trip.destination_longitude),
+                            title: trip.destination,
+                            type: "end",
+                          }
+                        : null;
+                    const markers = [
+                      ...locations.map((location) => ({
+                        latitude: Number(location.latitude),
+                        longitude: Number(location.longitude),
+                        title: "School trip vehicle",
+                        type: "driver",
+                      })),
+                      ...(destination ? [destination] : []),
+                    ];
+                    return (
+                      <View style={styles.schoolTripCard} key={trip.id}>
+                        <View style={styles.schoolTripHeading}>
+                          <View style={styles.schoolTripIcon}>
+                            <MaterialIcons
+                              name="school"
+                              size={20}
+                              color="#2563EB"
+                            />
+                          </View>
+                          <View style={styles.schoolTripHeadingText}>
+                            <Text style={styles.schoolTripName}>
+                              {trip.name}
+                            </Text>
+                            <Text style={styles.schoolTripDestination}>
+                              {trip.destination}
+                            </Text>
+                          </View>
+                          <Text
+                            style={[
+                              styles.schoolTripStatus,
+                              trip.status === "in_progress" &&
+                                styles.schoolTripStatusLive,
+                            ]}
+                          >
+                            {trip.status.replaceAll("_", " ")}
                           </Text>
                         </View>
-                      ))}
-                      {trip.status === "in_progress" && (
-                        <View style={styles.schoolTripLiveWrap}>
-                          {markers.length ? (
-                            <CustomMap markers={markers} style={styles.schoolTripMap} />
-                          ) : (
-                            <View style={styles.schoolTripLocationUnavailable}>
-                              <MaterialIcons name="location-off" size={19} color="#B45309" />
-                              <Text style={styles.schoolTripLocationText}>Location unavailable · no current GPS update</Text>
-                            </View>
-                          )}
-                          {locations.map((location, index) => <Text style={styles.schoolTripLastSeen} key={`${location.trip_vehicle_id}-${index}`}>Last updated {new Date(location.recorded_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text>)}
+                        <View style={styles.schoolTripFacts}>
+                          <Text style={styles.schoolTripFact}>
+                            Departure ·{" "}
+                            {new Date(trip.departure_at).toLocaleString([], {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </Text>
+                          <Text style={styles.schoolTripFact}>
+                            Return ·{" "}
+                            {new Date(trip.return_at).toLocaleString([], {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            })}
+                          </Text>
+                          <Text style={styles.schoolTripFact}>
+                            Price ·{" "}
+                            {trip.is_free
+                              ? "Free"
+                              : `${trip.currency || "ZAR"} ${Number(trip.price || 0).toFixed(2)}`}
+                          </Text>
+                          {trip.learners?.map((learner) => (
+                            <Text
+                              style={styles.schoolTripFact}
+                              key={learner.child_id}
+                            >
+                              Child · {learner.child?.name}{" "}
+                              {learner.child?.lastname}
+                            </Text>
+                          ))}
                         </View>
-                      )}
-                      {trip.emergency_contact ? <Text style={styles.schoolTripEmergency}>Emergency contact · {trip.emergency_contact}</Text> : null}
-                    </View>
-                  );
-                })}
+                        <TouchableOpacity
+                          style={styles.schoolTripDetailsButton}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(client)/(tabs)/school-trip/[tripId]",
+                              params: { tripId: trip.id },
+                            })
+                          }
+                        >
+                          <Text style={styles.schoolTripDetailsButtonText}>
+                            View trip details
+                          </Text>
+                          <MaterialIcons
+                            name="chevron-right"
+                            size={19}
+                            color="#2563EB"
+                          />
+                        </TouchableOpacity>
+                        {tripVehicles.map((assignment) => (
+                          <View
+                            key={assignment.id}
+                            style={styles.schoolTripVehicle}
+                          >
+                            <MaterialIcons
+                              name="directions-bus"
+                              size={18}
+                              color="#2563EB"
+                            />
+                            <Text style={styles.schoolTripVehicleText}>
+                              {assignment.vehicle?.name || "School vehicle"} ·{" "}
+                              {assignment.vehicle?.registration_number ||
+                                "Registration unavailable"}
+                              {assignment.driver
+                                ? ` · Driver ${assignment.driver.first_name} ${assignment.driver.last_name || ""}`
+                                : ""}
+                              {assignment.coordinator
+                                ? ` · Coordinator ${assignment.coordinator.first_name} ${assignment.coordinator.last_name || ""}`
+                                : ""}
+                            </Text>
+                          </View>
+                        ))}
+                        {trip.status === "in_progress" && (
+                          <View style={styles.schoolTripLiveWrap}>
+                            {markers.length ? (
+                              <CustomMap
+                                markers={markers}
+                                style={styles.schoolTripMap}
+                              />
+                            ) : (
+                              <View
+                                style={styles.schoolTripLocationUnavailable}
+                              >
+                                <MaterialIcons
+                                  name="location-off"
+                                  size={19}
+                                  color="#B45309"
+                                />
+                                <Text style={styles.schoolTripLocationText}>
+                                  Location unavailable · no current GPS update
+                                </Text>
+                              </View>
+                            )}
+                            {locations.map((location, index) => (
+                              <Text
+                                style={styles.schoolTripLastSeen}
+                                key={`${location.trip_vehicle_id}-${index}`}
+                              >
+                                Last updated{" "}
+                                {new Date(
+                                  location.recorded_at,
+                                ).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
+                        {trip.emergency_contact ? (
+                          <Text style={styles.schoolTripEmergency}>
+                            Emergency contact · {trip.emergency_contact}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                )}
               </View>
             )}
 
@@ -991,6 +1119,20 @@ const styles = StyleSheet.create({
   schoolTripFact: {
     color: "#475569",
     fontSize: 10,
+  },
+  schoolTripDetailsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 11,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  schoolTripDetailsButtonText: {
+    color: "#2563EB",
+    fontSize: 11,
+    fontWeight: "700",
   },
   schoolTripVehicle: {
     flexDirection: "row",
