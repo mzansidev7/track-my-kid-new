@@ -99,6 +99,26 @@ export const useClientNotifications = () => {
     [userToken, userId],
   );
 
+  const markAllAsRead = useCallback(async () => {
+    if (!userToken || !userId) return;
+
+    const baseUrl = await resolveWorkingBaseUrl();
+    const response = await fetch(`${baseUrl}/client/notifications/read-all`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${userToken}` },
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to mark notifications as read.");
+    }
+
+    setNotifications((current) =>
+      current.map((item) =>
+        item.user_id === userId ? { ...item, is_read: true } : item,
+      ),
+    );
+  }, [userId, userToken]);
+
   useEffect(() => {
     const timeout = setTimeout(() => void refresh(), 0);
     return () => clearTimeout(timeout);
@@ -115,11 +135,14 @@ export const useClientNotifications = () => {
   return {
     userId,
     notifications,
-    unreadCount: notifications.filter((item) => item.is_read !== true).length,
+    unreadCount: notifications.filter(
+      (item) => item.is_read !== true && item.user_id === userId,
+    ).length,
     loading,
     refreshing,
     error,
     refresh,
     markAsRead,
+    markAllAsRead,
   };
 };

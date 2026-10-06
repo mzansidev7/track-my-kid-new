@@ -11,7 +11,7 @@ type Props = {
     latitude: number;
     longitude: number;
     title?: string;
-    type?: "pickup" | "dropoff" | "driver" | "start" | "end";
+    type?: "pickup" | "dropoff" | "driver" | "start" | "end" | "waypoint";
     endpoint?: "start" | "end";
   }[];
   origin?: { latitude: number; longitude: number } | null;
@@ -23,6 +23,9 @@ type Props = {
   centerOnUser?: boolean;
   focus?: { latitude: number; longitude: number } | null;
   showMarkerLabels?: boolean;
+  requestLocationPermission?: boolean;
+  onRouteReady?: (route: { distanceKm: number; durationMinutes: number }) => void;
+  onRouteError?: (message: string) => void;
 };
 
 const Map: React.FC<Props> = ({
@@ -36,6 +39,9 @@ const Map: React.FC<Props> = ({
   centerOnUser = false,
   focus = null,
   showMarkerLabels = false,
+  requestLocationPermission = true,
+  onRouteReady,
+  onRouteError,
 }) => {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [userRegion, setUserRegion] = useState<any | null>(null);
@@ -51,6 +57,7 @@ const Map: React.FC<Props> = ({
   useEffect(() => {
     let mounted = true;
     const load = async () => {
+      if (!requestLocationPermission) return;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === "granted") {
@@ -72,7 +79,7 @@ const Map: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [requestLocationPermission]);
   const mapInitialRegion = hasMarkers
     ? initialRegion
     : centerOnUser && userRegion
@@ -144,7 +151,7 @@ const Map: React.FC<Props> = ({
       typeof mapRef.current.fitToCoordinates === "function"
     ) {
       try {
-        mapRef.current.fitToCoordinates([origin, destination], {
+        mapRef.current.fitToCoordinates([origin, ...waypoints, destination], {
           edgePadding: { top: 80, right: 40, bottom: 220, left: 40 },
           animated: true,
         });
@@ -155,14 +162,20 @@ const Map: React.FC<Props> = ({
   }, [origin, destination, waypoints]);
 
   return (
-    <View style={[styles.container, style]}>
+    <View collapsable={false} style={[styles.container, style]}>
       <MapView
         provider={PROVIDER_DEFAULT}
         style={styles.map}
+        mapType="standard"
         initialRegion={mapInitialRegion}
         ref={mapRef}
-        showsMyLocationButton={true}
-        showsUserLocation={true}
+        loadingEnabled
+        loadingBackgroundColor="#F4F8FC"
+        loadingIndicatorColor="#1769D2"
+        showsMyLocationButton={requestLocationPermission}
+        showsUserLocation={requestLocationPermission}
+        toolbarEnabled={false}
+        pitchEnabled={false}
       >
         {markers.map((m, i) => {
           const isStart = m.endpoint === "start";
@@ -172,6 +185,8 @@ const Map: React.FC<Props> = ({
             ? "#16A34A"
             : isEnd
               ? "#DC2626"
+              : m.type === "waypoint"
+                ? "#1769D2"
               : isPickup
                 ? "#22C55E"
                 : "#EF4444";
@@ -201,6 +216,8 @@ const Map: React.FC<Props> = ({
                         ? "flag"
                         : isPickup
                           ? "home"
+                          : m.type === "waypoint"
+                            ? "place"
                           : m.type === "driver"
                             ? "directions-car"
                             : "school"
@@ -231,9 +248,20 @@ const Map: React.FC<Props> = ({
               strokeColor="#1E90FF"
               onReady={(result) => {
                 if (result && typeof result.distance === "number") {
-                  setDistanceKm(Number(result.distance.toFixed(2)));
+                  const distanceKm = Number(result.distance.toFixed(2));
+                  setDistanceKm(distanceKm);
+                  if (
+                    typeof result.duration === "number" &&
+                    Number.isFinite(result.duration)
+                  ) {
+                    onRouteReady?.({
+                      distanceKm,
+                      durationMinutes: result.duration,
+                    });
+                  }
                 }
               }}
+              onError={(message) => onRouteError?.(message)}
             />
             {showReturnDirection ? (
               <MapViewDirections
@@ -272,6 +300,7 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 12,
     overflow: "hidden",
+    backgroundColor: "#E8EEF5",
   },
   map: {
     ...StyleSheet.absoluteFill,

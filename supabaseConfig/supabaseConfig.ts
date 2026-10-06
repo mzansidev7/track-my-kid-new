@@ -25,6 +25,8 @@ export const client = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+let hasLoggedRealtimeAuthMode = false;
+
 // Function to set auth token for the client
 export const setAuthToken = (token?: string | null) => {
   const normalizedToken = typeof token === "string" ? token.trim() : "";
@@ -37,9 +39,12 @@ export const setAuthToken = (token?: string | null) => {
   // This app authenticates users with a backend JWT rather than a Supabase auth session.
   // Realtime channels should not receive that token, otherwise they fail with CHANNEL_ERROR.
   client.realtime.setAuth("");
-  console.warn(
-    "⚠️ Realtime auth skipped; using anonymous Supabase access for subscriptions.",
-  );
+  if (!hasLoggedRealtimeAuthMode) {
+    console.info(
+      "Supabase Realtime is using the anon key; backend JWTs are not Supabase Auth tokens.",
+    );
+    hasLoggedRealtimeAuthMode = true;
+  }
 
   return false;
 };

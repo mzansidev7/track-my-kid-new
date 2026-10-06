@@ -191,43 +191,6 @@ const ChildrenScreen = () => {
         showBackButton={true}
       />
       <View style={styles.container}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>My Children</Text>
-            <Text style={styles.subtitle}>Manage and track your children</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.bellButton}>
-              <Ionicons
-                name="notifications-outline"
-                size={23}
-                color="#111827"
-              />
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>2</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityLabel="Open profile"
-              style={styles.clientAvatarButton}
-              onPress={() => router.push("/(client)/(tabs)/profile")}
-            >
-              {client?.avatar ? (
-                <Image
-                  source={{ uri: client.avatar }}
-                  style={styles.clientAvatar}
-                />
-              ) : (
-                <Text style={styles.clientAvatarText}>
-                  {(client?.first_name || user?.userData?.name || "C")
-                    .charAt(0)
-                    .toUpperCase()}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
         <View style={styles.summaryCard}>
           <View style={styles.summaryLeft}>
             <View style={styles.summaryIconContainer}>

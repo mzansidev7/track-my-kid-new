@@ -19,12 +19,19 @@ import * as ImagePicker from "expo-image-picker";
 import MapView, { Marker } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import CustomMap from "../../../../components/map";
+import AppNotification from "../../../../components/Notification";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useTheme } from "../../../../styles/theme";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl, GOOGLE_API_KEY } from "@/url";
+import {
+  loadChildDetails,
+  loadChildren,
+  saveChildDetails,
+  updateChildInChildrenCache,
+} from "../../../../store/asyncStorage/clientCache";
 
 const getLocalDateKey = (date = new Date()) =>
   [date.getFullYear(), date.getMonth() + 1, date.getDate()]
@@ -32,6 +39,28 @@ const getLocalDateKey = (date = new Date()) =>
     .join("-");
 
 const getScheduleDateKey = (value?: string) => value?.split("T")[0];
+
+const lightRouteMapStyle = [
+  { elementType: "geometry", stylers: [{ color: "#EEF2F5" }] },
+  {
+    elementType: "labels.text.fill",
+    stylers: [{ color: "#475569" }],
+  },
+  {
+    elementType: "labels.text.stroke",
+    stylers: [{ color: "#FFFFFF" }],
+  },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#FFFFFF" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#BFDBFE" }],
+  },
+];
 
 const parseVehicleQrData = (rawData: unknown) => {
   if (rawData && typeof rawData === "object")
@@ -79,7 +108,7 @@ const ChildDetailScreen = () => {
   const { user } = useContext(AuthContext);
 
   const [child, setChild] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [savingChild, setSavingChild] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [tripLoading, setTripLoading] = useState(false);
@@ -89,11 +118,16 @@ const ChildDetailScreen = () => {
   );
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [vehicleLinkNotification, setVehicleLinkNotification] = useState({
+    visible: false,
+    message: "",
+  });
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isMapModalVisible, setIsMapModalVisible] = useState(false);
   const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
+  const [isActivityModalVisible, setIsActivityModalVisible] = useState(false);
   const [mapModalTitle, setMapModalTitle] = useState("");
   const [mapMarkers, setMapMarkers] = useState<any[]>([]);
   const [mapRegion, setMapRegion] = useState<any>(null);
@@ -124,49 +158,67 @@ const ChildDetailScreen = () => {
     onConfirm?: () => void | Promise<void>;
   }>({ visible: false, title: "", message: "" });
 
-  const fetchChild = useCallback(async () => {
-    if (!childId || !user?.token) return;
-    setLoading(true);
+  const cacheChild = useCallback(
+    async (childData: any) => {
+      await Promise.all([
+        saveChildDetails(childId, childData),
+        updateChildInChildrenCache(childId, childData),
+      ]);
+    },
+    [childId],
+  );
 
-    try {
-      const baseUrl = await resolveWorkingBaseUrl();
-      const response = await fetch(`${baseUrl}/client/children/${childId}`, {
-        headers: { Authorization: `Bearer ${user?.token}` },
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          data.error || data.message || "Unable to load child details.",
-        );
-      }
-      setChild(data);
+  const fetchChild = useCallback(
+    async (showError = true) => {
+      if (!childId || !user?.token) return;
 
-      const tripsResponse = await fetch(
-        `${baseUrl}/client/children/${childId}/scheduled-trips`,
-        { headers: { Authorization: `Bearer ${user.token}` } },
-      );
-      const tripsData = await tripsResponse.json();
-      if (!tripsResponse.ok) {
-        throw new Error(
-          tripsData.detail ||
-            tripsData.error ||
-            "Unable to load scheduled weekend trips.",
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/client/children/${childId}`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data.error || data.message || "Unable to load child details.",
+          );
+        }
+        setChild(data);
+        await cacheChild(data);
+
+        const tripsResponse = await fetch(
+          `${baseUrl}/client/children/${childId}/scheduled-trips`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
         );
+        const tripsData = await tripsResponse.json();
+        if (!tripsResponse.ok) {
+          throw new Error(
+            tripsData.detail ||
+              tripsData.error ||
+              "Unable to load scheduled weekend trips.",
+          );
+        }
+        const trips = Array.isArray(tripsData) ? tripsData : [];
+        setScheduledTrips(trips);
+        const today = getLocalDateKey();
+        const todaysTrip = trips.find(
+          (trip) => getScheduleDateKey(trip.schedule_date) === today,
+        );
+        setWeekendTripScheduled(Boolean(todaysTrip));
+      } catch (err: any) {
+        console.error("Fetch child detail error:", err);
+        if (showError) {
+          Alert.alert(
+            "Unable to load child",
+            err?.message || "Please try again.",
+          );
+        }
+      } finally {
+        setLoading(false);
       }
-      const trips = Array.isArray(tripsData) ? tripsData : [];
-      setScheduledTrips(trips);
-      const today = getLocalDateKey();
-      const todaysTrip = trips.find(
-        (trip) => getScheduleDateKey(trip.schedule_date) === today,
-      );
-      setWeekendTripScheduled(Boolean(todaysTrip));
-    } catch (err: any) {
-      console.error("Fetch child detail error:", err);
-      Alert.alert("Unable to load child", err?.message || "Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [childId, user?.token]);
+    },
+    [cacheChild, childId, user?.token],
+  );
 
   const getWeekendOptions = () => {
     const today = new Date();
@@ -184,8 +236,37 @@ const ChildDetailScreen = () => {
   const weekendOptions = getWeekendOptions();
 
   useEffect(() => {
-    fetchChild();
-  }, [fetchChild]);
+    let active = true;
+
+    const loadCachedChildThenRefresh = async () => {
+      if (!childId) {
+        setLoading(false);
+        return;
+      }
+
+      const [cachedDetails, cachedChildren] = await Promise.all([
+        loadChildDetails(childId),
+        loadChildren(),
+      ]);
+      const cachedChild =
+        cachedDetails ||
+        cachedChildren?.find((cached) => cached?.id === childId) ||
+        null;
+
+      if (!active) return;
+      if (cachedChild) {
+        setChild(cachedChild);
+        setLoading(false);
+      }
+
+      await fetchChild(!cachedChild);
+    };
+
+    void loadCachedChildThenRefresh();
+    return () => {
+      active = false;
+    };
+  }, [childId, fetchChild]);
 
   useEffect(() => {
     const driverId = child?.vehicle?.driver?.id;
@@ -275,10 +356,10 @@ const ChildDetailScreen = () => {
         );
       }
 
-      Alert.alert(
-        "Vehicle linked",
-        data.message || "Child linked to vehicle successfully.",
-      );
+      setVehicleLinkNotification({
+        visible: true,
+        message: data.message || "Child linked to vehicle successfully.",
+      });
       setScanModalVisible(false);
       fetchChild();
     } catch (err: any) {
@@ -1065,7 +1146,9 @@ const ChildDetailScreen = () => {
             : "pending",
     },
     {
-      time: dropoffStartTime ? formatDisplayTime(dropoffStartTime) : tripDropoffTime,
+      time: dropoffStartTime
+        ? formatDisplayTime(dropoffStartTime)
+        : tripDropoffTime,
       title: "On route",
       detail: routeInfo?.end_location || "Travelling to school",
       status:
@@ -1076,7 +1159,9 @@ const ChildDetailScreen = () => {
             : "pending",
     },
     {
-      time: dropoffEndTime ? formatDisplayTime(dropoffEndTime) : tripDropoffTime,
+      time: dropoffEndTime
+        ? formatDisplayTime(dropoffEndTime)
+        : tripDropoffTime,
       title: "Dropped off",
       detail: dropoffAddress,
       status: activeTimelineStep === 4 ? "progress" : "pending",
@@ -1372,22 +1457,26 @@ const ChildDetailScreen = () => {
                             ? formatDisplayTime(pickupEndTime)
                             : tripPickupTime}
                       </Text>
-                      <Text
-                        style={[
-                          styles.tripPointLabel,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        Route start
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tripPointLocation,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {routeInfo?.start_location || "Route start not set"}
-                      </Text>
+                      {routeInfo?.start_location && (
+                        <>
+                          <Text
+                            style={[
+                              styles.tripPointLabel,
+                              { color: colors.text.secondary },
+                            ]}
+                          >
+                            Route start
+                          </Text>
+                          <Text
+                            style={[
+                              styles.tripPointLocation,
+                              { color: colors.text.primary },
+                            ]}
+                          >
+                            {routeInfo?.start_location || "Route start not set"}
+                          </Text>
+                        </>
+                      )}
                       <Text
                         style={[
                           styles.tripPointLabel,
@@ -1425,22 +1514,27 @@ const ChildDetailScreen = () => {
                             ? formatDisplayTime(dropoffEndTime)
                             : tripDropoffTime}
                       </Text>
-                      <Text
-                        style={[
-                          styles.tripPointLabel,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        Route end
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tripPointLocation,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {routeInfo?.end_location || "Route end not set"}
-                      </Text>
+
+                      {routeInfo?.end_location && (
+                        <>
+                          <Text
+                            style={[
+                              styles.tripPointLabel,
+                              { color: colors.text.secondary },
+                            ]}
+                          >
+                            Route end
+                          </Text>
+                          <Text
+                            style={[
+                              styles.tripPointLocation,
+                              { color: colors.text.primary },
+                            ]}
+                          >
+                            {routeInfo?.end_location || "Route end not set"}
+                          </Text>
+                        </>
+                      )}
                       <Text
                         style={[
                           styles.tripPointLabel,
@@ -1609,7 +1703,7 @@ const ChildDetailScreen = () => {
                 Locations
               </Text>
               <View style={styles.locationCard}>
-                <View style={styles.locationRow}>
+                <View style={[styles.locationRow, { paddingBottom: 10 }]}>
                   <View style={styles.locationIconWrap}>
                     <MaterialIcons
                       name="location-on"
@@ -1636,7 +1730,7 @@ const ChildDetailScreen = () => {
                     </Text>
                   </View>
                 </View>
-                <View style={styles.locationRow}>
+                <View style={[styles.locationRow, { paddingBottom: 10 }]}>
                   <View style={styles.locationIconWrap}>
                     <MaterialIcons
                       name="location-on"
@@ -1664,7 +1758,7 @@ const ChildDetailScreen = () => {
                   </View>
                 </View>
                 <TouchableOpacity
-                  style={styles.locationAction}
+                  style={[styles.locationAction, { paddingTop: 10 }]}
                   onPress={openRouteMap}
                 >
                   <Text style={styles.locationActionText}>
@@ -1771,57 +1865,11 @@ const ChildDetailScreen = () => {
                   Recent Activity
                 </Text>
                 <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      "Activity",
-                      "Recent activity details will be available in a future update.",
-                    )
-                  }
+                  accessibilityRole="button"
+                  onPress={() => setIsActivityModalVisible(true)}
                 >
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
-              </View>
-              <View style={{ marginBottom: 40 }}>
-                {activityItems.map((item, idx) => (
-                  <View key={`${item.title}-${idx}`} style={styles.activityRow}>
-                    <View
-                      style={[
-                        styles.activityMarker,
-                        item.status === "done"
-                          ? styles.activityMarkerDone
-                          : item.status === "progress"
-                            ? styles.activityMarkerProgress
-                            : styles.activityMarkerPending,
-                      ]}
-                    />
-                    <View style={styles.activityTextWrap}>
-                      <Text
-                        style={[
-                          styles.activityTime,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {item.time}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.activityTitle,
-                          { color: colors.text.primary },
-                        ]}
-                      >
-                        {item.title}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.activityDetail,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        {item.detail}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
               </View>
             </View>
           </>
@@ -1832,60 +1880,84 @@ const ChildDetailScreen = () => {
         )}
       </ScrollView>
 
-      <Modal visible={scanModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              styles.scanModalCard,
-              { backgroundColor: colors.surface },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
-              Scan vehicle QR
-            </Text>
-            <View style={styles.cameraContainer}>
-              {cameraPermission === false ? (
-                <View style={styles.cameraFallback}>
-                  <Text
-                    style={[
-                      styles.cameraFallbackText,
-                      { color: colors.text.primary },
-                    ]}
-                  >
-                    Camera permission is required to scan vehicle QR codes.
-                  </Text>
-                </View>
-              ) : (
-                <CameraView
-                  style={styles.cameraView}
-                  onBarcodeScanned={handleBarcodeScanned}
-                />
-              )}
-              {scanLoading ? (
-                <View style={styles.scanLoadingOverlay}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.scanLoadingText}>Linking vehicle…</Text>
-                </View>
-              ) : null}
-            </View>
-            {scanError ? (
-              <Text
-                style={[styles.scanError, { color: "#EF4444", marginTop: 12 }]}
-              >
-                {scanError}
-              </Text>
-            ) : null}
+      <Modal
+        visible={scanModalVisible}
+        animationType="slide"
+        onRequestClose={() => setScanModalVisible(false)}
+      >
+        <SafeAreaView style={styles.scanFullScreen}>
+          <View style={styles.scanTopBar}>
             <TouchableOpacity
-              style={[styles.closeButton, { borderColor: colors.border }]}
+              accessibilityLabel="Close vehicle scanner"
+              style={styles.scanCloseButton}
               onPress={() => setScanModalVisible(false)}
             >
-              <Text style={[styles.closeText, { color: colors.text.primary }]}>
-                Cancel
-              </Text>
+              <MaterialIcons name="close" size={23} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.scanHeading}>
+              <Text style={styles.scanEyebrow}>VEHICLE LINKING</Text>
+              <Text style={styles.scanTitle}>Scan vehicle QR</Text>
+            </View>
+            <View style={styles.scanTopBarSpacer} />
+          </View>
+          <View style={styles.scanCameraStage}>
+            {cameraPermission === false ? (
+              <View style={styles.cameraFallback}>
+                <MaterialIcons name="no-photography" size={38} color="#fff" />
+                <Text style={styles.scanPermissionText}>
+                  Camera permission is required to scan vehicle QR codes.
+                </Text>
+              </View>
+            ) : (
+              <CameraView
+                style={styles.cameraView}
+                facing="back"
+                onBarcodeScanned={
+                  scanLoading ? undefined : handleBarcodeScanned
+                }
+              />
+            )}
+            <View pointerEvents="none" style={styles.scanViewfinderWrap}>
+              <View style={styles.scanViewfinder}>
+                <View style={[styles.scanCorner, styles.scanCornerTopLeft]} />
+                <View style={[styles.scanCorner, styles.scanCornerTopRight]} />
+                <View
+                  style={[styles.scanCorner, styles.scanCornerBottomLeft]}
+                />
+                <View
+                  style={[styles.scanCorner, styles.scanCornerBottomRight]}
+                />
+                {scanLoading ? (
+                  <ActivityIndicator size="large" color="#fff" />
+                ) : null}
+              </View>
+            </View>
+            {scanLoading ? (
+              <View style={styles.scanLoadingOverlay}>
+                <Text style={styles.scanLoadingText}>Linking vehicle…</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.scanBottomPanel}>
+            <View style={styles.scanInstructionIcon}>
+              <MaterialIcons name="qr-code-scanner" size={22} color="#fff" />
+            </View>
+            <Text style={styles.scanInstructionTitle}>Align the QR code</Text>
+            <Text style={styles.scanInstructions}>
+              Hold the vehicle code inside the frame. It will scan
+              automatically.
+            </Text>
+            {scanError ? (
+              <Text style={styles.scanError}>{scanError}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={styles.scanCancelButton}
+              onPress={() => setScanModalVisible(false)}
+            >
+              <Text style={styles.scanCancelText}>Cancel scanning</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       <Modal visible={isMenuVisible} animationType="fade" transparent>
@@ -2033,60 +2105,96 @@ const ChildDetailScreen = () => {
         </View>
       </Modal>
 
-      <Modal visible={isMapModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
-              {mapModalTitle}
-            </Text>
-            <View style={styles.mapContainer}>
-              {mapRegion ? (
-                <MapView style={styles.mapView} initialRegion={mapRegion}>
-                  {mapMarkers.map((marker) => (
-                    <Marker
-                      key={marker.id}
-                      coordinate={marker.coordinate}
-                      title={marker.title}
-                      description={marker.description}
-                      pinColor={
-                        marker.id === "live-driver" ? "#16A34A" : undefined
-                      }
-                    />
-                  ))}
-                  {mapMarkers.length > 1 && GOOGLE_API_KEY ? (
-                    <MapViewDirections
-                      origin={mapMarkers[0].coordinate}
-                      destination={mapMarkers[mapMarkers.length - 1].coordinate}
-                      apikey={GOOGLE_API_KEY}
-                      strokeWidth={5}
-                      strokeColor="#2563EB"
-                      optimizeWaypoints={true}
-                    />
-                  ) : null}
-                </MapView>
-              ) : (
-                <View style={styles.cameraFallback}>
-                  <Text
-                    style={[
-                      styles.cameraFallbackText,
-                      { color: colors.text.primary },
-                    ]}
-                  >
-                    Map data unavailable.
-                  </Text>
-                </View>
-              )}
+      <Modal
+        visible={isMapModalVisible}
+        animationType="slide"
+        onRequestClose={() => setIsMapModalVisible(false)}
+      >
+        <SafeAreaView style={styles.fullScreenMapScreen}>
+          {mapRegion ? (
+            <MapView
+              key={mapModalTitle}
+              style={StyleSheet.absoluteFill}
+              initialRegion={mapRegion}
+              mapType="standard"
+              customMapStyle={lightRouteMapStyle}
+              loadingEnabled
+              showsCompass
+              showsScale
+            >
+              {mapMarkers.map((marker) => (
+                <Marker
+                  key={marker.id}
+                  coordinate={marker.coordinate}
+                  title={marker.title}
+                  description={marker.description}
+                  pinColor={marker.id === "live-driver" ? "#16A34A" : undefined}
+                />
+              ))}
+              {mapMarkers.length > 1 && GOOGLE_API_KEY ? (
+                <MapViewDirections
+                  origin={mapMarkers[0].coordinate}
+                  destination={mapMarkers[mapMarkers.length - 1].coordinate}
+                  apikey={GOOGLE_API_KEY}
+                  strokeWidth={5}
+                  strokeColor="#2563EB"
+                  optimizeWaypoints
+                />
+              ) : null}
+            </MapView>
+          ) : (
+            <View style={styles.mapEmptyState}>
+              <MaterialIcons name="map" size={34} color="#64748B" />
+              <Text style={styles.mapEmptyTitle}>Map data unavailable</Text>
             </View>
+          )}
+          <View style={styles.mapScreenHeader}>
             <TouchableOpacity
-              style={[styles.closeButton, { borderColor: colors.border }]}
+              accessibilityLabel="Close map"
+              style={styles.mapBackButton}
               onPress={() => setIsMapModalVisible(false)}
             >
-              <Text style={[styles.closeText, { color: colors.text.primary }]}>
-                Close
-              </Text>
+              <MaterialIcons name="arrow-back" size={22} color="#172033" />
             </TouchableOpacity>
+            <View style={styles.mapHeaderText}>
+              <Text style={styles.mapEyebrow}>CHILD ROUTE</Text>
+              <Text style={styles.mapScreenTitle} numberOfLines={1}>
+                {mapModalTitle}
+              </Text>
+            </View>
           </View>
-        </View>
+          <View style={styles.mapBottomPanel}>
+            <View style={styles.mapPanelHandle} />
+            <Text style={styles.mapPanelTitle}>Pickup and drop-off</Text>
+            {mapMarkers.map((marker) => (
+              <View key={marker.id} style={styles.mapLocationRow}>
+                <View
+                  style={[
+                    styles.mapLocationDot,
+                    marker.id === "dropoff" && styles.mapDropoffDot,
+                    marker.id === "live-driver" && styles.mapDriverDot,
+                  ]}
+                />
+                <View style={styles.mapLocationText}>
+                  <Text style={styles.mapLocationTitle} numberOfLines={1}>
+                    {marker.title || "Route location"}
+                  </Text>
+                  {marker.description ? (
+                    <Text style={styles.mapLocationAddress} numberOfLines={2}>
+                      {marker.description}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+            {!GOOGLE_API_KEY && Platform.OS === "android" ? (
+              <Text style={styles.mapKeyHint}>
+                Map tiles need EXPO_PUBLIC_GOOGLE_API_KEY in the native app
+                configuration. Rebuild the app after adding the key.
+              </Text>
+            ) : null}
+          </View>
+        </SafeAreaView>
       </Modal>
 
       <Modal
@@ -2297,198 +2405,201 @@ const ChildDetailScreen = () => {
         </View>
       </Modal>
 
-      <Modal visible={isVehicleModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
-              Vehicle & Driver
-            </Text>
-
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.detailsSectionCard}>
-                <Text
-                  style={[
-                    styles.detailSectionTitle,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  Vehicle Information
-                </Text>
-
-                {vehicleImageUrl ? (
-                  <Image
-                    source={{ uri: vehicleImageUrl }}
-                    style={styles.vehicleImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.vehicleImagePlaceholder}>
-                    <MaterialIcons
-                      name="directions-car"
-                      size={28}
-                      color="#94A3B8"
-                    />
-                  </View>
-                )}
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Name
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.name || "No assigned vehicle"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Model
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.model || "N/A"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Registration
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.license_plate || "N/A"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Color
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.color || "N/A"}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailsSectionCard}>
-                <Text
-                  style={[
-                    styles.detailSectionTitle,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  Driver Information
-                </Text>
-
-                {(driverInfo?.avatar || linkedVehicle?.driver?.avatar) && (
-                  <Image
-                    source={{
-                      uri: driverInfo?.avatar || linkedVehicle?.driver?.avatar,
-                    }}
-                    style={styles.driverAvatar}
-                    resizeMode="cover"
-                  />
-                )}
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Name
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.name ||
-                      linkedVehicle?.driver_name ||
-                      linkedVehicle?.driver?.users?.name ||
-                      linkedVehicle?.driver?.name ||
-                      "No assigned driver"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Email
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.email ||
-                      linkedVehicle?.driver?.users?.email ||
-                      linkedVehicle?.driver?.email ||
-                      "Not available"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Phone
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.phone ||
-                      linkedVehicle?.driver?.users?.phone ||
-                      linkedVehicle?.driver?.phone ||
-                      "Not available"}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
+      <Modal
+        visible={isVehicleModalVisible}
+        animationType="slide"
+        onRequestClose={() => setIsVehicleModalVisible(false)}
+      >
+        <SafeAreaView
+          style={[
+            styles.vehicleFullScreen,
+            { backgroundColor: colors.background },
+          ]}
+        >
+          <View style={styles.vehicleScreenHeader}>
+            <View style={styles.vehicleHeaderCopy}>
+              <Text style={[styles.vehicleEyebrow, { color: colors.primary }]}>
+                TRANSPORT DETAILS
+              </Text>
+              <Text
+                style={[
+                  styles.vehicleScreenTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Vehicle & Driver
+              </Text>
+            </View>
             <TouchableOpacity
-              style={[styles.closeButton, { borderColor: colors.border }]}
+              accessibilityLabel="Close vehicle and driver details"
+              style={[
+                styles.vehicleCloseButton,
+                { backgroundColor: colors.surface },
+              ]}
               onPress={() => setIsVehicleModalVisible(false)}
             >
-              <Text style={[styles.closeText, { color: colors.text.primary }]}>
-                Close
-              </Text>
+              <MaterialIcons
+                name="close"
+                size={22}
+                color={colors.text.primary}
+              />
             </TouchableOpacity>
           </View>
-        </View>
+          <ScrollView
+            style={styles.vehicleModalScroll}
+            contentContainerStyle={styles.vehicleModalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.detailsSectionCard}>
+              <Text
+                style={[
+                  styles.detailSectionTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Vehicle Information
+              </Text>
+
+              {vehicleImageUrl ? (
+                <Image
+                  source={{ uri: vehicleImageUrl }}
+                  style={styles.vehicleImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.vehicleImagePlaceholder}>
+                  <MaterialIcons
+                    name="directions-car"
+                    size={28}
+                    color="#94A3B8"
+                  />
+                </View>
+              )}
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Name
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {linkedVehicle?.name || "No assigned vehicle"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Model
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {linkedVehicle?.model || "N/A"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Registration
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {linkedVehicle?.license_plate || "N/A"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Color
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {linkedVehicle?.color || "N/A"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.detailsSectionCard}>
+              <Text
+                style={[
+                  styles.detailSectionTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Driver Information
+              </Text>
+
+              {(driverInfo?.avatar || linkedVehicle?.driver?.avatar) && (
+                <Image
+                  source={{
+                    uri: driverInfo?.avatar || linkedVehicle?.driver?.avatar,
+                  }}
+                  style={styles.driverAvatar}
+                  resizeMode="cover"
+                />
+              )}
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Name
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {driverInfo?.name ||
+                    linkedVehicle?.driver_name ||
+                    linkedVehicle?.driver?.users?.name ||
+                    linkedVehicle?.driver?.name ||
+                    "No assigned driver"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Email
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {driverInfo?.email ||
+                    linkedVehicle?.driver?.users?.email ||
+                    linkedVehicle?.driver?.email ||
+                    "Not available"}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text
+                  style={[styles.detailLabel, { color: colors.text.secondary }]}
+                >
+                  Phone
+                </Text>
+                <Text
+                  style={[styles.detailValue, { color: colors.text.primary }]}
+                >
+                  {driverInfo?.phone ||
+                    linkedVehicle?.driver?.users?.phone ||
+                    linkedVehicle?.driver?.phone ||
+                    "Not available"}
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
 
       <Modal visible={isMenuVisible} animationType="fade" transparent>
@@ -2636,189 +2747,116 @@ const ChildDetailScreen = () => {
         </View>
       </Modal>
 
-      <Modal visible={isVehicleModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text.primary }]}>
-              Vehicle & Driver
-            </Text>
-
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.detailsSectionCard}>
-                <Text
-                  style={[
-                    styles.detailSectionTitle,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  Vehicle Information
-                </Text>
-
-                {vehicleImageUrl ? (
-                  <Image
-                    source={{ uri: vehicleImageUrl }}
-                    style={styles.vehicleImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.vehicleImagePlaceholder}>
-                    <MaterialIcons
-                      name="directions-car"
-                      size={28}
-                      color="#94A3B8"
-                    />
-                  </View>
-                )}
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Name
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.name || "No assigned vehicle"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Model
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.model || "N/A"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Registration
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.license_plate || "N/A"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Color
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {linkedVehicle?.color || "N/A"}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailsSectionCard}>
-                <Text
-                  style={[
-                    styles.detailSectionTitle,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  Driver Information
-                </Text>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Name
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.name ||
-                      linkedVehicle?.driver_name ||
-                      linkedVehicle?.driver?.users?.name ||
-                      linkedVehicle?.driver?.name ||
-                      "No assigned driver"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Email
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.email ||
-                      linkedVehicle?.driver?.users?.email ||
-                      linkedVehicle?.driver?.email ||
-                      "Not available"}
-                  </Text>
-                </View>
-
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: colors.text.secondary },
-                    ]}
-                  >
-                    Phone
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: colors.text.primary }]}
-                  >
-                    {driverInfo?.phone ||
-                      linkedVehicle?.driver?.users?.phone ||
-                      linkedVehicle?.driver?.phone ||
-                      "Not available"}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.closeButton, { borderColor: colors.border }]}
-              onPress={() => setIsVehicleModalVisible(false)}
-            >
-              <Text style={[styles.closeText, { color: colors.text.primary }]}>
-                Close
+      <Modal
+        visible={isActivityModalVisible}
+        animationType="slide"
+        onRequestClose={() => setIsActivityModalVisible(false)}
+      >
+        <SafeAreaView
+          style={[
+            styles.activityModalScreen,
+            { backgroundColor: colors.background },
+          ]}
+        >
+          <View
+            style={[
+              styles.activityModalHeader,
+              { backgroundColor: colors.surface },
+            ]}
+          >
+            <View style={styles.activityModalHeading}>
+              <Text style={styles.activityModalEyebrow}>TRIP TIMELINE</Text>
+              <Text
+                style={[
+                  styles.activityModalTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Recent Activity
               </Text>
+              <Text
+                style={[
+                  styles.activityModalSubtitle,
+                  { color: colors.text.secondary },
+                ]}
+              >
+                {child?.name || "Your child"} · Today&apos;s trip
+              </Text>
+            </View>
+            <TouchableOpacity
+              accessibilityLabel="Close recent activity"
+              style={[
+                styles.activityModalClose,
+                { backgroundColor: colors.background },
+              ]}
+              onPress={() => setIsActivityModalVisible(false)}
+            >
+              <MaterialIcons
+                name="close"
+                size={21}
+                color={colors.text.primary}
+              />
             </TouchableOpacity>
           </View>
-        </View>
+          <ScrollView
+            style={styles.activityModalScroll}
+            contentContainerStyle={styles.activityModalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.activityModalList}>
+              {activityItems.map((item, index) => (
+                <View key={`${item.title}-${index}`} style={styles.activityRow}>
+                  <View
+                    style={[
+                      styles.activityMarker,
+                      item.status === "done"
+                        ? styles.activityMarkerDone
+                        : item.status === "progress"
+                          ? styles.activityMarkerProgress
+                          : styles.activityMarkerPending,
+                    ]}
+                  />
+                  <View style={styles.activityTextWrap}>
+                    <Text
+                      style={[
+                        styles.activityTime,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {item.time}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.activityTitle,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.activityDetail,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {item.detail}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
+
+      <AppNotification
+        message={vehicleLinkNotification.message}
+        type="success"
+        visible={vehicleLinkNotification.visible}
+        onHide={() =>
+          setVehicleLinkNotification({ visible: false, message: "" })
+        }
+      />
     </SafeAreaView>
   );
 };
@@ -3374,7 +3412,7 @@ const styles = StyleSheet.create({
   },
 
   locationActionText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     color: "#2563EB",
   },
@@ -3501,6 +3539,66 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
+  activityModalScreen: {
+    flex: 1,
+  },
+
+  activityModalHeader: {
+    minHeight: 92,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(148,163,184,0.24)",
+  },
+
+  activityModalHeading: {
+    flex: 1,
+  },
+
+  activityModalEyebrow: {
+    color: "#2563EB",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+
+  activityModalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  activityModalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  activityModalClose: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
+  },
+
+  activityModalScroll: {
+    flex: 1,
+  },
+
+  activityModalContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+  },
+
+  activityModalList: {
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: "rgba(148,163,184,0.08)",
+  },
+
   viewAllText: {
     fontSize: 11,
     fontWeight: "800",
@@ -3573,20 +3671,230 @@ const styles = StyleSheet.create({
     padding: 18,
   },
 
-  scanModalCard: {
-    maxHeight: "85%",
-    flexDirection: "column",
+  scanFullScreen: {
+    flex: 1,
+    backgroundColor: "#101820",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+
+  scanTopBar: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  scanCloseButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+
+  scanHeading: {
+    flex: 1,
+    alignItems: "center",
+  },
+
+  scanEyebrow: {
+    color: "#A7F3D0",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+
+  scanTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+
+  scanTopBarSpacer: {
+    width: 42,
+  },
+
+  scanCameraStage: {
+    flex: 1,
+    minHeight: 240,
+    overflow: "hidden",
+    borderRadius: 20,
+    backgroundColor: "#17232C",
+    marginTop: 12,
+    marginBottom: 18,
+  },
+
+  scanViewfinderWrap: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  scanViewfinder: {
+    width: 252,
+    height: 252,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  scanCorner: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderColor: "#A7F3D0",
+  },
+
+  scanCornerTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 12,
+  },
+
+  scanCornerTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 12,
+  },
+
+  scanCornerBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 12,
+  },
+
+  scanCornerBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 12,
+  },
+
+  scanPermissionText: {
+    color: "#fff",
+    textAlign: "center",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 14,
+    maxWidth: 260,
+  },
+
+  scanBottomPanel: {
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+  },
+
+  scanInstructionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(167,243,208,0.16)",
+    marginBottom: 10,
+  },
+
+  scanInstructionTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  scanCancelButton: {
+    minHeight: 48,
+    alignSelf: "stretch",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    marginTop: 8,
+  },
+
+  scanCancelText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  scanInstructions: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#CBD5E1",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 10,
   },
 
   modalScrollContent: {
     maxHeight: 430,
   },
 
+  vehicleFullScreen: {
+    flex: 1,
+  },
+
+  vehicleScreenHeader: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(148,163,184,0.28)",
+  },
+
+  vehicleHeaderCopy: {
+    flex: 1,
+  },
+
+  vehicleEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+
+  vehicleScreenTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+
+  vehicleCloseButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  vehicleModalScroll: {
+    flex: 1,
+  },
+
+  vehicleModalContent: {
+    padding: 18,
+    paddingBottom: 32,
+  },
+
   detailsSectionCard: {
-    backgroundColor: "rgba(15,23,42,0.04)",
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: "rgba(148,163,184,0.10)",
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.14)",
   },
 
   detailSectionTitle: {
@@ -3801,7 +4109,8 @@ const styles = StyleSheet.create({
 
   cameraContainer: {
     width: "100%",
-    height: 280,
+    flex: 1,
+    minHeight: 220,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#000",
@@ -3867,6 +4176,157 @@ const styles = StyleSheet.create({
   mapView: {
     width: "100%",
     height: "100%",
+  },
+
+  fullScreenMapScreen: {
+    flex: 1,
+    backgroundColor: "#E8EDF2",
+  },
+
+  mapScreenHeader: {
+    position: "absolute",
+    top: 8,
+    left: 16,
+    right: 16,
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+
+  mapBackButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  mapHeaderText: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  mapEyebrow: {
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+
+  mapScreenTitle: {
+    color: "#172033",
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+
+  mapBottomPanel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 22,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: "#fff",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+
+  mapPanelHandle: {
+    width: 38,
+    height: 4,
+    alignSelf: "center",
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+    marginBottom: 12,
+  },
+
+  mapPanelTitle: {
+    color: "#172033",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+
+  mapLocationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 9,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E2E8F0",
+  },
+
+  mapLocationDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#10B981",
+    marginTop: 3,
+    marginRight: 12,
+  },
+
+  mapDropoffDot: {
+    backgroundColor: "#2563EB",
+  },
+
+  mapDriverDot: {
+    backgroundColor: "#F59E0B",
+  },
+
+  mapLocationText: {
+    flex: 1,
+  },
+
+  mapLocationTitle: {
+    color: "#172033",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  mapLocationAddress: {
+    color: "#64748B",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+
+  mapKeyHint: {
+    color: "#92400E",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 8,
+  },
+
+  mapEmptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E8EDF2",
+  },
+
+  mapEmptyTitle: {
+    color: "#334155",
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: 10,
   },
 
   /* =========================

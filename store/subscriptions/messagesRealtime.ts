@@ -14,6 +14,7 @@ export interface ConversationData {
     id: string;
     name: string;
     email: string;
+    phone?: string | null;
     role: string;
     profile: any;
   };
@@ -96,7 +97,7 @@ export const fetchConversationsWithCache = async (
         // Fetch user data
         const { data: userData } = await client
           .from("users")
-          .select("id, name, email, role")
+          .select("id, name, email, phone, role")
           .eq("id", otherParticipantId)
           .single();
 
@@ -144,6 +145,7 @@ export const fetchConversationsWithCache = async (
             id: userData?.id,
             name: userData?.name,
             email: userData?.email,
+            phone: userData?.phone,
             role: userData?.role,
             profile: profileData,
           },

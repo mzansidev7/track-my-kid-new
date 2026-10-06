@@ -1,4 +1,3 @@
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
@@ -20,6 +19,8 @@ import AppNotification from "../../components/Notification";
 import { subscribeToDriverProfileUpdates } from "../../store/subscriptions/driversRealtime";
 import { resolveWorkingBaseUrl } from "../../url";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRoutes } from "./ownerHelpers/hooks/useRoutes";
 // import Header from "./components/header";
 
 interface Driver {
@@ -44,6 +45,36 @@ interface Driver {
   students_count?: number;
 }
 
+const formatDriverValue = (value: unknown): string => {
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map(formatDriverValue).filter(Boolean).join(", ");
+  }
+  if (value && typeof value === "object") {
+    const fields = value as Record<string, unknown>;
+    const preferredFields = [
+      "formatted_address",
+      "display_name",
+      "address",
+      "street",
+      "city",
+      "province",
+      "state",
+      "country",
+      "name",
+      "label",
+      "description",
+    ];
+    const parts = preferredFields
+      .map((field) => formatDriverValue(fields[field]))
+      .filter(Boolean);
+    return [...new Set(parts)].join(", ");
+  }
+  return "";
+};
+
 const DriverDetails = ({
   driverId: propDriverId,
   onBack: propOnBack,
@@ -62,6 +93,7 @@ const DriverDetails = ({
     : params?.driverId;
   const actualDriverId = propDriverId || urlDriverId;
   const { user } = useContext(AuthContext);
+  const { allRoutes } = useRoutes();
 
   const handleBack = () => {
     if (propOnBack) {
@@ -86,6 +118,7 @@ const DriverDetails = ({
 
   // Vehicle assignment state
   const [showVehicleModal, setShowVehicleModal] = useState(false);
+  const [showDriverActions, setShowDriverActions] = useState(false);
   const [availableVehicles, setAvailableVehicles] = useState<any[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
@@ -103,12 +136,32 @@ const DriverDetails = ({
 
   const getBaseUrl = useCallback(async () => resolveWorkingBaseUrl(), []);
 
-  const { renderHeader } = useOwnerPageHeader({
-    title: "Driver Details",
-    subtitle: driver ? `${driver.name}'s profile` : "Loading...",
-    actionLabel: "Add New Vehicle",
-    onBackPress: handleBack,
-  });
+  const renderHeader = () => (
+    <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+      <View style={styles.pageHeader}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={handleBack}
+          accessibilityLabel="Back"
+        >
+          <MaterialIcons name="arrow-back" size={21} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>View Driver</Text>
+          <Text style={styles.headerSubtitle}>
+            {driver ? `${driver.name}'s profile` : "Driver profile"}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => setShowDriverActions(true)}
+          accessibilityLabel="Driver actions"
+        >
+          <MaterialIcons name="more-vert" size={21} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
 
   // Notification state
   const [notification, setNotification] = useState<{
@@ -538,7 +591,7 @@ const DriverDetails = ({
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7ED321" />
+          <ActivityIndicator size="large" color="#1769D2" />
           <Text style={styles.loadingText}>Loading driver details...</Text>
         </View>
       </View>
@@ -548,7 +601,7 @@ const DriverDetails = ({
   if (error) {
     return (
       <View style={styles.container}>
-        renderHeader();
+        {renderHeader()}
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
@@ -580,6 +633,122 @@ const DriverDetails = ({
     (driver as any)?.users?.avatar ||
     (driver as any)?.users?.avatar_url ||
     null;
+  const driverData = driver as Driver & Record<string, any>;
+  const displayDate = (value: unknown) => {
+    const text = formatDriverValue(value);
+    if (!text) return "Not provided";
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? text : date.toLocaleDateString();
+  };
+  const licenseNumber = formatDriverValue(
+    driverData.license_number ||
+      driverData.licenseNumber ||
+      driverData.license ||
+      driver.vehicle_plate_number,
+  );
+  const licenseExpiry =
+    driverData.license_expiry ||
+    driverData.license_expiry_date ||
+    driverData.licenseExpiry;
+  const dateOfBirth =
+    driverData.date_of_birth || driverData.dateOfBirth || driverData.dob;
+  const experience =
+    driverData.experience_years ??
+    driverData.experienceYears ??
+    driverData.years_of_experience ??
+    driverData.experience;
+  const driverLocation = formatDriverValue(
+    driverData.location ||
+      driverData.address ||
+      driverData.users?.location ||
+      driverData.users?.address ||
+      [driverData.city, driverData.province].filter(Boolean).join(", "),
+  );
+  const experienceText = formatDriverValue(experience);
+  const vehicleData = (driver as any)?.vehicle;
+  const vehicleImage =
+    vehicleData?.image ||
+    vehicleData?.image_url ||
+    vehicleData?.vehicle_images?.[0]?.url ||
+    vehicleData?.images?.[0]?.url ||
+    vehicleData?.images?.[0] ||
+    null;
+  const isDriverActive = driver.status?.toLowerCase() === "active";
+  const driverIds = new Set(
+    [
+      driverData.id,
+      driverData.driver_id,
+      driverData.driverId,
+      driverData.user_id,
+      driverData.userId,
+    ]
+      .filter((id) => id != null && String(id).length > 0)
+      .map(String),
+  );
+  const routeEntries = allRoutes.filter((route: any) => {
+    const routeAssignments = Array.isArray(route.route_assignments)
+      ? route.route_assignments
+      : [];
+    const assignedDriverIds = [
+      route.driver_id,
+      route.driverId,
+      route.drivers?.id,
+      route.drivers?.driver_id,
+      route.drivers?.user_id,
+      ...routeAssignments.flatMap((assignment: any) => [
+        assignment.driver_id,
+        assignment.driverId,
+        assignment.drivers?.id,
+        assignment.drivers?.driver_id,
+        assignment.drivers?.user_id,
+      ]),
+    ]
+      .filter((id) => id != null && String(id).length > 0)
+      .map(String);
+    return assignedDriverIds.some((id) => driverIds.has(id));
+  });
+  const driverDocuments = [
+    {
+      title: "Driver License",
+      provided: Boolean(
+        driverData.driver_license_document ||
+        driverData.license_document ||
+        driverData.license_document_url,
+      ),
+      verified: Boolean(driverData.driver_license_verified),
+      icon: "description" as const,
+    },
+    {
+      title: "Police Clearance",
+      provided: Boolean(
+        driverData.police_clearance_document || driverData.police_clearance_url,
+      ),
+      verified: Boolean(driverData.police_clearance_verified),
+      icon: "policy" as const,
+    },
+    {
+      title: "Professional Driver Permit",
+      provided: Boolean(
+        driverData.professional_driver_permit ||
+        driverData.professional_driver_permit_url,
+      ),
+      verified: Boolean(driverData.professional_driver_permit_verified),
+      icon: "badge" as const,
+    },
+  ];
+  const onTimeRate =
+    driverData.on_time_rate ??
+    driverData.onTimeRate ??
+    driverData.on_time_percentage ??
+    driverData.performance?.on_time_rate;
+  const tripsCompleted =
+    driverData.trips_completed ??
+    driverData.tripsCompleted ??
+    driverData.performance?.trips_completed;
+  const incidents =
+    driverData.incidents_count ??
+    driverData.incidents ??
+    driverData.performance?.incidents;
 
   return (
     <View style={styles.container}>
@@ -591,280 +760,408 @@ const DriverDetails = ({
       />
       {renderHeader()}
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Driver Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {driverAvatar ? (
-              <Image
-                source={{ uri: driverAvatar }}
-                style={styles.avatarImage}
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {(driver.name?.charAt(0) || "?").toUpperCase()}
-              </Text>
-            )}
-          </View>
-          <Text style={styles.driverName}>{driver.name || "Driver"}</Text>
-          <View
-            style={[
-              styles.statusContainer,
-              { flexDirection: "row", alignItems: "center", gap: 10 },
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                driver.status === "active"
-                  ? [
-                      styles.activeStatus,
-                      {
-                        backgroundColor: "green",
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 20,
-                      },
-                    ]
-                  : [
-                      styles.inactiveStatus,
-                      {
-                        backgroundColor: "red",
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 20,
-                      },
-                    ],
-              ]}
-            >
-              {driver.status === "active"
-                ? "🟢 Active/Vehicle assigned"
-                : "🔴 Inactive"}
-            </Text>
-            {driver.is_verified ? (
-              <Text
-                style={[
-                  styles.verifiedText,
-                  {
-                    backgroundColor: "green",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                  },
-                ]}
-              >
-                ✓ Verified
-              </Text>
-            ) : (
-              <Text
-                style={[
-                  styles.inactiveStatus,
-                  {
-                    backgroundColor: "red",
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                    fontSize: 14,
-                    fontWeight: "600",
-                  },
-                ]}
-              >
-                ✗ Not Verified/Email not confirmed
-              </Text>
-            )}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.profileSummary}>
+          <View style={styles.profileIdentity}>
+            <View style={styles.avatarContainer}>
+              {driverAvatar ? (
+                <Image
+                  source={{ uri: driverAvatar }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {(driver.name?.charAt(0) || "?").toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View style={styles.profileIdentityText}>
+              <View style={styles.nameAndStatus}>
+                <Text style={styles.driverName} numberOfLines={1}>
+                  {driver.name || "Driver"}
+                </Text>
+                <Text
+                  style={[
+                    styles.statusBadge,
+                    isDriverActive ? styles.activeBadge : styles.inactiveBadge,
+                  ]}
+                >
+                  {isDriverActive ? "Active" : "Inactive"}
+                </Text>
+              </View>
+              <View style={styles.contactLine}>
+                <MaterialIcons name="call" size={13} color="#1769D2" />
+                <Text style={styles.contactText}>
+                  {driver.phone || "Phone not provided"}
+                </Text>
+              </View>
+              <View style={styles.contactLine}>
+                <MaterialIcons name="mail-outline" size={13} color="#1769D2" />
+                <Text style={styles.contactText} numberOfLines={1}>
+                  {driver.email || "Email not provided"}
+                </Text>
+              </View>
+              {driverLocation ? (
+                <View style={styles.contactLine}>
+                  <MaterialIcons name="location-on" size={13} color="#1769D2" />
+                  <Text style={styles.contactText} numberOfLines={1}>
+                    {driverLocation}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {/* Driver Information */}
-        <View style={styles.infoCard}>
-          <Text style={styles.cardTitle}>Personal Information</Text>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Name:</Text>
-            <Text style={styles.value}>{driver.name}</Text>
+        <View style={styles.detailGrid}>
+          <View style={styles.detailTile}>
+            <View style={styles.detailIcon}>
+              <MaterialIcons name="badge" size={16} color="#1769D2" />
+            </View>
+            <View style={styles.detailTextWrap}>
+              <Text style={styles.detailLabel}>License Number</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {licenseNumber || "Not provided"}
+              </Text>
+            </View>
           </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Email:</Text>
-            <Text style={styles.value}>{driver.email}</Text>
+          <View style={styles.detailTile}>
+            <View style={styles.detailIcon}>
+              <MaterialIcons name="event" size={16} color="#1769D2" />
+            </View>
+            <View style={styles.detailTextWrap}>
+              <Text style={styles.detailLabel}>License Expiry</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {displayDate(licenseExpiry)}
+              </Text>
+            </View>
           </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Phone:</Text>
-            <Text style={styles.value}>{driver.phone}</Text>
+          <View style={styles.detailTile}>
+            <View style={styles.detailIcon}>
+              <MaterialIcons name="calendar-today" size={16} color="#1769D2" />
+            </View>
+            <View style={styles.detailTextWrap}>
+              <Text style={styles.detailLabel}>Date of Birth</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {displayDate(dateOfBirth)}
+              </Text>
+            </View>
           </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Joined:</Text>
-            <Text style={styles.value}>
-              {new Date(driver.created_at).toLocaleDateString()}
-            </Text>
+          <View style={styles.detailTile}>
+            <View style={styles.detailIcon}>
+              <MaterialIcons name="star" size={16} color="#1769D2" />
+            </View>
+            <View style={styles.detailTextWrap}>
+              <Text style={styles.detailLabel}>Experience</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {experienceText
+                  ? typeof experience === "number"
+                    ? `${experienceText} years`
+                    : experienceText
+                  : "Not provided"}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Vehicle Information */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Assigned Vehicle</Text>
+        <TouchableOpacity
+          style={styles.primaryEditButton}
+          onPress={handleEditDriver}
+          activeOpacity={0.85}
+        >
+          <MaterialIcons name="edit" size={16} color="#FFFFFF" />
+          <Text style={styles.primaryEditText}>Edit Driver</Text>
+        </TouchableOpacity>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeading}>
+            <MaterialIcons name="directions-car" size={15} color="#1769D2" />
+            <Text style={styles.sectionTitle}>Assigned Vehicle</Text>
+            <View style={styles.sectionHeadingSpacer} />
             {driver?.is_verified && (
               <TouchableOpacity
-                style={[
-                  styles.assignButton,
-                  assigningVehicle && styles.buttonDisabled,
-                ]}
+                style={styles.sectionAction}
                 onPress={openVehicleAssignment}
                 disabled={assigningVehicle}
               >
                 {assigningVehicle ? (
-                  <ActivityIndicator color="#7ED321" size="small" />
+                  <ActivityIndicator color="#1769D2" size="small" />
                 ) : (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <MaterialIcons
-                      name="directions-car"
-                      size={20}
-                      color="#FFF"
-                      style={{ marginRight: 5 }}
-                    />
-                    <Text style={styles.assignButtonText}>
-                      {driver.vehicle ? "Change Vehicle" : "Assign Vehicle"}
-                    </Text>
-                  </View>
+                  <Text style={styles.sectionActionText}>
+                    {driver.vehicle ? "Change" : "Assign"}
+                  </Text>
                 )}
               </TouchableOpacity>
             )}
           </View>
-
           {driver.vehicle ? (
-            <>
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Vehicle:</Text>
-                <Text style={styles.value}>
+            <View style={styles.compactCard}>
+              {vehicleImage ? (
+                <Image
+                  source={{ uri: vehicleImage }}
+                  style={styles.vehicleThumbnail}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.vehicleThumbnailPlaceholder}>
+                  <MaterialIcons
+                    name="directions-car"
+                    size={23}
+                    color="#71869C"
+                  />
+                </View>
+              )}
+              <View style={styles.compactCardInfo}>
+                <Text style={styles.compactCardTitle} numberOfLines={1}>
                   {driver.vehicle.name} {driver.vehicle.model}
                 </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>License Plate:</Text>
-                <Text style={styles.value}>{driver.vehicle.license_plate}</Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.label}>Capacity:</Text>
-                <Text style={styles.value}>
-                  {driver.vehicle.capacity} students
+                <Text style={styles.compactCardSubtitle} numberOfLines={1}>
+                  {driver.vehicle.license_plate || "License plate not provided"}
                 </Text>
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.unassignButton,
-                  unassigningVehicle && styles.buttonDisabled,
-                ]}
-                onPress={handleUnassignVehicle}
-                disabled={unassigningVehicle}
-              >
-                {unassigningVehicle ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <MaterialIcons
-                      name="remove-circle-outline"
-                      size={20}
-                      color="#FFF"
-                    />
-                    <Text style={styles.unassignButtonText}>
-                      Unassign Vehicle
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </>
+              <Text style={styles.statusBadgeSmall}>Active</Text>
+              <MaterialIcons name="chevron-right" size={19} color="#71869C" />
+            </View>
           ) : (
-            <Text style={styles.noVehicleText}>No vehicle assigned</Text>
+            <TouchableOpacity
+              style={styles.emptySectionCard}
+              onPress={openVehicleAssignment}
+              disabled={assigningVehicle}
+            >
+              <MaterialIcons name="directions-car" size={20} color="#71869C" />
+              <Text style={styles.emptySectionText}>No vehicle assigned</Text>
+              <MaterialIcons name="chevron-right" size={19} color="#71869C" />
+            </TouchableOpacity>
+          )}
+          {driver.vehicle && (
+            <TouchableOpacity
+              style={styles.textAction}
+              onPress={handleUnassignVehicle}
+              disabled={unassigningVehicle}
+            >
+              {unassigningVehicle ? (
+                <ActivityIndicator color="#D94A57" size="small" />
+              ) : (
+                <Text style={styles.dangerText}>Unassign vehicle</Text>
+              )}
+            </TouchableOpacity>
           )}
         </View>
 
-        {/* Statistics */}
-        <View style={styles.infoCard}>
-          <Text style={styles.cardTitle}>Activity Summary</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeading}>
+            <MaterialIcons name="alt-route" size={15} color="#1769D2" />
+            <Text style={styles.sectionTitle}>Assigned Route(s)</Text>
+          </View>
+          {routeEntries.length > 0 ? (
+            routeEntries.map((route: any, index: number) => {
+              const routeId =
+                route.id ||
+                route.route_id ||
+                route.routeId ||
+                route.routes?.id ||
+                route.route?.id;
 
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{driver.routes_count || 0}</Text>
-              <Text style={styles.statLabel}>Active Routes</Text>
+              return (
+              <TouchableOpacity
+                onPress={() => {
+                  if (!routeId) return;
+                  router.push({
+                    pathname: "/(owner)/route-details",
+                    params: { routeId: String(routeId) },
+                  });
+                }}
+                style={styles.compactCard}
+                key={routeId || index}
+                disabled={!routeId}
+                activeOpacity={0.8}
+              >
+                <View style={styles.routeIcon}>
+                  <MaterialIcons name="groups" size={17} color="#FFFFFF" />
+                </View>
+                <View style={styles.compactCardInfo}>
+                  <Text style={styles.compactCardTitle} numberOfLines={1}>
+                    {route.route_name ||
+                      route.name ||
+                      route.routes?.route_name ||
+                      route.route?.route_name ||
+                      route.route_children?.[0]?.children?.school_name ||
+                      route.start_location ||
+                      "Assigned route"}
+                  </Text>
+                  <Text style={styles.compactCardSubtitle}>
+                    {(route.students_count ?? route.route_children?.length) !=
+                    null
+                      ? `${route.students_count ?? route.route_children.length} students assigned`
+                      : "Route assigned"}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={19} color="#71869C" />
+              </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={styles.compactCard}>
+              <View style={styles.routeIcon}>
+                <MaterialIcons name="groups" size={17} color="#FFFFFF" />
+              </View>
+              <View style={styles.compactCardInfo}>
+                <Text style={styles.compactCardTitle}>
+                  {driver.routes_count
+                    ? `${driver.routes_count} assigned route(s)`
+                    : "No routes assigned"}
+                </Text>
+                <Text style={styles.compactCardSubtitle}>
+                  {driver.routes_count
+                    ? "Route details are not available"
+                    : "Route assignments will appear here"}
+                </Text>
+              </View>
+              {driver.routes_count ? (
+                <MaterialIcons name="chevron-right" size={19} color="#71869C" />
+              ) : null}
             </View>
+          )}
+        </View>
 
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {driver.students_count || 0}
+        <View style={styles.section}>
+          <View style={styles.sectionHeading}>
+            <MaterialIcons name="description" size={15} color="#1769D2" />
+            <Text style={styles.sectionTitle}>Documents</Text>
+          </View>
+          <View style={styles.documentList}>
+            {driverDocuments.map((document, index) => (
+              <View
+                style={[
+                  styles.documentRow,
+                  index === driverDocuments.length - 1 &&
+                    styles.documentRowLast,
+                ]}
+                key={document.title}
+              >
+                <MaterialIcons name={document.icon} size={16} color="#1769D2" />
+                <Text style={styles.documentTitle}>{document.title}</Text>
+                <Text
+                  style={[
+                    styles.documentStatus,
+                    document.provided && document.verified
+                      ? styles.documentVerified
+                      : styles.documentMissing,
+                  ]}
+                >
+                  {document.provided
+                    ? document.verified
+                      ? "Verified"
+                      : "Pending"
+                    : "Not provided"}
+                </Text>
+                <MaterialIcons name="chevron-right" size={18} color="#71869C" />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeading}>
+            <MaterialIcons name="star" size={15} color="#1769D2" />
+            <Text style={styles.sectionTitle}>Performance</Text>
+          </View>
+          <View style={styles.performanceRow}>
+            <View style={styles.performanceTile}>
+              <Text style={styles.performanceLabel}>On-time Rate</Text>
+              <Text style={styles.performanceValue}>
+                {onTimeRate != null
+                  ? `${onTimeRate}${String(onTimeRate).includes("%") ? "" : "%"}`
+                  : "—"}
               </Text>
-              <Text style={styles.statLabel}>Students</Text>
+            </View>
+            <View style={styles.performanceTile}>
+              <Text style={styles.performanceLabel}>Trips Completed</Text>
+              <Text style={styles.performanceValue}>
+                {tripsCompleted ?? "—"}
+              </Text>
+            </View>
+            <View style={styles.performanceTile}>
+              <Text style={styles.performanceLabel}>Incidents</Text>
+              <Text style={styles.performanceValue}>{incidents ?? "—"}</Text>
             </View>
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          {driver?.is_verified === false && (
-            <TouchableOpacity
-              style={[
-                styles.editButton,
-                {
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                },
-              ]}
-              onPress={handleEditDriver}
-            >
-              <MaterialIcons
-                name="edit"
-                size={20}
-                color="#FFF"
-                style={{ marginRight: 5 }}
-              />
-              <Text style={styles.editButtonText}>Edit Driver</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
+        <TouchableOpacity
+          style={[
+            styles.removeButton,
+            isOwnerDriverProfile && styles.disabledActionButton,
+          ]}
+          onPress={handleRemoveDriver}
+          disabled={isOwnerDriverProfile}
+        >
+          <MaterialCommunityIcons
+            name={isOwnerDriverProfile ? "account-check" : "delete"}
+            size={17}
+            color={isOwnerDriverProfile ? "#FFFFFF" : "#D94A57"}
+          />
+          <Text
             style={[
-              styles.removeButton,
-              isOwnerDriverProfile && styles.disabledActionButton,
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-              },
+              styles.removeButtonText,
+              !isOwnerDriverProfile && styles.removeButtonTextDanger,
             ]}
-            onPress={handleRemoveDriver}
-            disabled={isOwnerDriverProfile}
           >
-            <MaterialCommunityIcons
-              name={isOwnerDriverProfile ? "account-check" : "delete"}
-              size={20}
-              color="#FFF"
-              style={{ marginRight: 5 }}
-            />
-            <Text style={styles.removeButtonText}>
-              {isOwnerDriverProfile ? "Owner Driver" : "Remove Driver"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            {isOwnerDriverProfile ? "Owner Driver" : "Remove Driver"}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={showDriverActions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDriverActions(false)}
+      >
+        <TouchableOpacity
+          style={styles.actionsOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDriverActions(false)}
+        >
+          <View style={styles.actionsMenu}>
+            <TouchableOpacity
+              style={styles.actionsMenuItem}
+              onPress={() => {
+                setShowDriverActions(false);
+                handleEditDriver();
+              }}
+            >
+              <MaterialIcons name="edit" size={18} color="#1769D2" />
+              <Text style={styles.actionsMenuText}>Edit driver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionsMenuItem}
+              onPress={() => {
+                setShowDriverActions(false);
+                handleRemoveDriver();
+              }}
+              disabled={isOwnerDriverProfile}
+            >
+              <MaterialCommunityIcons
+                name="delete"
+                size={18}
+                color={isOwnerDriverProfile ? "#AAB6C2" : "#D94A57"}
+              />
+              <Text
+                style={[
+                  styles.actionsMenuText,
+                  isOwnerDriverProfile && styles.disabledMenuText,
+                ]}
+              >
+                Remove driver
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Remove Driver Modal */}
       <Modal
@@ -923,31 +1220,55 @@ const DriverDetails = ({
         transparent={true}
         onRequestClose={() => setShowVehicleModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Vehicle</Text>
+        <View style={styles.assignModalOverlay}>
+          <View style={styles.assignModalSheet}>
+            <View style={styles.assignModalHeader}>
+              <View style={styles.assignModalHeading}>
+                <View style={styles.assignModalIcon}>
+                  <MaterialIcons
+                    name="directions-car"
+                    size={19}
+                    color="#1769D2"
+                  />
+                </View>
+                <View style={styles.assignModalTitleWrap}>
+                  <Text style={styles.modalTitle}>Assign Vehicle</Text>
+                  <Text style={styles.assignModalSubtitle}>
+                    Choose a vehicle for {driver.name}
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowVehicleModal(false)}
-                style={styles.closeButton}
+                style={styles.assignCloseButton}
+                accessibilityLabel="Close vehicle selector"
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                <MaterialIcons name="close" size={19} color="#526981" />
               </TouchableOpacity>
             </View>
 
             {loadingVehicles || assigningVehicle ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#7ED321" />
-                <Text style={styles.loadingText}>
+              <View style={styles.assignLoadingContainer}>
+                <ActivityIndicator size="large" color="#1769D2" />
+                <Text style={styles.assignLoadingText}>
                   {assigningVehicle
                     ? "Assigning vehicle..."
                     : "Loading vehicles..."}
                 </Text>
               </View>
             ) : availableVehicles.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No available vehicles</Text>
-                <Text style={styles.emptySubtext}>
+              <View style={styles.assignEmptyContainer}>
+                <View style={styles.assignEmptyIcon}>
+                  <MaterialIcons
+                    name="directions-car"
+                    size={26}
+                    color="#1769D2"
+                  />
+                </View>
+                <Text style={styles.assignEmptyTitle}>
+                  No vehicles available
+                </Text>
+                <Text style={styles.assignEmptyText}>
                   All vehicles are already assigned or you need to add more
                   vehicles.
                 </Text>
@@ -956,49 +1277,100 @@ const DriverDetails = ({
               <FlatList
                 data={availableVehicles}
                 keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.vehicleList}
                 renderItem={({ item }) => {
                   const isAssignedToCurrentDriver =
                     item.driver_id === driver.id;
+                  const vehiclePhoto =
+                    item.vehicle_images?.[0]?.url ||
+                    item.images?.[0]?.url ||
+                    item.images?.[0] ||
+                    item.image_url ||
+                    item.image;
+                  const assignedToName = item.drivers?.users?.name;
                   return (
                     <TouchableOpacity
                       style={[
-                        styles.vehicleItem,
-                        isAssignedToCurrentDriver && styles.vehicleItemDisabled,
+                        styles.assignVehicleItem,
+                        (isAssignedToCurrentDriver || item.driver_id) &&
+                          styles.vehicleItemDisabled,
                       ]}
                       onPress={() => handleAssignVehicle(item.id)}
-                      disabled={isAssignedToCurrentDriver || assigningVehicle}
+                      disabled={
+                        isAssignedToCurrentDriver ||
+                        Boolean(item.driver_id) ||
+                        assigningVehicle
+                      }
                     >
-                      <View style={styles.vehicleInfo}>
-                        <Text style={styles.vehicleName}>
+                      {vehiclePhoto ? (
+                        <Image
+                          source={{ uri: vehiclePhoto }}
+                          style={styles.assignVehicleImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.assignVehicleImagePlaceholder}>
+                          <MaterialIcons
+                            name="directions-car"
+                            size={24}
+                            color="#6F89A4"
+                          />
+                        </View>
+                      )}
+                      <View style={styles.assignVehicleInfo}>
+                        <Text
+                          style={styles.assignVehicleName}
+                          numberOfLines={1}
+                        >
                           {item.name} {item.model}
                         </Text>
-                        <Text style={styles.vehicleDetails}>
-                          {item.license_plate} • Capacity: {item.capacity}
+                        <Text
+                          style={styles.assignVehicleDetails}
+                          numberOfLines={1}
+                        >
+                          {item.license_plate || "Plate not provided"}
+                          {item.capacity != null
+                            ? `  ·  ${item.capacity} seats`
+                            : ""}
                         </Text>
                         {isAssignedToCurrentDriver ? (
-                          <Text style={styles.assignedText}>
-                            Already assigned to this driver
+                          <Text style={styles.assignVehicleUnavailable}>
+                            Assigned to this driver
                           </Text>
-                        ) : item.drivers?.users?.name ? (
-                          <Text style={styles.assignedText}>
-                            Currently assigned to: {item.drivers.users.name}
+                        ) : item.driver_id ? (
+                          <Text style={styles.assignVehicleUnavailable}>
+                            Assigned to {assignedToName || "another driver"}
                           </Text>
                         ) : null}
                       </View>
-                      <Text
-                        style={[
-                          styles.selectText,
-                          isAssignedToCurrentDriver &&
-                            styles.selectTextDisabled,
-                        ]}
-                      >
-                        {isAssignedToCurrentDriver ? "Assigned" : "Select"}
-                      </Text>
+                      {item.driver_id ? (
+                        <MaterialIcons
+                          name="lock-outline"
+                          size={17}
+                          color="#91A0AF"
+                        />
+                      ) : (
+                        <View style={styles.vehicleSelectIcon}>
+                          <MaterialIcons
+                            name="arrow-forward"
+                            size={15}
+                            color="#1769D2"
+                          />
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 }}
                 showsVerticalScrollIndicator={false}
               />
+            )}
+            {!loadingVehicles && availableVehicles.length > 0 && (
+              <View style={styles.assignModalFooter}>
+                <MaterialIcons name="info-outline" size={15} color="#71869C" />
+                <Text style={styles.assignModalFooterText}>
+                  Vehicles assigned to another driver are unavailable.
+                </Text>
+              </View>
             )}
           </View>
         </View>
@@ -1072,8 +1444,352 @@ const DriverDetails = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
-  content: { padding: 20 },
+  container: { flex: 1, backgroundColor: "#F4F8FC" },
+  headerSafeArea: {
+    backgroundColor: "#17385F",
+  },
+  pageHeader: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    gap: 11,
+  },
+  headerButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 11,
+  },
+  content: { padding: 11, paddingBottom: 26 },
+  profileSummary: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 8,
+  },
+  profileIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  profileIdentityText: {
+    flex: 1,
+    gap: 3,
+  },
+  nameAndStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 1,
+  },
+  contactLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  contactText: {
+    flexShrink: 1,
+    color: "#536D87",
+    fontSize: 10,
+  },
+  statusBadge: {
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  activeBadge: {
+    backgroundColor: "#E4F5EC",
+    color: "#258052",
+  },
+  inactiveBadge: {
+    backgroundColor: "#EEF2F6",
+    color: "#71869C",
+  },
+  detailGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 6,
+    marginBottom: 8,
+  },
+  detailTile: {
+    width: "48%",
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    borderRadius: 9,
+  },
+  detailIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF5FC",
+  },
+  detailTextWrap: {
+    flex: 1,
+  },
+  detailLabel: {
+    color: "#71869C",
+    fontSize: 8,
+    marginBottom: 2,
+  },
+  detailValue: {
+    color: "#17385F",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  primaryEditButton: {
+    minHeight: 36,
+    borderRadius: 8,
+    backgroundColor: "#287BE8",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+    marginBottom: 10,
+  },
+  primaryEditText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  section: {
+    marginBottom: 9,
+  },
+  sectionHeading: {
+    minHeight: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 4,
+  },
+  sectionHeadingSpacer: {
+    flex: 1,
+  },
+  sectionTitle: {
+    color: "#17385F",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  sectionAction: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "#EAF3FD",
+  },
+  sectionActionText: {
+    color: "#1769D2",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  compactCard: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    borderRadius: 9,
+  },
+  vehicleThumbnail: {
+    width: 48,
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: "#EEF4FA",
+  },
+  vehicleThumbnailPlaceholder: {
+    width: 48,
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: "#EEF4FA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compactCardInfo: {
+    flex: 1,
+  },
+  compactCardTitle: {
+    color: "#17385F",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  compactCardSubtitle: {
+    color: "#71869C",
+    fontSize: 8,
+    marginTop: 2,
+  },
+  statusBadgeSmall: {
+    overflow: "hidden",
+    color: "#258052",
+    backgroundColor: "#E4F5EC",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 9,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+  emptySectionCard: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    borderRadius: 9,
+  },
+  emptySectionText: {
+    flex: 1,
+    color: "#71869C",
+    fontSize: 10,
+  },
+  routeIcon: {
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    backgroundColor: "#3182EF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  documentList: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    borderRadius: 9,
+    paddingHorizontal: 9,
+  },
+  documentRow: {
+    minHeight: 29,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+  },
+  documentRowLast: {
+    borderBottomWidth: 0,
+  },
+  documentTitle: {
+    flex: 1,
+    color: "#405A74",
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  documentStatus: {
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    fontSize: 8,
+    fontWeight: "600",
+  },
+  documentVerified: {
+    color: "#258052",
+    backgroundColor: "#E4F5EC",
+  },
+  documentMissing: {
+    color: "#71869C",
+    backgroundColor: "#EEF2F6",
+  },
+  performanceRow: {
+    flexDirection: "row",
+    gap: 5,
+  },
+  performanceTile: {
+    flex: 1,
+    minHeight: 45,
+    paddingHorizontal: 7,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    backgroundColor: "#FFFFFF",
+  },
+  performanceLabel: {
+    color: "#71869C",
+    fontSize: 8,
+  },
+  performanceValue: {
+    color: "#17385F",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  textAction: {
+    alignSelf: "flex-end",
+    paddingTop: 7,
+  },
+  dangerText: {
+    color: "#D94A57",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  actionsOverlay: {
+    flex: 1,
+    alignItems: "flex-end",
+    paddingTop: 58,
+    paddingRight: 10,
+    backgroundColor: "rgba(10,30,50,0.18)",
+  },
+  actionsMenu: {
+    width: 170,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    backgroundColor: "#FFFFFF",
+    elevation: 5,
+  },
+  actionsMenuItem: {
+    minHeight: 39,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+  },
+  actionsMenuText: {
+    color: "#405A74",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  disabledMenuText: {
+    color: "#AAB6C2",
+  },
 
   loadingContainer: {
     flex: 1,
@@ -1082,8 +1798,8 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
-    color: "#666",
+    fontSize: 14,
+    color: "#526981",
   },
 
   errorContainer: {
@@ -1093,13 +1809,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: 14,
+    color: "#526981",
     textAlign: "center",
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: "#7ED321",
+    backgroundColor: "#1769D2",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1113,20 +1829,17 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: "center",
     backgroundColor: "#FFF",
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    padding: 16,
+    borderRadius: 13,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
   },
   avatarContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#1769D2",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -1143,19 +1856,24 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   driverName: {
+    flexShrink: 1,
     fontSize: 20,
     fontWeight: "bold",
-    color: "#333",
+    color: "#17385F",
     marginBottom: 8,
   },
   statusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "600",
+    overflow: "hidden",
   },
   activeStatus: {
     color: "white",
@@ -1164,22 +1882,18 @@ const styles = StyleSheet.create({
     color: "white",
   },
   verifiedText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#7ED321",
-    marginTop: 4,
+    color: "#258052",
   },
 
   infoCard: {
     backgroundColor: "#FFF",
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    padding: 15,
+    borderRadius: 13,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
   },
   cardHeader: {
     flexDirection: "row",
@@ -1188,15 +1902,15 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "bold",
-    color: "#333",
+    color: "#17385F",
   },
   assignButton: {
-    backgroundColor: "#7ED321",
+    backgroundColor: "#1769D2",
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingVertical: 8,
+    borderRadius: 9,
   },
   assignButtonText: {
     color: "#FFF",
@@ -1204,10 +1918,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   unassignButton: {
-    backgroundColor: "#DC3545",
+    backgroundColor: "#D94A57",
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingVertical: 9,
+    borderRadius: 9,
     marginTop: 15,
     alignSelf: "flex-start",
   },
@@ -1246,27 +1960,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "#EAF0F6",
   },
   label: {
     fontSize: 14,
-    color: "#666",
+    color: "#64788E",
     fontWeight: "500",
   },
   value: {
     fontSize: 14,
-    color: "#333",
+    color: "#263B50",
     fontWeight: "600",
     flex: 1,
     textAlign: "right",
   },
 
   noVehicleText: {
-    fontSize: 16,
-    color: "#666",
-    fontStyle: "italic",
+    fontSize: 13,
+    color: "#71869C",
     textAlign: "center",
-    paddingVertical: 20,
+    paddingVertical: 14,
   },
 
   statsContainer: {
@@ -1278,26 +1991,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "bold",
-    color: "#7ED321",
+    color: "#1769D2",
   },
   statLabel: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 12,
+    color: "#71869C",
     marginTop: 4,
   },
 
   actionsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 10,
+    marginTop: 2,
+    marginBottom: 18,
   },
   editButton: {
-    backgroundColor: "#4A90E2",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: "#1769D2",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 9,
     flex: 1,
     marginRight: 10,
   },
@@ -1308,12 +2022,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   removeButton: {
-    backgroundColor: "#DC3545",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    marginLeft: 10,
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#F0C9CD",
+    backgroundColor: "#FFFFFF",
+    marginTop: 2,
   },
   removeButtonText: {
     color: "#FFF",
@@ -1321,8 +2040,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  removeButtonTextDanger: {
+    color: "#D94A57",
+  },
   disabledActionButton: {
-    backgroundColor: "#9CA3AF",
+    backgroundColor: "#7B8EA3",
     opacity: 0.9,
   },
 
@@ -1333,6 +2055,177 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  assignModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(16, 38, 62, 0.42)",
+  },
+  assignModalSheet: {
+    width: "100%",
+    maxHeight: "78%",
+    minHeight: "38%",
+    paddingBottom: 18,
+    backgroundColor: "#F6F9FC",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    overflow: "hidden",
+  },
+  assignModalHeader: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E4EDF5",
+  },
+  assignModalHeading: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  assignModalIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EAF3FD",
+  },
+  assignModalTitleWrap: {
+    flex: 1,
+  },
+  assignModalSubtitle: {
+    marginTop: 3,
+    fontSize: 11,
+    color: "#71869C",
+  },
+  assignCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+  assignLoadingContainer: {
+    flex: 1,
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  assignLoadingText: {
+    color: "#526981",
+    fontSize: 12,
+  },
+  assignEmptyContainer: {
+    flex: 1,
+    minHeight: 210,
+    paddingHorizontal: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignEmptyIcon: {
+    width: 56,
+    height: 56,
+    marginBottom: 12,
+    borderRadius: 18,
+    backgroundColor: "#EAF3FD",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignEmptyTitle: {
+    color: "#17385F",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  assignEmptyText: {
+    marginTop: 6,
+    color: "#71869C",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  vehicleList: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  assignVehicleItem: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+    padding: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+    backgroundColor: "#FFFFFF",
+  },
+  assignVehicleImage: {
+    width: 62,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#EEF4FA",
+  },
+  assignVehicleImagePlaceholder: {
+    width: 62,
+    height: 48,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF4FA",
+  },
+  assignVehicleInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  assignVehicleName: {
+    color: "#17385F",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  assignVehicleDetails: {
+    marginTop: 3,
+    color: "#647B92",
+    fontSize: 10,
+  },
+  assignVehicleUnavailable: {
+    marginTop: 3,
+    color: "#8998A8",
+    fontSize: 9,
+  },
+  vehicleSelectIcon: {
+    width: 27,
+    height: 27,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EAF3FD",
+  },
+  assignModalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 9,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: "#E4EDF5",
+    backgroundColor: "#FFFFFF",
+  },
+  assignModalFooterText: {
+    flex: 1,
+    color: "#71869C",
+    fontSize: 10,
   },
   confirmModalCard: {
     width: "100%",
@@ -1411,12 +2304,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "#EAF0F6",
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "bold",
-    color: "#333",
+    color: "#17385F",
   },
   closeButton: {
     padding: 5,
@@ -1432,7 +2325,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "#EAF0F6",
   },
   vehicleItemDisabled: {
     opacity: 0.6,
@@ -1443,12 +2336,12 @@ const styles = StyleSheet.create({
   vehicleName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: "#17385F",
     marginBottom: 4,
   },
   vehicleDetails: {
     fontSize: 14,
-    color: "#666",
+    color: "#71869C",
     marginBottom: 2,
   },
   assignedText: {
@@ -1458,7 +2351,7 @@ const styles = StyleSheet.create({
   },
   selectText: {
     fontSize: 14,
-    color: "#7ED321",
+    color: "#1769D2",
     fontWeight: "600",
   },
   selectTextDisabled: {
@@ -1480,23 +2373,24 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
+    borderColor: "#D8E4EF",
+    borderRadius: 10,
     padding: 12,
-    fontSize: 16,
+    fontSize: 14,
     marginBottom: 16,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FBFDFF",
+    color: "#263B50",
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#333",
+    color: "#465F78",
     marginBottom: 8,
   },
   updateButton: {
-    backgroundColor: "#7ED321",
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: "#1769D2",
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
     marginTop: 20,
   },

@@ -1,5 +1,4 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, {
   useCallback,
@@ -30,6 +29,7 @@ import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { SelectedVehicle } from "../ownerHelpers/interface/owner.interfece";
+import CustomMap from "../../../components/map";
 
 export default function ManageVehicle() {
   const router = useRouter();
@@ -83,6 +83,11 @@ export default function ManageVehicle() {
     isOnline: false,
     lastUpdatedAt: null,
   });
+  const [driverLocation, setDriverLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [showLocationMap, setShowLocationMap] = useState(false);
   const [loadingGpsStatus, setLoadingGpsStatus] = useState(false);
   const [vehicleStats, setVehicleStats] = useState({
     trips: 0,
@@ -235,6 +240,7 @@ export default function ManageVehicle() {
       const driverId = vehicle?.drivers?.id;
       if (!driverId || !user?.token) {
         setDriverGpsStatus({ isOnline: false, lastUpdatedAt: null });
+        setDriverLocation(null);
         return;
       }
 
@@ -255,6 +261,13 @@ export default function ManageVehicle() {
 
         const location = await response.json().catch(() => null);
         const lastUpdatedAt = location?.recorded_at || null;
+        const latitude = Number(location?.latitude);
+        const longitude = Number(location?.longitude);
+        setDriverLocation(
+          Number.isFinite(latitude) && Number.isFinite(longitude)
+            ? { latitude, longitude }
+            : null,
+        );
         const lastUpdatedTime = lastUpdatedAt
           ? new Date(lastUpdatedAt).getTime()
           : null;
@@ -268,6 +281,7 @@ export default function ManageVehicle() {
       } catch (error) {
         console.error("Error fetching driver GPS status:", error);
         setDriverGpsStatus({ isOnline: false, lastUpdatedAt: null });
+        setDriverLocation(null);
       } finally {
         setLoadingGpsStatus(false);
       }
@@ -1080,7 +1094,7 @@ export default function ManageVehicle() {
     return (
       <SafeAreaView style={styles.container} edges={["bottom", "top"]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A855F7" />
+          <ActivityIndicator size="large" color="#1769D2" />
           <Text style={styles.loadingText}>Loading vehicle details...</Text>
         </View>
       </SafeAreaView>
@@ -1129,7 +1143,7 @@ export default function ManageVehicle() {
 
       <View style={styles.pageContent}>
         {/* Header with Vehicle Image */}
-        <LinearGradient colors={["#A855F7", "#7C3AED"]} style={styles.header}>
+        <View style={styles.header}>
           <View style={styles.headerTop}>
             <TouchableOpacity
               style={styles.backButton}
@@ -1137,6 +1151,7 @@ export default function ManageVehicle() {
             >
               <MaterialIcons name="arrow-back" size={24} color="#FFF" />
             </TouchableOpacity>
+            <Text style={styles.headerTitle}>Vehicle Details</Text>
             <View style={styles.headerSpacer} />
             <TouchableOpacity
               style={styles.moreButton}
@@ -1189,17 +1204,14 @@ export default function ManageVehicle() {
                 )}
               </>
             ) : (
-              <LinearGradient
-                colors={["#EC4899", "#A855F7"]}
-                style={styles.placeholderImage}
-              >
+              <View style={styles.placeholderImage}>
                 <MaterialIcons
                   name="directions-bus"
                   size={64}
-                  color="#FFF"
+                  color="#1769D2"
                   opacity={0.8}
                 />
-              </LinearGradient>
+              </View>
             )}
           </View>
 
@@ -1207,15 +1219,49 @@ export default function ManageVehicle() {
           <View style={styles.vehicleNameBadgeContainer}>
             <View>
               <Text style={styles.vehicleNameInHeader}>{vehicle.name}</Text>
-              <Text style={styles.vehicleModel}>{vehicle.model}</Text>
+              <Text style={styles.vehicleModel}>
+                {vehicle.license_plate}  ·  {vehicle.model}
+              </Text>
             </View>
             <View
-              style={[styles.statusBadge, { backgroundColor: statusColor }]}
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    resolvedVehicleStatus === "maintenance"
+                      ? "#FFF4DC"
+                      : resolvedVehicleStatus === "inactive" ||
+                          resolvedVehicleStatus === "offline"
+                        ? "#EEF2F7"
+                        : "#E5F8ED",
+                },
+              ]}
             >
-              <Text style={styles.statusBadgeText}>{statusLabel}</Text>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: statusColor },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  {
+                    color:
+                      resolvedVehicleStatus === "maintenance"
+                        ? "#B7791F"
+                        : resolvedVehicleStatus === "inactive" ||
+                            resolvedVehicleStatus === "offline"
+                          ? "#65758B"
+                          : "#20864B",
+                  },
+                ]}
+              >
+                {statusLabel}
+              </Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView
           style={styles.scrollContent}
@@ -1225,18 +1271,18 @@ export default function ManageVehicle() {
           {/* Quick Action Buttons */}
           <View style={styles.quickActionsContainer}>
             <TouchableOpacity
-              style={styles.quickActionButton}
+              style={styles.primaryQuickAction}
               onPress={openEditVehicle}
             >
-              <MaterialIcons name="edit" size={20} color="#FFF" />
-              <Text style={styles.quickActionLabel}>Edit</Text>
+              <MaterialIcons name="edit" size={17} color="#FFF" />
+              <Text style={styles.primaryQuickActionLabel}>Edit Vehicle</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={openDocsPage}
+              style={styles.secondaryQuickAction}
+              onPress={() => setShowLocationMap(true)}
             >
-              <MaterialIcons name="description" size={20} color="#FFF" />
-              <Text style={styles.quickActionLabel}>Docs</Text>
+              <MaterialIcons name="fullscreen" size={17} color="#1769D2" />
+              <Text style={styles.secondaryQuickActionLabel}>View on Map</Text>
             </TouchableOpacity>
           </View>
 
@@ -1245,7 +1291,7 @@ export default function ManageVehicle() {
             {/* Vehicle Information Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="info" size={20} color="#A855F7" />
+                <MaterialIcons name="info" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Vehicle Information</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1275,7 +1321,7 @@ export default function ManageVehicle() {
             {/* Assigned Driver Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="person" size={20} color="#A855F7" />
+                <MaterialIcons name="person" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Assigned Driver</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1288,7 +1334,7 @@ export default function ManageVehicle() {
                           : "person"
                       }
                       size={28}
-                      color="#A855F7"
+                      color="#1769D2"
                     />
                   </View>
                   <View style={styles.driverInfo}>
@@ -1314,7 +1360,7 @@ export default function ManageVehicle() {
             {/* Assigned Route Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="route" size={20} color="#A855F7" />
+                <MaterialIcons name="route" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Assigned Route</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1327,11 +1373,37 @@ export default function ManageVehicle() {
               </View>
             </View>
 
+            {/* Vehicle Photos */}
+            {vehicleImageUrls.length > 0 ? (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <MaterialIcons name="photo-library" size={19} color="#1769D2" />
+                  <Text style={styles.cardTitle}>Vehicle Photos</Text>
+                  <Text style={styles.photoCount}>
+                    {vehicleImageUrls.length}
+                  </Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.photoStrip}
+                >
+                  {vehicleImageUrls.map((imageUrl, index) => (
+                    <Image
+                      key={`${imageUrl}-${index}`}
+                      source={{ uri: imageUrl }}
+                      style={styles.photoThumbnail}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
             {/* Maintenance Card */}
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="build" size={20} color="#A855F7" />
+                <MaterialIcons name="build" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Maintenance</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1369,7 +1441,7 @@ export default function ManageVehicle() {
             {/* Insurance & License Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="verified" size={20} color="#A855F7" />
+                <MaterialIcons name="verified" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Insurance & License</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1414,8 +1486,8 @@ export default function ManageVehicle() {
             {/* GPS Status Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="location-on" size={20} color="#A855F7" />
-                <Text style={styles.cardTitle}>GPS Status</Text>
+                <MaterialIcons name="location-on" size={20} color="#1769D2" />
+                <Text style={styles.cardTitle}>Vehicle Location</Text>
               </View>
               <View style={styles.cardContent}>
                 <View style={styles.gpsStatusRow}>
@@ -1440,13 +1512,24 @@ export default function ManageVehicle() {
                     ? "Device connected"
                     : `Last update: ${formatLastSeenText(driverGpsStatus.lastUpdatedAt)}`}
                 </Text>
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={() => setShowLocationMap(true)}
+                >
+                  <MaterialIcons
+                    name="map"
+                    size={16}
+                    color="#1769D2"
+                  />
+                  <Text style={styles.locationButtonText}>View Full Map</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
             {/* Statistics Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="show-chart" size={20} color="#A855F7" />
+                <MaterialIcons name="show-chart" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Statistics</Text>
               </View>
               <View style={styles.statsGrid}>
@@ -1486,7 +1569,7 @@ export default function ManageVehicle() {
             {/* QR Code Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="qr-code" size={20} color="#A855F7" />
+                <MaterialIcons name="qr-code" size={20} color="#1769D2" />
                 <Text style={styles.cardTitle}>Vehicle QR Code</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1514,12 +1597,98 @@ export default function ManageVehicle() {
         </ScrollView>
       </View>
 
+      <Modal
+        visible={showLocationMap}
+        animationType="slide"
+        onRequestClose={() => setShowLocationMap(false)}
+      >
+        <SafeAreaView style={styles.locationMapScreen} edges={["top", "bottom"]}>
+          <View style={styles.locationMapHeader}>
+            <TouchableOpacity
+              style={styles.locationMapBack}
+              onPress={() => setShowLocationMap(false)}
+            >
+              <MaterialIcons name="arrow-back" size={21} color="#17385F" />
+            </TouchableOpacity>
+            <View style={styles.locationMapHeaderText}>
+              <Text style={styles.locationMapTitle}>Vehicle Location</Text>
+              <Text style={styles.locationMapSubtitle}>
+                {vehicle.name}  ·  {vehicle.license_plate}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.locationMapOnlineBadge,
+                {
+                  backgroundColor: driverGpsStatus.isOnline
+                    ? "#E5F8ED"
+                    : "#EEF2F7",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.locationMapOnlineText,
+                  { color: driverGpsStatus.isOnline ? "#20864B" : "#65758B" },
+                ]}
+              >
+                {driverGpsStatus.isOnline ? "Online" : "Offline"}
+              </Text>
+            </View>
+          </View>
+          {driverLocation ? (
+            <CustomMap
+              markers={[
+                {
+                  latitude: driverLocation.latitude,
+                  longitude: driverLocation.longitude,
+                  title: vehicle.name,
+                  type: "driver",
+                },
+              ]}
+              focus={driverLocation}
+              style={styles.locationMap}
+            />
+          ) : (
+            <View style={styles.noLocationState}>
+              <MaterialIcons
+                name="location-disabled"
+                size={42}
+                color="#8CA0B6"
+              />
+              <Text style={styles.noLocationTitle}>Location unavailable</Text>
+              <Text style={styles.noLocationDescription}>
+                No GPS coordinates have been received from this vehicle yet.
+              </Text>
+            </View>
+          )}
+          <View style={styles.locationMapFooter}>
+            <View style={styles.vehicleMiniIcon}>
+              <MaterialIcons name="directions-bus" size={21} color="#1769D2" />
+            </View>
+            <View style={styles.locationMapFooterText}>
+              <Text style={styles.locationMapVehicleName}>{vehicle.name}</Text>
+              <Text style={styles.lastUpdateText}>
+                {driverGpsStatus.lastUpdatedAt
+                  ? `Last update: ${formatLastSeenText(driverGpsStatus.lastUpdatedAt)}`
+                  : "No location update"}
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       {/* Driver Selection Modal */}
       {showSwitchDriverModal && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Driver</Text>
+              <View>
+                <Text style={styles.modalTitle}>Assign Driver</Text>
+                <Text style={styles.assignmentVehicleLabel}>
+                  Vehicle: {vehicle.name} ({vehicle.license_plate})
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setShowSwitchDriverModal(false)}>
                 <MaterialIcons name="close" size={24} color="#1F2937" />
               </TouchableOpacity>
@@ -1550,7 +1719,7 @@ export default function ManageVehicle() {
                         <MaterialIcons
                           name="person"
                           size={24}
-                          color="#A855F7"
+                          color="#1769D2"
                         />
                       </View>
                       <View style={styles.driverItemInfo}>
@@ -1578,7 +1747,7 @@ export default function ManageVehicle() {
                     )}
                     {assigningDriver &&
                       selectedSwitchingDriverId === driver.id && (
-                        <ActivityIndicator size="small" color="#A855F7" />
+                        <ActivityIndicator size="small" color="#1769D2" />
                       )}
                   </TouchableOpacity>
                 );
@@ -1666,49 +1835,90 @@ export default function ManageVehicle() {
       >
         <View style={styles.modalOverlayCentered}>
           <View style={styles.editModalContent}>
-            <View style={styles.modalHeaderTop}>
-              <Text style={styles.modalTitle}>Edit Vehicle</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <MaterialIcons name="close" size={24} color="#1F2937" />
+            <View style={styles.editModalHeader}>
+              <View style={styles.editModalTitleGroup}>
+                <View style={styles.editModalIcon}>
+                  <MaterialIcons
+                    name="directions-bus"
+                    size={18}
+                    color="#1769D2"
+                  />
+                </View>
+                <View>
+                  <Text style={styles.editModalTitle}>Edit Vehicle</Text>
+                  <Text style={styles.editModalSubtitle}>
+                    Update vehicle details
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.editModalClose}
+                onPress={() => setShowEditModal(false)}
+                accessibilityLabel="Close edit vehicle form"
+              >
+                <MaterialIcons name="close" size={21} color="#50677F" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.editModalBody}>
-              <Text style={styles.inputLabel}>Vehicle Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editName}
-                onChangeText={setEditName}
-                placeholder="Enter vehicle name"
-              />
-              <Text style={styles.inputLabel}>License Plate</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editLicensePlate}
-                onChangeText={setEditLicensePlate}
-                placeholder="Enter license plate"
-              />
-              <Text style={styles.inputLabel}>Model</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editModel}
-                onChangeText={setEditModel}
-                placeholder="Enter vehicle model"
-              />
-              <Text style={styles.inputLabel}>Color</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editColor}
-                onChangeText={setEditColor}
-                placeholder="Enter vehicle color"
-              />
-              <Text style={styles.inputLabel}>Capacity</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editCapacity}
-                onChangeText={setEditCapacity}
-                placeholder="Enter seating capacity"
-                keyboardType="numeric"
-              />
+            <ScrollView
+              style={styles.editModalBody}
+              contentContainerStyle={styles.editModalForm}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.editFieldGroup}>
+                <Text style={styles.inputLabel}>Vehicle Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="Enter vehicle name"
+                  placeholderTextColor="#91A1B5"
+                />
+              </View>
+              <View style={styles.editFieldGroup}>
+                <Text style={styles.inputLabel}>License Plate</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editLicensePlate}
+                  onChangeText={setEditLicensePlate}
+                  placeholder="Enter license plate"
+                  placeholderTextColor="#91A1B5"
+                  autoCapitalize="characters"
+                />
+              </View>
+              <View style={styles.editFieldGroup}>
+                <Text style={styles.inputLabel}>Vehicle Model</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editModel}
+                  onChangeText={setEditModel}
+                  placeholder="Enter vehicle model"
+                  placeholderTextColor="#91A1B5"
+                />
+              </View>
+              <View style={styles.editFieldGroup}>
+                <Text style={styles.inputLabel}>Vehicle Color</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editColor}
+                  onChangeText={setEditColor}
+                  placeholder="Enter vehicle color"
+                  placeholderTextColor="#91A1B5"
+                />
+              </View>
+              <View style={styles.editFieldGroup}>
+                <Text style={styles.inputLabel}>Capacity</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editCapacity}
+                  onChangeText={setEditCapacity}
+                  placeholder="Enter seating capacity"
+                  placeholderTextColor="#91A1B5"
+                  keyboardType="numeric"
+                />
+              </View>
+            </ScrollView>
+            <View style={styles.editModalFooter}>
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={handleSaveVehicle}
@@ -1720,7 +1930,7 @@ export default function ManageVehicle() {
                   <Text style={styles.saveButtonText}>Save Changes</Text>
                 )}
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1767,7 +1977,7 @@ const StatItem = ({
   value: string;
 }) => (
   <View style={styles.statItem}>
-    <MaterialIcons name={icon as any} size={24} color="#A855F7" />
+    <MaterialIcons name={icon as any} size={24} color="#1769D2" />
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statLabel}>{label}</Text>
   </View>
@@ -1814,7 +2024,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    backgroundColor: "#A855F7",
+    backgroundColor: "#1769D2",
     borderRadius: 8,
   },
   errorButtonText: {
@@ -1822,41 +2032,52 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   header: {
-    paddingTop: 12,
-    paddingBottom: 24,
+    paddingTop: 0,
+    paddingBottom: 14,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E1EDF9",
   },
   headerTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
     marginBottom: 12,
+    height: 48,
+    backgroundColor: "#17385F",
+    gap: 10,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 36,
     borderRadius: 8,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
   },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   headerSpacer: {
     flex: 1,
   },
   moreButton: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 36,
     borderRadius: 8,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
   },
   imageContainer: {
-    height: 200,
-    marginHorizontal: 16,
-    borderRadius: 12,
+    height: 164,
+    marginHorizontal: 0,
+    borderRadius: 0,
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: 10,
+    backgroundColor: "#EAF3FB",
   },
   vehicleImage: {
     width: "100%",
@@ -1867,67 +2088,100 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#EAF3FB",
   },
   vehicleNameBadgeContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
+    paddingTop: 4,
   },
   vehicleNameInHeader: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#FFF",
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#17385F",
   },
   vehicleModel: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 11,
+    color: "#647C95",
     marginTop: 4,
   },
   statusBadge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: 20,
   },
   statusBadgeText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "600",
-    color: "#FFF",
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   quickActionsContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    gap: 9,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 4,
+    backgroundColor: "#F4F8FC",
   },
-  quickActionButton: {
+  primaryQuickAction: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 38,
+    borderRadius: 9,
+    backgroundColor: "#1769D2",
   },
-  quickActionLabel: {
+  primaryQuickActionLabel: {
+    color: "#FFFFFF",
     fontSize: 11,
-    color: "#6B7280",
-    marginTop: 6,
-    fontWeight: "500",
+    fontWeight: "700",
+  },
+  secondaryQuickAction: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 38,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#1769D2",
+  },
+  secondaryQuickActionLabel: {
+    color: "#1769D2",
+    fontSize: 11,
+    fontWeight: "700",
   },
   content: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     paddingBottom: 40,
+    backgroundColor: "#F4F8FC",
   },
   card: {
     backgroundColor: "#FFF",
-    borderRadius: 12,
-    marginBottom: 16,
+    borderColor: "#DDEBFA",
+    borderWidth: 1,
+    borderRadius: 13,
+    marginBottom: 10,
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: "#4D7EA8",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 1,
   },
   dangerCard: {
     borderLeftWidth: 4,
@@ -1936,30 +2190,45 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "rgba(168, 85, 247, 0.05)",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    backgroundColor: "#F5F9FE",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    gap: 10,
+    borderBottomColor: "#E7F0F9",
+    gap: 8,
+  },
+  photoCount: {
+    marginLeft: "auto",
+    color: "#71869C",
+    fontSize: 10,
+  },
+  photoStrip: {
+    padding: 10,
+    gap: 8,
+  },
+  photoThumbnail: {
+    width: 86,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: "#EAF3FB",
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#17385F",
   },
   dangerTitle: {
     color: "#EF4444",
   },
   cardContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -1996,7 +2265,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    backgroundColor: "#EAF3FE",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -2018,8 +2287,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#A855F7",
-    paddingVertical: 10,
+    backgroundColor: "#1769D2",
+    paddingVertical: 9,
     borderRadius: 8,
     gap: 6,
     marginTop: 4,
@@ -2079,6 +2348,22 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginLeft: 20,
   },
+  locationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderColor: "#1769D2",
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingVertical: 9,
+    marginTop: 12,
+  },
+  locationButtonText: {
+    color: "#1769D2",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2088,7 +2373,7 @@ const styles = StyleSheet.create({
   },
   statItem: {
     width: "48%",
-    backgroundColor: "rgba(168, 85, 247, 0.05)",
+    backgroundColor: "#F3F8FE",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 8,
@@ -2195,6 +2480,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     maxHeight: "80%",
     overflow: "hidden",
+    borderTopWidth: 1,
+    borderColor: "#DDEBFA",
   },
   optionsDrawerContent: {
     backgroundColor: "#FFF",
@@ -2248,15 +2535,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700",
-    color: "#1F2937",
+    color: "#17385F",
+  },
+  assignmentVehicleLabel: {
+    color: "#71869C",
+    fontSize: 10,
+    marginTop: 3,
   },
   driversList: {
     paddingHorizontal: 16,
@@ -2269,14 +2561,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 8,
-    borderRadius: 8,
-    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#DDEBFA",
   },
   driverItemSelected: {
-    backgroundColor: "rgba(168, 85, 247, 0.05)",
-    borderColor: "#A855F7",
+    backgroundColor: "#EDF6FF",
+    borderColor: "#1769D2",
   },
   driverItemOwner: {
     backgroundColor: "#F0F9FF",
@@ -2293,7 +2585,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    backgroundColor: "#EAF3FE",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2332,7 +2624,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 20,
     paddingVertical: 12,
-    backgroundColor: "#A855F7",
+    backgroundColor: "#1769D2",
     borderRadius: 8,
     alignItems: "center",
   },
@@ -2341,61 +2633,199 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFF",
   },
+  locationMapScreen: {
+    flex: 1,
+    backgroundColor: "#F4F8FC",
+  },
+  locationMapHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#DDEBFA",
+  },
+  locationMapBack: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF5FC",
+  },
+  locationMapHeaderText: {
+    flex: 1,
+  },
+  locationMapTitle: {
+    color: "#17385F",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  locationMapSubtitle: {
+    color: "#71869C",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  locationMapOnlineBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  locationMapOnlineText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  locationMap: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: "#E6EEF6",
+  },
+  noLocationState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+  noLocationTitle: {
+    marginTop: 12,
+    color: "#17385F",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  noLocationDescription: {
+    marginTop: 6,
+    color: "#71869C",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  locationMapFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#DDEBFA",
+  },
+  vehicleMiniIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EAF3FE",
+  },
+  locationMapFooterText: {
+    flex: 1,
+  },
+  locationMapVehicleName: {
+    color: "#17385F",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   modalOverlayCentered: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    backgroundColor: "rgba(15, 37, 62, 0.45)",
+    justifyContent: "flex-end",
   },
   editModalContent: {
-    backgroundColor: "#FFF",
-    borderRadius: 24,
-    paddingVertical: 22,
-    paddingHorizontal: 18,
-    maxHeight: "92%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 18,
+    height: "92%",
+    backgroundColor: "#F4F8FC",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#DDEBFA",
   },
-  modalHeaderTop: {
+  editModalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 18,
-    paddingHorizontal: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#DDEBFA",
+  },
+  editModalTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  editModalIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#EAF3FE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editModalTitle: {
+    color: "#17385F",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  editModalSubtitle: {
+    color: "#71869C",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  editModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F6FB",
   },
   editModalBody: {
-    paddingBottom: 16,
+    flex: 1,
+  },
+  editModalForm: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+  },
+  editFieldGroup: {
+    marginBottom: 13,
   },
   inputLabel: {
-    fontSize: 13,
-    color: "#4B5563",
+    fontSize: 11,
+    color: "#526981",
     fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: 6,
   },
   textInput: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: "#111827",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E7F6",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: "#1F3552",
+  },
+  editModalFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#DDEBFA",
+    backgroundColor: "#FFFFFF",
   },
   saveButton: {
-    marginTop: 24,
-    backgroundColor: "#5B21B6",
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: "#1769D2",
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   saveButtonText: {
     color: "#FFF",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
 });

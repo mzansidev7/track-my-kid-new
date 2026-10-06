@@ -7,13 +7,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import { MaterialIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { clearOwnerCache } from "../../store/asyncStorage/ownerCache";
 import { AuthContext } from "../../context/authContext/auth-context";
-import FloatingInput from "../../components/FloatingInput";
 import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
 
@@ -43,11 +44,31 @@ const AddDriver = ({ setActiveButton }: any) => {
     type: "success",
   });
 
-  const { renderHeader } = useOwnerPageHeader({
-    title: "Add Driver",
-    subtitle: "Add a new driver to your fleet",
-    // onBackPress: () => router.push("/(owner)/drivers"),
-  });
+  const renderHeader = () => (
+    <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+      <View style={styles.pageHeader}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/(owner)/(tabs)/drivers");
+            }
+          }}
+          accessibilityLabel="Back to drivers"
+        >
+          <MaterialIcons name="arrow-back" size={21} color="#FFFFFF" />
+        </TouchableOpacity>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle}>Add Driver</Text>
+          <Text style={styles.headerSubtitle}>
+            Add a new driver to your fleet
+          </Text>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 
   useEffect(() => {
     if (!user?.token) return;
@@ -221,8 +242,8 @@ const AddDriver = ({ setActiveButton }: any) => {
       <View style={styles.loadingContainer}>
         {renderHeader()}
         <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color="#EC4899" />
-          <Text style={styles.loadingText}>Loading Vehicles...</Text>
+          <ActivityIndicator size="large" color="#1769D2" />
+          <Text style={styles.loadingText}>Loading vehicles...</Text>
         </View>
       </View>
     );
@@ -254,40 +275,96 @@ const AddDriver = ({ setActiveButton }: any) => {
         onHide={() => setNotification({ ...notification, visible: false })}
       />
       {renderHeader()}
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.form}>
-          <FloatingInput
-            label="Name *"
-            value={formData.name}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-            autoCapitalize="words"
-          />
+          <Text style={styles.formTitle}>Driver information</Text>
+          <Text style={styles.formSubtitle}>
+            Enter the driver’s contact details to get started.
+          </Text>
 
-          <FloatingInput
-            label="Email *"
-            value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>
+              Full name <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="person-outline" size={19} color="#71869C" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter full name"
+                placeholderTextColor="#94A3B3"
+                value={formData.name}
+                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                autoCapitalize="words"
+                accessibilityLabel="Full name"
+              />
+            </View>
+          </View>
 
-          <FloatingInput
-            label="Phone *"
-            value={formData.phone}
-            onChangeText={(text) => setFormData({ ...formData, phone: text })}
-            keyboardType="phone-pad"
-          />
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>
+              Email address <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="mail-outline" size={19} color="#71869C" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter email address"
+                placeholderTextColor="#94A3B3"
+                value={formData.email}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, email: text })
+                }
+                keyboardType="email-address"
+                autoCapitalize="none"
+                accessibilityLabel="Email address"
+              />
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>
+              Phone number <Text style={styles.required}>*</Text>
+            </Text>
+            <View style={styles.inputRow}>
+              <MaterialIcons name="call" size={19} color="#71869C" />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter phone number"
+                placeholderTextColor="#94A3B3"
+                value={formData.phone}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, phone: text })
+                }
+                keyboardType="phone-pad"
+                accessibilityLabel="Phone number"
+              />
+            </View>
+          </View>
           {selectedVehicle && (
-            <FloatingInput
-              label="Vehicle License Plate"
-              value={selectedVehicle.license_plate || ""}
-              editable={false}
-            />
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Vehicle license plate</Text>
+              <View style={[styles.inputRow, styles.readOnlyInput]}>
+                <MaterialIcons
+                  name="directions-car"
+                  size={19}
+                  color="#71869C"
+                />
+                <Text style={styles.readOnlyText}>
+                  {selectedVehicle.license_plate || "Not provided"}
+                </Text>
+              </View>
+            </View>
           )}
 
           {vehicles.length > 0 && (
             <>
-              <Text style={styles.label}>Assign to Vehicle (Optional)</Text>
+              <Text style={styles.label}>
+                Assign to vehicle <Text style={styles.optional}>(Optional)</Text>
+              </Text>
               <TouchableOpacity
                 style={[
                   styles.selectorButton,
@@ -300,6 +377,11 @@ const AddDriver = ({ setActiveButton }: any) => {
                 }}
                 disabled={isVehiclePickerLocked}
               >
+                <MaterialIcons
+                  name="directions-car"
+                  size={19}
+                  color="#71869C"
+                />
                 <Text
                   style={
                     formData.vehicleId
@@ -313,6 +395,13 @@ const AddDriver = ({ setActiveButton }: any) => {
                       ? "Selected vehicle locked"
                       : "Select a vehicle (optional)"}
                 </Text>
+                {!isVehiclePickerLocked && (
+                  <MaterialIcons
+                    name="keyboard-arrow-down"
+                    size={21}
+                    color="#71869C"
+                  />
+                )}
               </TouchableOpacity>
               {isVehiclePickerLocked && (
                 <View style={styles.lockedNoteContainer}>
@@ -328,7 +417,7 @@ const AddDriver = ({ setActiveButton }: any) => {
           {vehicles.length === 0 && (
             <View style={styles.noVehiclesNote}>
               <Text style={styles.noVehiclesNoteText}>
-                💡 No vehicles available yet. You can add the driver now and
+                No vehicles available yet. You can add the driver now and
                 assign a vehicle later.
               </Text>
             </View>
@@ -342,7 +431,14 @@ const AddDriver = ({ setActiveButton }: any) => {
             {loading ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.buttonText}>Add Driver</Text>
+              <>
+                <Text style={styles.buttonText}>Add Driver</Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={19}
+                  color="#FFFFFF"
+                />
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -484,72 +580,152 @@ export default AddDriver;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F4F8FC",
+  },
+  headerSafeArea: {
+    backgroundColor: "#17385F",
+  },
+  pageHeader: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    gap: 11,
+  },
+  headerButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  headerText: {
+    flex: 1,
+  },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 11,
   },
   content: {
     flex: 1,
-    padding: 20,
+  },
+  contentContainer: {
+    padding: 14,
+    paddingBottom: 24,
   },
   form: {
     backgroundColor: "#FFF",
-    borderRadius: 12,
-    padding: 20,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
+  },
+  formTitle: {
+    color: "#17385F",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  formSubtitle: {
+    color: "#71869C",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+    marginBottom: 20,
+  },
+  fieldGroup: {
+    marginBottom: 17,
   },
   label: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-    marginTop: 16,
+    color: "#465F78",
+    marginBottom: 7,
+  },
+  required: {
+    color: "#D94A57",
+  },
+  optional: {
+    color: "#8294A7",
+    fontSize: 11,
+    fontWeight: "400",
+  },
+  inputRow: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#D8E4EF",
+    borderRadius: 10,
+    backgroundColor: "#FBFDFF",
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: "#F9F9F9",
+    flex: 1,
+    minHeight: 44,
+    color: "#263B50",
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  readOnlyInput: {
+    backgroundColor: "#F2F6FA",
+  },
+  readOnlyText: {
+    color: "#526981",
+    fontSize: 13,
+    flex: 1,
   },
   inputDisabled: {
     backgroundColor: "#E5E5E5",
     color: "#666",
   },
   button: {
-    backgroundColor: "#EC4899",
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: "#1769D2",
+    minHeight: 46,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
     marginTop: 20,
   },
   buttonDisabled: {
-    backgroundColor: "#CCC",
+    backgroundColor: "#7B8EA3",
   },
   buttonText: {
     color: "#FFF",
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "600",
   },
   selectorButton: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 8,
-    backgroundColor: "#F9F9F9",
+    borderColor: "#D8E7F6",
+    borderRadius: 10,
+    backgroundColor: "#FBFDFF",
     paddingHorizontal: 12,
-    paddingVertical: 14,
-    marginBottom: 20,
+    marginBottom: 4,
   },
   selectorButtonText: {
+    flex: 1,
     fontSize: 15,
-    color: "#333",
+    color: "#263B50",
   },
   selectorPlaceholderText: {
-    fontSize: 15,
-    color: "#999",
+    flex: 1,
+    fontSize: 13,
+    color: "#8294A7",
   },
   modalOverlay: {
     flex: 1,
@@ -558,15 +734,17 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     backgroundColor: "#FFF",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: "72%",
     padding: 16,
+    borderWidth: 1,
+    borderColor: "#DCE8F3",
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#222",
+    color: "#17385F",
     marginBottom: 12,
   },
   optionsList: {
@@ -577,16 +755,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "#EAF0F6",
     gap: 12,
   },
   vehicleOptionDisabled: {
-    opacity: 0.55,
+    opacity: 0.58,
   },
   sectionDivider: {
     paddingVertical: 8,
     paddingHorizontal: 4,
-    backgroundColor: "#F4F6F8",
+    backgroundColor: "#EEF4FA",
     marginTop: 16,
     marginBottom: 8,
     borderRadius: 8,
@@ -594,11 +772,11 @@ const styles = StyleSheet.create({
   sectionDividerText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#555",
+    color: "#526981",
   },
   assignedText: {
     fontSize: 13,
-    color: "#A00",
+    color: "#71869C",
     marginTop: 4,
   },
   vehicleOptionImage: {
@@ -624,12 +802,12 @@ const styles = StyleSheet.create({
   vehicleOptionName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#333",
+    color: "#17385F",
     marginBottom: 2,
   },
   vehicleOptionPlate: {
     fontSize: 13,
-    color: "#666",
+    color: "#71869C",
   },
   modalCloseBtn: {
     marginTop: 12,
@@ -638,7 +816,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 15,
-    color: "#4A90E2",
+    color: "#1769D2",
     fontWeight: "700",
   },
   noVehiclesContainer: {
@@ -662,7 +840,7 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F4F8FC",
   },
   loadingContent: {
     flex: 1,
@@ -671,21 +849,21 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: "#666",
+    color: "#526981",
     marginTop: 16,
     textAlign: "center",
   },
   noVehiclesNote: {
-    backgroundColor: "#FFF9E6",
-    borderLeftWidth: 4,
-    borderLeftColor: "#FFC107",
+    backgroundColor: "#EEF4FA",
+    borderLeftWidth: 3,
+    borderLeftColor: "#1769D2",
     padding: 12,
-    borderRadius: 6,
+    borderRadius: 9,
     marginVertical: 16,
   },
   noVehiclesNoteText: {
-    fontSize: 14,
-    color: "#856404",
+    fontSize: 12,
+    color: "#526981",
     lineHeight: 20,
   },
   selectorButtonDisabled: {
@@ -694,14 +872,14 @@ const styles = StyleSheet.create({
   },
   lockedNoteContainer: {
     marginTop: 10,
-    borderRadius: 12,
-    backgroundColor: "#EBF2FF",
+    borderRadius: 9,
+    backgroundColor: "#EEF4FA",
     borderWidth: 1,
-    borderColor: "#C6D9FF",
+    borderColor: "#D8E7F6",
     padding: 12,
   },
   lockedNoteText: {
-    color: "#1F3B7A",
+    color: "#526981",
     fontSize: 13,
     lineHeight: 19,
   },

@@ -18,6 +18,11 @@ import {
   Alert,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import {
+  MessageAttachment,
+  getMessagePreview,
+  parseMessageAttachment,
+} from "../../../components/messages/MessageAttachment";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ClientHeader from "../components/ClientHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
@@ -360,6 +365,7 @@ const ClientMessages = () => {
                 const own =
                   message.sender_id ===
                   (user?.userData?.id || user?.userData?.user_id);
+                const attachment = parseMessageAttachment(message.content);
                 return (
                   <View
                     key={message.id}
@@ -371,11 +377,20 @@ const ClientMessages = () => {
                     <View
                       style={[styles.chatBubble, own && styles.chatBubbleOwn]}
                     >
-                      <Text
-                        style={own ? styles.chatMessageOwn : styles.chatMessage}
-                      >
-                        {message.content}
-                      </Text>
+                      {attachment ? (
+                        <MessageAttachment
+                          content={message.content}
+                          isOwn={own}
+                        />
+                      ) : (
+                        <Text
+                          style={
+                            own ? styles.chatMessageOwn : styles.chatMessage
+                          }
+                        >
+                          {message.content}
+                        </Text>
+                      )}
                       <Text style={own ? styles.chatTimeOwn : styles.chatTime}>
                         {formatConversationTime(message.sent_at)}
                         {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
@@ -523,7 +538,8 @@ const ClientMessages = () => {
               const participant = item.other_participant || {};
               const role = (participant.role || "").toLowerCase();
               const lastMessage = item.last_message || {};
-              const preview = lastMessage.content || "Start a conversation";
+              const preview =
+                getMessagePreview(lastMessage.content) || "Start a conversation";
               const time = formatConversationTime(
                 item.last_message_at || lastMessage.sent_at,
               );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -40,6 +40,7 @@ type GooglePlacesAutoCompleteProps = {
   placeholder?: string;
   debounce?: number;
   minLength?: number;
+  compact?: boolean;
 };
 
 const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
@@ -49,88 +50,97 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   placeholder = "Search location",
   debounce = 400,
   minLength = 2,
+  compact = false,
 }) => {
   const [results, setResults] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
-
-  /**
-   * Search Google Places
-   */
-  useEffect(() => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-    }
-
-    const search = value.trim();
-
-    if (search.length < minLength) {
-      setResults([]);
-      return;
-    }
-
-    timer.current = setTimeout(() => {
-      fetchPredictions(search);
-    }, debounce);
-
-    return () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
-    };
-  }, [value, debounce, minLength]);
+  const requestId = useRef(0);
+  const selectedValue = useRef<string | null>(null);
+  const selectingPlace = useRef(false);
 
   /**
    * Fetch autocomplete predictions
    */
-  const fetchPredictions = async (search: string) => {
-    if (!GOOGLE_API_KEY) {
-      console.warn("Google Places API key is missing.");
-      setResults([]);
+  const fetchPredictions = useCallback(
+    async (search: string, currentRequestId: number) => {
+      if (!GOOGLE_API_KEY) {
+        console.warn("Google Places API key is missing.");
+        setResults([]);
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const url =
+          `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
+          `?input=${encodeURIComponent(search)}` +
+          `&key=${GOOGLE_API_KEY}` +
+          `&language=en`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+        if (currentRequestId !== requestId.current) return;
+
+        if (data.status === "OK") {
+          setResults(data.predictions || []);
+        } else {
+          console.warn(
+            "Google Places autocomplete error:",
+            data.status,
+            data.error_message,
+          );
+
+          setResults([]);
+        }
+      } catch (error) {
+        if (currentRequestId !== requestId.current) return;
+        console.error("Google Places autocomplete error:", error);
+        setResults([]);
+      } finally {
+        if (currentRequestId === requestId.current) setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+
+    const search = value.trim();
+    if (
+      search.length < minLength ||
+      selectedValue.current === search
+    ) {
       return;
     }
 
-    setLoading(true);
+    const currentRequestId = ++requestId.current;
+    timer.current = setTimeout(
+      () => fetchPredictions(search, currentRequestId),
+      debounce,
+    );
 
-    try {
-      const url =
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-        `?input=${encodeURIComponent(search)}` +
-        `&key=${GOOGLE_API_KEY}` +
-        `&language=en`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.status === "OK") {
-        setResults(data.predictions || []);
-      } else {
-        console.warn(
-          "Google Places autocomplete error:",
-          data.status,
-          data.error_message,
-        );
-
-        setResults([]);
-      }
-    } catch (error) {
-      console.error("Google Places autocomplete error:", error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [value, debounce, minLength, fetchPredictions]);
 
   /**
    * Select Google Place
    */
   const handleSelect = async (place: Prediction) => {
-    if (!place.place_id || !GOOGLE_API_KEY) {
+    if (!place.place_id || !GOOGLE_API_KEY || selectingPlace.current) {
       return;
     }
 
+    selectingPlace.current = true;
+    requestId.current += 1;
+    selectedValue.current = null;
+    setResults([]);
     setLoading(true);
 
     try {
@@ -166,49 +176,28 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
         coordinates,
       });
 
-      /**
-       * IMPORTANT:
-       *
-       * Parent owns the input value.
-       *
-       * We update the parent FIRST.
-       */
+      selectedValue.current = name.trim();
       onChangeText?.(name);
-
-      /**
-       * Then notify parent that a place was selected.
-       */
       onSelect(name, coordinates, {
         name,
         address,
       });
 
-      /**
-       * Clear suggestions.
-       */
-      setResults([]);
-
-      /**
-       * Remove keyboard.
-       */
       inputRef.current?.blur();
     } catch (error) {
       console.error("Google Place details error:", error);
 
       const address = place.description || "";
-
       const name = place.structured_formatting?.main_text || address;
-
+      selectedValue.current = name.trim();
       onChangeText?.(name);
-
       onSelect(name, null, {
         name,
         address,
       });
-
-      setResults([]);
       inputRef.current?.blur();
     } finally {
+      selectingPlace.current = false;
       setLoading(false);
     }
   };
@@ -217,7 +206,10 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
    * Clear
    */
   const handleClear = () => {
+    requestId.current += 1;
+    selectedValue.current = null;
     setResults([]);
+    setLoading(false);
     onChangeText?.("");
     onSelect("", null);
   };
@@ -226,7 +218,12 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
     <View style={styles.container}>
       {/* Suggestions */}
       {results.length > 0 && (
-        <View style={styles.resultsContainer}>
+        <View
+          style={[
+            styles.resultsContainer,
+            compact && styles.resultsContainerCompact,
+          ]}
+        >
           {results.map((item, index) => {
             const mainText =
               item.structured_formatting?.main_text || item.description || "";
@@ -237,7 +234,11 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
             return (
               <TouchableOpacity
                 key={item.place_id || item.description || String(index)}
-                style={styles.resultItem}
+                style={[
+                  styles.resultItem,
+                  compact && styles.resultItemCompact,
+                ]}
+                disabled={loading}
                 activeOpacity={0.7}
                 onPress={() => handleSelect(item)}
               >
@@ -265,20 +266,31 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
       )}
 
       {/* Input */}
-      <View style={styles.inputContainer}>
-        <View style={styles.inputIcon}>
-          <Text style={styles.inputIconText}>📍</Text>
-        </View>
+      <View
+        style={[
+          styles.inputContainer,
+          compact && styles.inputContainerCompact,
+        ]}
+      >
+        {!compact && (
+          <View style={styles.inputIcon}>
+            <Text style={styles.inputIconText}>📍</Text>
+          </View>
+        )}
 
         <TextInput
           ref={inputRef}
           value={value}
           onChangeText={(text) => {
+            selectedValue.current = null;
+            requestId.current += 1;
+            setResults([]);
+            setLoading(false);
             onChangeText?.(text);
           }}
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
-          style={styles.input}
+          style={[styles.input, compact && styles.inputCompact]}
           autoCorrect={false}
           autoCapitalize="words"
           returnKeyType="search"
@@ -288,17 +300,21 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
           <ActivityIndicator
             size="small"
             color="#4A90E2"
-            style={styles.loader}
+            style={[styles.loader, compact && styles.loaderCompact]}
           />
         )}
 
         {!loading && value.length > 0 && (
           <TouchableOpacity
-            style={styles.clearButton}
+            style={[styles.clearButton, compact && styles.clearButtonCompact]}
             onPress={handleClear}
             activeOpacity={0.7}
           >
-            <Text style={styles.clearText}>×</Text>
+            <Text
+              style={[styles.clearText, compact && styles.clearTextCompact]}
+            >
+              ×
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -326,6 +342,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 6,
   },
+  inputContainerCompact: {
+    height: 46,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#C9E4FA",
+  },
 
   inputIcon: {
     width: 40,
@@ -349,9 +372,18 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#111827",
   },
+  inputCompact: {
+    height: 44,
+    paddingHorizontal: 0,
+    fontSize: 14,
+    color: "#17385F",
+  },
 
   loader: {
     marginHorizontal: 12,
+  },
+  loaderCompact: {
+    marginHorizontal: 4,
   },
 
   clearButton: {
@@ -363,11 +395,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 4,
   },
+  clearButtonCompact: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 0,
+  },
 
   clearText: {
     fontSize: 24,
     lineHeight: 25,
     color: "#6B7280",
+  },
+  clearTextCompact: {
+    fontSize: 23,
+    lineHeight: 25,
   },
 
   resultsContainer: {
@@ -393,6 +435,11 @@ const styles = StyleSheet.create({
 
     zIndex: 99999,
   },
+  resultsContainerCompact: {
+    bottom: 50,
+    maxHeight: 180,
+    borderRadius: 8,
+  },
 
   resultItem: {
     minHeight: 68,
@@ -403,6 +450,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
     backgroundColor: "#FFFFFF",
+  },
+  resultItemCompact: {
+    minHeight: 48,
+    paddingHorizontal: 9,
   },
 
   resultIcon: {

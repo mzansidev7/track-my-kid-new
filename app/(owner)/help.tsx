@@ -2,6 +2,7 @@ import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, View } from "react-native";
+import { useTheme } from "../../styles/theme";
 import { HelpSupportContent } from "../../components/HelpSupportContent";
 import {
   helpSubtitleBySection,
@@ -11,6 +12,7 @@ import {
 
 const Help = () => {
   const router = useRouter();
+  const { colors } = useTheme();
 
   const { renderHeader } = useOwnerPageHeader({
     title: "Help & Support",
@@ -45,7 +47,7 @@ const Help = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
 
       <HelpSupportContent

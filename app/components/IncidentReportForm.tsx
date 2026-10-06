@@ -18,7 +18,10 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { AuthContext } from "../../context/authContext/auth-context";
+import { CLIENT_COLORS, DRIVER_COLORS, useTheme } from "../../styles/theme";
 import { resolveWorkingBaseUrl } from "../../url";
+import { useOwnerPageHeader } from "../(owner)/ownerHelpers/hooks/useOwnerPageHeader";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type ReporterRole = "client" | "driver" | "owner";
 type RelatedRoute = {
@@ -28,6 +31,16 @@ type RelatedRoute = {
   children?: any[];
 };
 type RelatedChild = { id: string; name: string; lastname?: string };
+type IncidentPalette = {
+  background: string;
+  surface: string;
+  border: string;
+  divider: string;
+  accent: string;
+  textPrimary: string;
+  textSecondary: string;
+  error: string;
+};
 
 const labels: Record<string, string> = {
   safety_concern: "Safety concern",
@@ -50,7 +63,33 @@ export default function IncidentReportForm({
   initialChildId?: string;
 }) {
   const router = useRouter();
+  const { colors, getBrandColors } = useTheme();
   const { user } = useContext(AuthContext);
+  const brandColors = getBrandColors(role) as Record<
+    string,
+    string | undefined
+  >;
+  const palette: IncidentPalette = {
+    background: brandColors.background || colors.background,
+    surface: brandColors.card || brandColors.surface || colors.surface,
+    border: brandColors.cardBorder || brandColors.border || colors.border,
+    divider: brandColors.divider || colors.divider,
+    accent: brandColors.primary || colors.primary,
+    textPrimary:
+      role === "client"
+        ? CLIENT_COLORS.textPrimary
+        : role === "driver"
+          ? DRIVER_COLORS.text
+          : colors.text.primary,
+    textSecondary:
+      role === "client"
+        ? CLIENT_COLORS.textSecondary
+        : role === "driver"
+          ? DRIVER_COLORS.muted
+          : colors.text.secondary,
+    error: colors.error,
+  };
+  const styles = createStyles(palette);
   const [routes, setRoutes] = useState<RelatedRoute[]>([]);
   const [children, setChildren] = useState<RelatedChild[]>([]);
   const [routeId, setRouteId] = useState(initialRouteId || "");
@@ -63,6 +102,13 @@ export default function IncidentReportForm({
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const { renderHeader } = useOwnerPageHeader({
+    title: "SAFETY & SUPPORT",
+    subtitle: `Send a report to the school and support team.`,
+    actionLabel: "+ Add New Driver",
+    onBackPress: () => router.push("/(owner)/(tabs)"),
+  });
 
   const loadOptions = useCallback(async () => {
     if (!user?.token) {
@@ -113,7 +159,8 @@ export default function IncidentReportForm({
             });
         });
         setChildren(Array.from(uniqueChildren.values()));
-        if (!initialRouteId && nextRoutes.length === 1) setRouteId(nextRoutes[0].id);
+        if (!initialRouteId && nextRoutes.length === 1)
+          setRouteId(nextRoutes[0].id);
       }
     } catch (requestError) {
       setLoadError(
@@ -221,229 +268,242 @@ export default function IncidentReportForm({
   const childOptions = role === "client" ? children : routeChildren;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          accessibilityLabel="Go back"
-        >
-          <Text style={styles.back}>‹</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>SAFETY & SUPPORT</Text>
-          <Text style={styles.title}>{title}</Text>
-        </View>
-      </View>
-      <Text style={styles.intro}>
-        Send a report to the school team. High and critical reports are
-        highlighted for faster follow-up.
-      </Text>
-
-      {loadingOptions ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color="#2563EB" />
-          <Text style={styles.muted}>Loading your routes and students…</Text>
-        </View>
-      ) : null}
-      {loadError ? <Text style={styles.error}>{loadError}</Text> : null}
-
-      {role !== "client" && !loadingOptions ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>Route *</Text>
-          <View style={styles.picker}>
-            <Picker
-              selectedValue={routeId}
-              onValueChange={(value) => {
-                setRouteId(String(value || ""));
-                setChildId("");
-              }}
-            >
-              <Picker.Item label="Select a route" value="" />
-              {routes.map((route) => (
-                <Picker.Item
-                  key={route.id}
-                  label={route.route_name || "Route"}
-                  value={route.id}
-                />
-              ))}
-            </Picker>
-          </View>
-          {routes.length === 0 ? (
-            <Text style={styles.muted}>
-              No routes are currently assigned to your account.
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {!loadingOptions && childOptions.length > 0 ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>
-            {role === "client" ? "Child *" : "Related child (optional)"}
-          </Text>
-          <View style={styles.picker}>
-            <Picker
-              selectedValue={childId}
-              onValueChange={(value) => setChildId(String(value || ""))}
-            >
-              <Picker.Item
-                label={
-                  role === "client" ? "Select a child" : "No specific child"
-                }
-                value=""
-              />
-              {childOptions.map((child) => (
-                <Picker.Item
-                  key={child.id}
-                  label={displayChild(child)}
-                  value={child.id}
-                />
-              ))}
-            </Picker>
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Incident type *</Text>
-        <View style={styles.picker}>
-          <Picker
-            selectedValue={incidentType}
-            onValueChange={(value) => setIncidentType(String(value))}
-          >
-            {Object.entries(labels).map(([value, label]) => (
-              <Picker.Item key={value} label={label} value={value} />
-            ))}
-          </Picker>
-        </View>
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Severity *</Text>
-        <View style={styles.picker}>
-          <Picker
-            selectedValue={severity}
-            onValueChange={(value) => setSeverity(String(value))}
-          >
-            <Picker.Item label="Low" value="low" />
-            <Picker.Item label="Medium" value="medium" />
-            <Picker.Item label="High" value="high" />
-            <Picker.Item label="Critical" value="critical" />
-          </Picker>
-        </View>
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>Location (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={location}
-          onChangeText={setLocation}
-          placeholder="Address or location details"
-        />
-      </View>
-      <View style={styles.field}>
-        <Text style={styles.label}>What happened? *</Text>
-        <TextInput
-          style={[styles.input, styles.multiline]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Describe the incident and any action already taken…"
-          multiline
-          textAlignVertical="top"
-          maxLength={3000}
-        />
-        <Text style={styles.counter}>{description.length}/3000</Text>
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.submit,
-          (saving || success || loadingOptions) && styles.disabled,
-        ]}
-        onPress={submit}
-        disabled={saving || success || loadingOptions}
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+      {renderHeader()}
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        {saving ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.submitText}>Submit incident report</Text>
-        )}
-      </TouchableOpacity>
-      <Text style={styles.footnote}>
-        Your report is shared with the school associated with the selected
-        student or route.
-      </Text>
-    </ScrollView>
+        {loadingOptions ? (
+          <View style={[styles.loading, { marginTop: 20 }]}>
+            <ActivityIndicator color={palette.accent} />
+            <Text style={styles.muted}>Loading your routes and students…</Text>
+          </View>
+        ) : null}
+        {loadError ? <Text style={styles.error}>{loadError}</Text> : null}
+
+        {role !== "client" && !loadingOptions ? (
+          <View style={[styles.field, { marginTop: 20 }]}>
+            <Text style={styles.label}>Route *</Text>
+            <View style={styles.picker}>
+              <Picker
+                style={{ color: palette.textPrimary }}
+                selectedValue={routeId}
+                onValueChange={(value) => {
+                  setRouteId(String(value || ""));
+                  setChildId("");
+                }}
+              >
+                <Picker.Item label="Select a route" value="" />
+                {routes.map((route) => (
+                  <Picker.Item
+                    key={route.id}
+                    label={route.route_name || "Route"}
+                    value={route.id}
+                  />
+                ))}
+              </Picker>
+            </View>
+            {routes.length === 0 ? (
+              <Text style={styles.muted}>
+                No routes are currently assigned to your account.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!loadingOptions && childOptions.length > 0 ? (
+          <View style={[styles.field, { marginTop: 20 }]}>
+            <Text style={styles.label}>
+              {role === "client" ? "Child *" : "Related child (optional)"}
+            </Text>
+            <View style={styles.picker}>
+              <Picker
+                style={{ color: palette.textPrimary }}
+                selectedValue={childId}
+                onValueChange={(value) => setChildId(String(value || ""))}
+              >
+                <Picker.Item
+                  label={
+                    role === "client" ? "Select a child" : "No specific child"
+                  }
+                  value=""
+                />
+                {childOptions.map((child) => (
+                  <Picker.Item
+                    key={child.id}
+                    label={displayChild(child)}
+                    value={child.id}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={[styles.field, { marginTop: 20 }]}>
+          <Text style={styles.label}>Incident type *</Text>
+          <View style={styles.picker}>
+            <Picker
+              style={{ color: palette.textPrimary }}
+              selectedValue={incidentType}
+              onValueChange={(value) => setIncidentType(String(value))}
+            >
+              {Object.entries(labels).map(([value, label]) => (
+                <Picker.Item key={value} label={label} value={value} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>Severity *</Text>
+          <View style={styles.picker}>
+            <Picker
+              style={{ color: palette.textPrimary }}
+              selectedValue={severity}
+              onValueChange={(value) => setSeverity(String(value))}
+            >
+              <Picker.Item label="Low" value="low" />
+              <Picker.Item label="Medium" value="medium" />
+              <Picker.Item label="High" value="high" />
+              <Picker.Item label="Critical" value="critical" />
+            </Picker>
+          </View>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>Location (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={location}
+            onChangeText={setLocation}
+            placeholder="Address or location details"
+            placeholderTextColor={palette.textSecondary}
+          />
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.label}>What happened? *</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Describe the incident and any action already taken…"
+            placeholderTextColor={palette.textSecondary}
+            multiline
+            textAlignVertical="top"
+            maxLength={3000}
+          />
+          <Text style={styles.counter}>{description.length}/3000</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.submit,
+            (saving || success || loadingOptions) && styles.disabled,
+          ]}
+          onPress={submit}
+          disabled={saving || success || loadingOptions}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.submitText}>Submit incident report</Text>
+          )}
+        </TouchableOpacity>
+        <Text style={styles.footnote}>
+          Your report is shared with the school associated with the selected
+          student or route.
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F8FAFC" },
-  content: { padding: 18, paddingBottom: 40 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  back: { color: "#2563EB", fontSize: 34, lineHeight: 38 },
-  eyebrow: {
-    color: "#64748B",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  title: { color: "#172554", fontSize: 22, fontWeight: "800", marginTop: 3 },
-  intro: { color: "#64748B", fontSize: 13, lineHeight: 19, marginBottom: 18 },
-  field: { marginBottom: 15 },
-  label: { color: "#334155", fontSize: 13, fontWeight: "700", marginBottom: 7 },
-  picker: {
-    overflow: "hidden",
-    minHeight: 52,
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#D9E2EF",
-    borderRadius: 10,
-    backgroundColor: "#FFF",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#D9E2EF",
-    borderRadius: 10,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-    backgroundColor: "#FFF",
-    color: "#172554",
-    fontSize: 14,
-  },
-  multiline: { minHeight: 130 },
-  counter: { marginTop: 4, color: "#94A3B8", fontSize: 10, textAlign: "right" },
-  submit: {
-    minHeight: 50,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: "#2563EB",
-    marginTop: 6,
-  },
-  submitText: { color: "#FFF", fontSize: 14, fontWeight: "800" },
-  disabled: { opacity: 0.6 },
-  footnote: {
-    marginTop: 12,
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: "center",
-  },
-  loading: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    marginBottom: 16,
-  },
-  muted: { color: "#64748B", fontSize: 11, marginTop: 5 },
-  error: { marginBottom: 14, color: "#DC2626", fontSize: 12 },
-});
+const createStyles = (palette: IncidentPalette) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: palette.background },
+    content: { padding: 18, paddingBottom: 40 },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 12,
+    },
+    back: { color: palette.accent, fontSize: 34, lineHeight: 38 },
+    eyebrow: {
+      color: palette.accent,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+    },
+    title: {
+      color: palette.textPrimary,
+      fontSize: 22,
+      fontWeight: "800",
+      marginTop: 3,
+    },
+    intro: {
+      color: palette.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+      marginBottom: 18,
+    },
+    field: { marginBottom: 15 },
+    label: {
+      color: palette.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+      marginBottom: 7,
+    },
+    picker: {
+      overflow: "hidden",
+      minHeight: 52,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: palette.border,
+      borderRadius: 10,
+      backgroundColor: palette.surface,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: palette.border,
+      borderRadius: 10,
+      paddingHorizontal: 13,
+      paddingVertical: 12,
+      backgroundColor: palette.surface,
+      color: palette.textPrimary,
+      fontSize: 14,
+    },
+    multiline: { minHeight: 130 },
+    counter: {
+      marginTop: 4,
+      color: palette.textSecondary,
+      fontSize: 10,
+      textAlign: "right",
+    },
+    submit: {
+      minHeight: 50,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: palette.accent,
+      marginTop: 6,
+    },
+    submitText: { color: "#FFF", fontSize: 14, fontWeight: "800" },
+    disabled: { opacity: 0.6 },
+    footnote: {
+      marginTop: 12,
+      color: palette.textSecondary,
+      fontSize: 11,
+      lineHeight: 16,
+      textAlign: "center",
+    },
+    loading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      marginBottom: 16,
+    },
+    muted: { color: palette.textSecondary, fontSize: 11, marginTop: 5 },
+    error: { marginBottom: 14, color: palette.error, fontSize: 12 },
+  });

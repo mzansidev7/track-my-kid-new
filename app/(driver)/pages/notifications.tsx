@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Alert,
   ActivityIndicator,
   FlatList,
   RefreshControl,
@@ -17,10 +18,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const DriverNotifications = () => {
   const {
     notifications,
+    unreadCount,
     loading,
     error,
     refreshing,
     markAsRead,
+    markingAll,
+    markAllAsRead,
     onRefresh,
     fetchNotifications,
   } = useDriverNotifications();
@@ -64,6 +68,20 @@ const DriverNotifications = () => {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (markingAll || unreadCount === 0) return;
+    try {
+      await markAllAsRead();
+    } catch (requestError) {
+      Alert.alert(
+        "Unable to update notifications",
+        requestError instanceof Error
+          ? requestError.message
+          : "Please try again.",
+      );
+    }
   };
 
   const renderNotification = ({ item }: { item: NotificationRow }) => (
@@ -135,12 +153,26 @@ const DriverNotifications = () => {
         subtitle="Stay connected with parents, school and fleet owner"
         showBackButton={true}
         showNotifications={true}
-        notificationCount={
-          (notifications &&
-            notifications.filter((n: any) => !n.is_read).length) ||
-          0
-        }
+        notificationCount={unreadCount}
       />
+      {unreadCount > 0 && (
+        <View style={styles.readAllBar}>
+          <Text style={styles.readAllCount}>
+            {unreadCount} unread notification{unreadCount === 1 ? "" : "s"}
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={markingAll}
+            onPress={handleMarkAllAsRead}
+            style={styles.readAllButton}
+          >
+            <MaterialIcons name="done-all" size={17} color="#276749" />
+            <Text style={styles.readAllText}>
+              {markingAll ? "Reading..." : "Read all"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4CAF50" />
@@ -171,6 +203,35 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 12,
     paddingBottom: 20,
+  },
+  readAllBar: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 12,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#EAF7EF",
+  },
+  readAllCount: {
+    flex: 1,
+    color: "#276749",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  readAllButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+  },
+  readAllText: {
+    color: "#276749",
+    fontSize: 12,
+    fontWeight: "800",
   },
   notificationCard: {
     flexDirection: "row",

@@ -41,6 +41,13 @@ module.exports = ({ config }) => {
     plugins: [
       ...(config.plugins || []),
       [
+        "expo-audio",
+        {
+          microphonePermission:
+            "Allow Track My Kid to record voice messages in conversations.",
+        },
+      ],
+      [
         "expo-build-properties",
         {
           android: {

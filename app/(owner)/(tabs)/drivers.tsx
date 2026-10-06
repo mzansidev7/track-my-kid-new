@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Modal,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,11 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useTheme } from "../../../styles/theme";
 import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
-import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
-import { driversPageStyles } from "../ownerHelpers/styles/ownerStyles";
+import { driversPageStyles as baseDriversPageStyles } from "../ownerHelpers/styles/ownerStyles";
 import {
   formatLicense,
   getInitials,
@@ -26,13 +24,148 @@ import {
 import Loading from "../ownerHelpers/components/Loading";
 import Error from "../ownerHelpers/components/Error";
 
+const getDriverStatus = (driver: any) => {
+  const vehicleCount =
+    driver.vehicles?.length ?? driver.raw?.vehicles?.length ?? 0;
+  return String(
+    driver.status || (vehicleCount > 0 ? "active" : "inactive"),
+  ).toLowerCase();
+};
+
 const DriversScreen = () => {
   const router = useRouter();
+  const { colors, getBrandColors, shadows } = useTheme();
+  const ownerColors = getBrandColors("owner");
+  const driversPageStyles: Record<string, any> = {
+    ...baseDriversPageStyles,
+    container: [
+      baseDriversPageStyles.container,
+      { backgroundColor: colors.background },
+    ],
+    statusCard: [
+      baseDriversPageStyles.statusCard,
+      { backgroundColor: colors.surface },
+      shadows.sm,
+    ],
+    statusCardNumber: [
+      baseDriversPageStyles.statusCardNumber,
+      { color: colors.text.primary },
+    ],
+    statusCardLabel: [
+      baseDriversPageStyles.statusCardLabel,
+      { color: colors.text.secondary },
+    ],
+    searchContainer: [
+      baseDriversPageStyles.searchContainer,
+      { backgroundColor: colors.surface, borderColor: "#D8E7F6" },
+      baseDriversPageStyles.searchContainerCompact,
+    ],
+    searchInput: [
+      baseDriversPageStyles.searchInput,
+      { color: colors.text.primary },
+    ],
+    card: [
+      baseDriversPageStyles.card,
+      { backgroundColor: colors.surface, borderColor: colors.border },
+    ],
+    name: [baseDriversPageStyles.name, { color: colors.text.primary }],
+    subText: [baseDriversPageStyles.subText, { color: colors.text.secondary }],
+    avatarCircle: [
+      baseDriversPageStyles.avatarCircle,
+      { backgroundColor: "#E9F2FC" },
+    ],
+    avatarText: [
+      baseDriversPageStyles.avatarText,
+      { color: ownerColors.primaryDark },
+    ],
+    activePill: [
+      baseDriversPageStyles.activePill,
+      { backgroundColor: colors.secondary },
+    ],
+    activeText: [
+      baseDriversPageStyles.activeText,
+      { color: ownerColors.primaryDark },
+    ],
+    inactivePill: [
+      baseDriversPageStyles.inactivePill,
+      { backgroundColor: colors.surfaceHover },
+    ],
+    inactiveText: [
+      baseDriversPageStyles.inactiveText,
+      { color: colors.text.secondary },
+    ],
+    statItem: [
+      baseDriversPageStyles.statItem,
+      { backgroundColor: colors.surfaceHover },
+    ],
+    statNumber: [
+      baseDriversPageStyles.statNumber,
+      { color: colors.text.primary },
+    ],
+    statLabel: [
+      baseDriversPageStyles.statLabel,
+      { color: colors.text.secondary },
+    ],
+    emptyState: [
+      baseDriversPageStyles.emptyState,
+      { backgroundColor: colors.surface, borderColor: colors.border },
+    ],
+    emptyTitle: [
+      baseDriversPageStyles.emptyTitle,
+      { color: colors.text.primary },
+    ],
+    emptyBody: [
+      baseDriversPageStyles.emptyBody,
+      { color: colors.text.secondary },
+    ],
+    refreshButton: [
+      baseDriversPageStyles.refreshButton,
+      { backgroundColor: ownerColors.primary },
+    ],
+    dividerLine: [
+      baseDriversPageStyles.dividerLine,
+      { backgroundColor: colors.divider },
+    ],
+    dividerText: [
+      baseDriversPageStyles.dividerText,
+      { color: colors.text.secondary },
+    ],
+    modalContainer: [
+      baseDriversPageStyles.modalContainer,
+      { backgroundColor: colors.surface },
+    ],
+    avatar: [
+      baseDriversPageStyles.avatar,
+      { backgroundColor: ownerColors.primary },
+    ],
+    modalTitle: [
+      baseDriversPageStyles.modalTitle,
+      { color: colors.text.primary },
+    ],
+    profileText: [
+      baseDriversPageStyles.profileText,
+      { color: colors.text.secondary },
+    ],
+    infoCard: [
+      baseDriversPageStyles.infoCard,
+      { backgroundColor: colors.surfaceHover },
+    ],
+    label: [baseDriversPageStyles.label, { color: colors.text.secondary }],
+    value: [baseDriversPageStyles.value, { color: colors.text.primary }],
+    modalText: [
+      baseDriversPageStyles.modalText,
+      { color: colors.text.secondary },
+    ],
+    closeBtn: [baseDriversPageStyles.closeBtn, { backgroundColor: "#1769D2" }],
+  };
   const { drivers, loadingDrivers, error, refreshDrivers } = useDrivers();
 
   const [selectedDriver, setSelectedDriver] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "All" | "Active" | "Inactive"
+  >("All");
 
   const openDriver = (driver: any) => {
     router.push(`/(owner)/driver-details?driverId=${driver.id}`);
@@ -53,13 +186,28 @@ const DriversScreen = () => {
     refreshDrivers(true);
   }, [refreshDrivers]);
 
-  const { renderHeader } = useOwnerPageHeader({
-    title: "Driver Management",
-    subtitle: `${drivers.length} total drivers`,
-    actionLabel: "+ Add New Driver",
-    onActionPress: () => router.push("/add-driver"),
-    onBackPress: () => router.push("/(owner)/(tabs)"),
-  });
+  const renderHeader = () => (
+    <SafeAreaView edges={["top"]} style={driversPageStyles.headerSafeArea}>
+      <View style={driversPageStyles.managementHeaderRow}>
+        <TouchableOpacity
+          style={driversPageStyles.headerButton}
+          onPress={() => router.push("/(owner)/(tabs)")}
+          accessibilityLabel="Back to dashboard"
+        >
+          <MaterialIcons name="arrow-back" size={21} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={driversPageStyles.managementHeaderTitle}>Drivers</Text>
+        <View style={driversPageStyles.headerSpacer} />
+        <TouchableOpacity
+          style={driversPageStyles.headerButton}
+          onPress={() => router.push("/add-driver")}
+          accessibilityLabel="Add driver"
+        >
+          <MaterialIcons name="add" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
 
   const filteredDrivers = useMemo(() => {
     const list = Array.isArray(drivers) ? drivers : [];
@@ -69,20 +217,27 @@ const DriversScreen = () => {
     const query = searchQuery.toLowerCase();
     return list.filter((driver: any) => {
       const name = driver.name || driver.raw?.users?.name || "";
-      return name.toLowerCase().includes(query);
+      const email = driver.email || driver.raw?.users?.email || "";
+      const phone = driver.phone || driver.raw?.users?.phone || "";
+      const license = driver.vehicle_plate_number || "";
+      return [name, email, phone, license].some((value) =>
+        String(value).toLowerCase().includes(query),
+      );
     });
   }, [drivers, searchQuery]);
 
-  const activeDriversCount = filteredDrivers.filter(
-    (driver: any) => driver.status === "active",
-  ).length;
-  const availableDriversCount = filteredDrivers.filter(
-    (driver: any) => !driver.hasAssignedVehicle && driver.status === "active",
-  ).length;
-  const offDutyDriversCount = filteredDrivers.filter(
-    (driver: any) => driver.status === "inactive" && driver.hasAssignedVehicle,
-  ).length;
-  const inactiveDriversCount = filteredDrivers.length - activeDriversCount;
+  const statusFilteredDrivers = useMemo(
+    () =>
+      filteredDrivers.filter((driver: any) => {
+        const status = getDriverStatus(driver);
+        return statusFilter === "All" || status === statusFilter.toLowerCase();
+      }),
+    [filteredDrivers, statusFilter],
+  );
+  const activeDriversCount = drivers.filter((driver: any) => {
+    return getDriverStatus(driver) === "active";
+  }).length;
+  const inactiveDriversCount = drivers.length - activeDriversCount;
 
   /* ---------------- DRIVER CARD ---------------- */
   const renderItem = ({ item }: any) => {
@@ -98,12 +253,11 @@ const DriversScreen = () => {
     }
 
     const name = item.name || item.raw?.users?.name || "Driver";
-    const email = item.email || item.raw?.users?.email || "";
     const phone = item.phone || item.raw?.users?.phone || "";
     const vehicles = item.vehicles?.length ?? item.raw?.vehicles?.length ?? 0;
     const routes = item.routes ?? item.raw?.routes ?? 0;
     const students = item.students ?? item.raw?.students ?? 0;
-    const status = item.status || (vehicles > 0 ? "active" : "inactive");
+    const status = getDriverStatus(item);
     const avatar = item.avatar || item.raw?.avatar || null;
     const isInactive = status === "inactive";
 
@@ -153,8 +307,17 @@ const DriversScreen = () => {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {email || phone || "No contact information"}
+              {phone || "No phone number"}
             </Text>
+            <View style={driversPageStyles.iconRow}>
+              <MaterialIcons name="directions-car" size={13} color="#71869C" />
+              <Text style={driversPageStyles.subText} numberOfLines={1}>
+                {item.vehicle?.license_plate ||
+                  item.vehicles?.[0]?.license_plate ||
+                  item.raw?.vehicles?.[0]?.license_plate ||
+                  "No vehicle assigned"}
+              </Text>
+            </View>
           </View>
 
           <View
@@ -178,46 +341,36 @@ const DriversScreen = () => {
           </View>
         </View>
 
-        {status === "active" && (
-          <View style={driversPageStyles.cardStats}>
+        <View style={driversPageStyles.cardStats}>
+          {vehicles > 0 && (
             <View style={driversPageStyles.statItem}>
               <Text style={driversPageStyles.statNumber}>{vehicles}</Text>
               <Text style={driversPageStyles.statLabel}>Vehicles</Text>
             </View>
-            <View style={driversPageStyles.statItem}>
-              <Text style={driversPageStyles.statNumber}>{routes}</Text>
-              <Text style={driversPageStyles.statLabel}>Routes</Text>
-            </View>
-            <View style={driversPageStyles.statItem}>
-              <Text style={driversPageStyles.statNumber}>{students}</Text>
-              <Text style={driversPageStyles.statLabel}>Students</Text>
-            </View>
+          )}
+          <View style={driversPageStyles.statItem}>
+            <Text style={driversPageStyles.statNumber}>{routes}</Text>
+            <Text style={driversPageStyles.statLabel}>Routes</Text>
           </View>
-        )}
+          <View style={driversPageStyles.statItem}>
+            <Text style={driversPageStyles.statNumber}>{students}</Text>
+            <Text style={driversPageStyles.statLabel}>Students</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={21} color="#71869C" />
+        </View>
       </TouchableOpacity>
     );
   };
 
-  // Prepare data for FlatList: last 3 active + divider + all inactive
-  const activeDrivers = filteredDrivers.filter((driver: any) => {
-    const status =
-      driver.status ||
-      ((driver.vehicles?.length ?? driver.raw?.vehicles?.length ?? 0) > 0
-        ? "active"
-        : "inactive");
-    return status === "active";
-  });
-  const last3Active = activeDrivers.slice(-3);
-  const inactiveDrivers = filteredDrivers.filter((driver: any) => {
-    const status =
-      driver.status ||
-      ((driver.vehicles?.length ?? driver.raw?.vehicles?.length ?? 0) > 0
-        ? "active"
-        : "inactive");
-    return status !== "active";
-  });
+  // Keep active and inactive drivers visually grouped while honoring the filter.
+  const activeDrivers = statusFilteredDrivers.filter(
+    (driver: any) => getDriverStatus(driver) === "active",
+  );
+  const inactiveDrivers = statusFilteredDrivers.filter(
+    (driver: any) => getDriverStatus(driver) !== "active",
+  );
   const combinedDriverList = [
-    ...last3Active,
+    ...activeDrivers,
     ...(inactiveDrivers.length > 0 ? [{ isDivider: true }] : []),
     ...inactiveDrivers,
   ];
@@ -240,61 +393,81 @@ const DriversScreen = () => {
 
   /* ---------------- MAIN UI ---------------- */
   return (
-    <SafeAreaView
-      style={[driversPageStyles.container, { marginBottom: 80 }]}
-      edges={["bottom"]}
-    >
+    <SafeAreaView style={driversPageStyles.container} edges={["bottom"]}>
       {renderHeader()}
-      <View style={driversPageStyles.statusCardsRow}>
-        <View style={driversPageStyles.statusCard}>
-          <Text style={driversPageStyles.statusCardNumber}>
-            {activeDriversCount}
-          </Text>
-          <Text style={driversPageStyles.statusCardLabel}>On Duty</Text>
+      <View style={driversPageStyles.searchRow}>
+        <View style={driversPageStyles.searchContainer}>
+          <Ionicons
+            name="search"
+            size={20}
+            color={colors.text.secondary}
+            style={driversPageStyles.searchIcon}
+          />
+          <TextInput
+            style={driversPageStyles.searchInput}
+            placeholder="Search by name, phone or license..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={colors.text.tertiary}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              style={driversPageStyles.clearButton}
+            >
+              <Ionicons
+                name="close-circle"
+                size={20}
+                color={colors.text.secondary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
-        <View style={driversPageStyles.statusCard}>
-          <Text style={driversPageStyles.statusCardNumber}>
-            {availableDriversCount}
-          </Text>
-          <Text style={driversPageStyles.statusCardLabel}>Available</Text>
-        </View>
-        <View style={driversPageStyles.statusCard}>
-          <Text style={driversPageStyles.statusCardNumber}>
-            {offDutyDriversCount}
-          </Text>
-          <Text style={driversPageStyles.statusCardLabel}>Off Duty</Text>
-        </View>
-        <View style={driversPageStyles.statusCard}>
-          <Text style={driversPageStyles.statusCardNumber}>
-            {inactiveDriversCount}
-          </Text>
-          <Text style={driversPageStyles.statusCardLabel}>Inactive</Text>
-        </View>
+        <TouchableOpacity
+          style={driversPageStyles.filterButton}
+          onPress={() =>
+            setStatusFilter((current) =>
+              current === "All"
+                ? "Active"
+                : current === "Active"
+                  ? "Inactive"
+                  : "All",
+            )
+          }
+          accessibilityLabel={`Filter drivers, currently showing ${statusFilter.toLowerCase()}`}
+        >
+          <MaterialIcons name="filter-list" size={20} color="#1769D2" />
+        </TouchableOpacity>
       </View>
-
-      {/* Search Input */}
-      <View style={driversPageStyles.searchContainer}>
-        <Ionicons
-          name="search"
-          size={20}
-          color="#6B7280"
-          style={driversPageStyles.searchIcon}
-        />
-        <TextInput
-          style={driversPageStyles.searchInput}
-          placeholder="Search drivers by name..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setSearchQuery("")}
-            style={driversPageStyles.clearButton}
-          >
-            <Ionicons name="close-circle" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        )}
+      <View style={driversPageStyles.filterRow}>
+        {(["All", "Active", "Inactive"] as const).map((filter) => {
+          const count =
+            filter === "All"
+              ? drivers.length
+              : filter === "Active"
+                ? activeDriversCount
+                : inactiveDriversCount;
+          const selected = statusFilter === filter;
+          return (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                driversPageStyles.filterChip,
+                selected && driversPageStyles.filterChipSelected,
+              ]}
+              onPress={() => setStatusFilter(filter)}
+            >
+              <Text
+                style={[
+                  driversPageStyles.filterChipText,
+                  selected && driversPageStyles.filterChipTextSelected,
+                ]}
+              >
+                {filter} ({count})
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <FlatList
@@ -307,7 +480,11 @@ const DriversScreen = () => {
           !loadingDrivers ? (
             <View style={driversPageStyles.emptyState}>
               <Text style={driversPageStyles.emptyTitle}>
-                {searchQuery ? "No drivers found" : "No drivers available"}
+                {searchQuery
+                  ? "No drivers found"
+                  : statusFilter !== "All"
+                    ? `No ${statusFilter.toLowerCase()} drivers`
+                    : "No drivers available"}
               </Text>
               <Text style={driversPageStyles.emptyBody}>
                 {searchQuery
@@ -338,7 +515,8 @@ const DriversScreen = () => {
         }
         contentContainerStyle={[
           driversPageStyles.list,
-          filteredDrivers.length === 0 && driversPageStyles.listEmptyContainer,
+          statusFilteredDrivers.length === 0 &&
+            driversPageStyles.listEmptyContainer,
         ]}
         refreshControl={
           <RefreshControl
@@ -417,7 +595,7 @@ const DriversScreen = () => {
                                 <Ionicons
                                   name="mail"
                                   size={14}
-                                  color="#9CA3AF"
+                                  color={colors.text.tertiary}
                                 />
                                 <Text style={driversPageStyles.profileText}>
                                   {email}
@@ -430,7 +608,7 @@ const DriversScreen = () => {
                                 <Ionicons
                                   name="call"
                                   size={14}
-                                  color="#9CA3AF"
+                                  color={colors.text.tertiary}
                                 />
                                 <Text style={driversPageStyles.profileText}>
                                   {phone}
@@ -439,7 +617,11 @@ const DriversScreen = () => {
                             ) : null}
 
                             <View style={driversPageStyles.profileRow}>
-                              <Ionicons name="card" size={14} color="#9CA3AF" />
+                              <Ionicons
+                                name="card"
+                                size={14}
+                                color={colors.text.tertiary}
+                              />
                               <Text style={driversPageStyles.profileText}>
                                 License: {license || "Not provided"}
                               </Text>
@@ -449,7 +631,7 @@ const DriversScreen = () => {
                               <Ionicons
                                 name="calendar"
                                 size={14}
-                                color="#9CA3AF"
+                                color={colors.text.tertiary}
                               />
                               <Text style={driversPageStyles.profileText}>
                                 Joined: {joined?.slice(0, 10) || "Unknown"}
@@ -461,7 +643,11 @@ const DriversScreen = () => {
                         {/* INFO */}
                         <View style={driversPageStyles.infoCard}>
                           <View style={driversPageStyles.modalRow}>
-                            <Ionicons name="pulse" size={16} color="#7ED321" />
+                            <Ionicons
+                              name="pulse"
+                              size={16}
+                              color={ownerColors.primary}
+                            />
                             <Text style={driversPageStyles.label}>Status</Text>
                             <Text style={driversPageStyles.value}>
                               {selectedDriver.status?.toUpperCase() || "N/A"}
@@ -469,7 +655,11 @@ const DriversScreen = () => {
                           </View>
 
                           <View style={driversPageStyles.modalRow}>
-                            <Ionicons name="car" size={16} color="#7ED321" />
+                            <Ionicons
+                              name="car"
+                              size={16}
+                              color={ownerColors.primary}
+                            />
                             <Text style={driversPageStyles.label}>
                               Vehicles
                             </Text>
@@ -479,7 +669,11 @@ const DriversScreen = () => {
                           </View>
 
                           <View style={driversPageStyles.modalRow}>
-                            <Ionicons name="bus" size={16} color="#7ED321" />
+                            <Ionicons
+                              name="bus"
+                              size={16}
+                              color={ownerColors.primary}
+                            />
                             <Text style={driversPageStyles.label}>Routes</Text>
                             <Text style={driversPageStyles.value}>
                               {routes}
@@ -487,7 +681,11 @@ const DriversScreen = () => {
                           </View>
 
                           <View style={driversPageStyles.modalRow}>
-                            <Ionicons name="people" size={16} color="#7ED321" />
+                            <Ionicons
+                              name="people"
+                              size={16}
+                              color={ownerColors.primary}
+                            />
                             <Text style={driversPageStyles.label}>
                               Students
                             </Text>
@@ -509,7 +707,7 @@ const DriversScreen = () => {
                                 <Ionicons
                                   name="car-sport"
                                   size={16}
-                                  color="#7ED321"
+                                  color={ownerColors.primary}
                                 />
                                 <Text style={driversPageStyles.value}>
                                   {v.name ||

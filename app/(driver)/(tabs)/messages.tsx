@@ -19,6 +19,11 @@ import {
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import {
+  getMessagePreview,
+  MessageAttachment,
+  parseMessageAttachment,
+} from "../../../components/messages/MessageAttachment";
 import { useTheme } from "@/styles/theme";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import {
@@ -462,6 +467,7 @@ const Messages = () => {
             }
             renderItem={({ item }) => {
               const isOwn = item.sender_id === userId;
+              const attachment = parseMessageAttachment(item.content);
 
               return (
                 <View
@@ -476,15 +482,22 @@ const Messages = () => {
                       isOwn ? localStyles.bubbleOwn : localStyles.bubbleOther,
                     ]}
                   >
-                    <Text
-                      style={
-                        isOwn
-                          ? localStyles.messageTextOwn
-                          : localStyles.messageText
-                      }
-                    >
-                      {item.content}
-                    </Text>
+                    {attachment ? (
+                      <MessageAttachment
+                        content={item.content}
+                        isOwn={isOwn}
+                      />
+                    ) : (
+                      <Text
+                        style={
+                          isOwn
+                            ? localStyles.messageTextOwn
+                            : localStyles.messageText
+                        }
+                      >
+                        {item.content}
+                      </Text>
+                    )}
                     <Text
                       style={isOwn ? localStyles.timeOwn : localStyles.time}
                     >
@@ -677,7 +690,7 @@ const Messages = () => {
               filteredConversations.map((item) => {
                 const name = item.other_participant?.name || "Unknown contact";
                 const previewMessage =
-                  item.last_message?.content || "No messages yet";
+                  getMessagePreview(item.last_message?.content) || "No messages yet";
                 const unreadCount = item.unread_count || 0;
                 const avatarUri =
                   item.other_participant?.profile?.avatar ||

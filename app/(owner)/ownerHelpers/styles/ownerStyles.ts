@@ -472,7 +472,7 @@ export type OwnerStyles = ReturnType<typeof useOwnerStyles>;
 export const driversPageStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F6F7FB",
+    backgroundColor: "#F4F8FC",
   },
 
   statusCardsRow: {
@@ -524,6 +524,67 @@ export const driversPageStyles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  searchContainerCompact: {
+    flex: 1,
+    marginHorizontal: 0,
+    marginVertical: 10,
+    height: 40,
+    paddingVertical: 0,
+    borderRadius: 10,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  headerSafeArea: { backgroundColor: "#17385F" },
+  managementHeaderRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    gap: 10,
+  },
+  headerButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  headerSpacer: { flex: 1 },
+  managementHeaderTitle: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  filterButton: {
+    height: 40,
+    width: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E7F6",
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingBottom: 5,
+  },
+  filterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E0EAF5",
+    backgroundColor: "#EEF4FA",
+  },
+  filterChipSelected: { backgroundColor: "#1769D2", borderColor: "#1769D2" },
+  filterChipText: { color: "#526981", fontSize: 10, fontWeight: "600" },
+  filterChipTextSelected: { color: "#FFFFFF" },
 
   searchIcon: {
     marginRight: 8,
@@ -567,11 +628,11 @@ export const driversPageStyles = StyleSheet.create({
   /* CARD */
   card: {
     backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
+    padding: 12,
+    borderRadius: 13,
+    marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#F1F1F1",
+    borderColor: "#DCE8F3",
   },
 
   row: {
@@ -593,16 +654,16 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#E8F8E5",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#E9F2FC",
     justifyContent: "center",
     alignItems: "center",
   },
 
   avatarText: {
-    color: "#166534",
+    color: "#1769D2",
     fontWeight: "800",
     fontSize: 15,
   },
@@ -626,7 +687,7 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   activePill: {
-    backgroundColor: "rgba(34,197,94,0.12)",
+    backgroundColor: "#E4F5EC",
   },
 
   inactivePill: {
@@ -634,7 +695,7 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   activeText: {
-    color: "#16A34A",
+    color: "#258052",
   },
 
   inactiveText: {
@@ -643,15 +704,17 @@ export const driversPageStyles = StyleSheet.create({
 
   cardStats: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
+    alignItems: "center",
     gap: 10,
+    marginTop: 2,
   },
 
   statItem: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    padding: 12,
-    borderRadius: 14,
+    backgroundColor: "#F2F6FA",
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 8,
     alignItems: "center",
   },
 

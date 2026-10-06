@@ -152,21 +152,16 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 44,
     height: 38,
-
     alignItems: "center",
     justifyContent: "center",
-
-    borderRadius: 13,
+    borderRadius: 50,
   },
 
   activeIndicator: {
     position: "absolute",
-
     bottom: 5,
-
     width: 20,
     height: 3,
-
     borderRadius: 10,
   },
 });

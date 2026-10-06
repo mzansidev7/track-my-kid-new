@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import React from "react";
 import {
   ScrollView,
@@ -7,9 +6,107 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../../styles/theme";
 
 const Privacy = () => {
-  const router = useRouter();
+  const { colors, shadows, getBrandColors } = useTheme();
+  const ownerColors = getBrandColors("owner");
+  const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 20, paddingBottom: 40 },
+    card: {
+      backgroundColor: ownerColors.surface,
+      padding: 20,
+      borderRadius: 12,
+      ...shadows.md,
+      marginBottom: 20,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: colors.text.primary,
+      marginBottom: 8,
+    },
+    description: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      marginBottom: 20,
+      lineHeight: 20,
+    },
+    privacySection: {
+      marginBottom: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: ownerColors.divider,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    sectionIcon: { fontSize: 20, marginRight: 12 },
+    sectionTitleSmall: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text.primary,
+    },
+    sectionContent: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      lineHeight: 20,
+      marginLeft: 32,
+    },
+    actionsCard: {
+      backgroundColor: ownerColors.surface,
+      padding: 20,
+      borderRadius: 12,
+      ...shadows.md,
+      marginBottom: 20,
+    },
+    actionsTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: colors.text.primary,
+      marginBottom: 16,
+    },
+    actionButton: {
+      backgroundColor: colors.surfaceHover,
+      padding: 16,
+      borderRadius: 8,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    actionText: {
+      fontSize: 14,
+      color: colors.text.primary,
+      fontWeight: "500",
+    },
+    infoCard: {
+      backgroundColor: ownerColors.surface,
+      padding: 20,
+      borderRadius: 12,
+      ...shadows.md,
+    },
+    infoTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: colors.text.primary,
+      marginBottom: 8,
+    },
+    infoText: {
+      fontSize: 14,
+      color: colors.text.secondary,
+      marginBottom: 12,
+      lineHeight: 20,
+    },
+    contactInfo: {
+      fontSize: 14,
+      color: ownerColors.primary,
+      fontWeight: "500",
+      lineHeight: 22,
+    },
+  });
 
   const privacySections = [
     {
@@ -103,133 +200,5 @@ const Privacy = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
-  content: { padding: 20 },
-
-  card: {
-    backgroundColor: "#FFF",
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    marginBottom: 20,
-  },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-  },
-
-  description: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-
-  privacySection: {
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-
-  sectionIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-
-  sectionTitleSmall: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-  },
-
-  sectionContent: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
-    marginLeft: 32,
-  },
-
-  actionsCard: {
-    backgroundColor: "#FFF",
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    marginBottom: 20,
-  },
-
-  actionsTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 16,
-  },
-
-  actionButton: {
-    backgroundColor: "#F8F9FA",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-
-  actionText: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "500",
-  },
-
-  infoCard: {
-    backgroundColor: "#FFF",
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-  },
-
-  infoText: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-
-  contactInfo: {
-    fontSize: 14,
-    color: "#4A90E2",
-    fontWeight: "500",
-    lineHeight: 22,
-  },
-});
 
 export default Privacy;

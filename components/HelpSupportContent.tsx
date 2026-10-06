@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../styles/theme";
 import type { HelpTopicItem } from "./helpConfig";
 
 type Props = {
@@ -25,6 +26,19 @@ export function HelpSupportContent({
   onTopicPress,
   onSupportAction,
 }: Props) {
+  const { colors, getBrandColors } = useTheme();
+  const brandName =
+    section === "fleet_owner"
+      ? "owner"
+      : section === "parent"
+        ? "client"
+        : section;
+  const brandColors = getBrandColors(brandName);
+  const accent = brandColors.primary;
+  const surface = brandColors.surface || colors.surface;
+  const border = brandColors.border || colors.border;
+  const divider = brandColors.divider || colors.divider;
+
   const contactMethods = useMemo(
     () => [
       {
@@ -65,10 +79,17 @@ export function HelpSupportContent({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Help topics</Text>
-        <Text style={styles.description}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      <View style={[styles.card, { backgroundColor: surface }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          Help topics
+        </Text>
+        <Text style={[styles.description, { color: colors.text.secondary }]}>
           Find answers to common questions and learn how to use the app
           effectively.
         </Text>
@@ -77,46 +98,68 @@ export function HelpSupportContent({
           {topics.map((topic, index) => (
             <TouchableOpacity
               key={`${topic.action}-${index}`}
-              style={styles.topicCard}
+              style={[
+                styles.topicCard,
+                { backgroundColor: colors.surfaceHover, borderColor: border },
+              ]}
               onPress={() => handleTopic(topic.action)}
             >
               <Text style={styles.topicIcon}>{topic.icon}</Text>
-              <Text style={styles.topicTitle}>{topic.title}</Text>
-              <Text style={styles.topicDescription}>{topic.description}</Text>
+              <Text style={[styles.topicTitle, { color: colors.text.primary }]}>
+                {topic.title}
+              </Text>
+              <Text
+                style={[styles.topicDescription, { color: colors.text.secondary }]}
+              >
+                {topic.description}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Contact support</Text>
-        <Text style={styles.description}>
+      <View style={[styles.card, { backgroundColor: surface }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+          Contact support
+        </Text>
+        <Text style={[styles.description, { color: colors.text.secondary }]}>
           Cannot find what you need? Reach our team using any option below.
         </Text>
 
         {contactMethods.map((method, index) => (
           <TouchableOpacity
             key={index}
-            style={styles.contactMethod}
+            style={[styles.contactMethod, { borderBottomColor: divider }]}
             onPress={method.action}
           >
             <View style={styles.contactContent}>
               <Text style={styles.contactIcon}>{method.icon}</Text>
               <View style={styles.contactText}>
-                <Text style={styles.contactTitle}>{method.title}</Text>
-                <Text style={styles.contactDescription}>
+                <Text
+                  style={[styles.contactTitle, { color: colors.text.primary }]}
+                >
+                  {method.title}
+                </Text>
+                <Text
+                  style={[
+                    styles.contactDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
                   {method.description}
                 </Text>
               </View>
             </View>
-            <Text style={styles.arrow}>›</Text>
+            <Text style={[styles.arrow, { color: accent }]}>›</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Support hours</Text>
-        <Text style={styles.infoText}>
+      <View style={[styles.infoCard, { backgroundColor: surface }]}>
+        <Text style={[styles.infoTitle, { color: colors.text.primary }]}>
+          Support hours
+        </Text>
+        <Text style={[styles.infoText, { color: colors.text.secondary }]}>
           🕘 Monday - Friday: 6:00 AM - 8:00 PM{"\n"}
           🕘 Saturday: 8:00 AM - 6:00 PM{"\n"}
           🕘 Sunday: 9:00 AM - 5:00 PM{"\n"}

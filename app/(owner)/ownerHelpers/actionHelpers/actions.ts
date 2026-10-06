@@ -87,7 +87,7 @@ export const formatDateTime = () => {
   return `${dayName}, ${date} ${monthName} ${year} ${hours}:${mins}`;
 };
 
-export const getWeeklyTripsAndRevenueData = ({ dashboardData }: any) => {
+export const getWeeklyTripsAndRevenueData = (dashboardData: any = null) => {
   const weeklyTrips = dashboardData?.weeklyTrips ?? [
     { day: "Mon", morning: 0, afternoon: 0 },
     { day: "Tue", morning: 0, afternoon: 0 },

@@ -11,7 +11,9 @@ export const useDriverNotifications = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const currentUserId = user?.userData?.id || user?.id;
 
   const fetchNotifications = useCallback(async () => {
     const candidateIds = [
@@ -92,6 +94,33 @@ export const useDriverNotifications = () => {
     [user?.token, user?.userData?.id, user?.id, markingId],
   );
 
+  const markAllAsRead = useCallback(async () => {
+    if (!currentUserId || !user?.token || markingAll) return;
+
+    setMarkingAll(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      await axios.put(
+        `${baseUrl}/driver/notifications/read-all`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.user_id === currentUserId ? { ...item, is_read: true } : item,
+        ),
+      );
+    } finally {
+      setMarkingAll(false);
+    }
+  }, [currentUserId, markingAll, user?.token]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchNotifications();
@@ -117,12 +146,17 @@ export const useDriverNotifications = () => {
 
   return {
     notifications,
+    unreadCount: notifications.filter(
+      (item) => item.is_read !== true && item.user_id === currentUserId,
+    ).length,
     loading,
     error,
     markingId,
+    markingAll,
     refreshing,
     fetchNotifications,
     markAsRead,
+    markAllAsRead,
     onRefresh,
   };
 };

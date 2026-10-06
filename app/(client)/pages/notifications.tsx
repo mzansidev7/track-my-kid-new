@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -30,14 +31,33 @@ const Notifications = () => {
     error,
     refresh,
     markAsRead,
+    markAllAsRead,
     userId,
   } = useClientNotifications();
   const [selected, setSelected] = useState<ClientNotification | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const openNotification = async (notification: ClientNotification) => {
     setSelected(notification);
     if (notification.is_read !== true) {
       await markAsRead(notification);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (markingAll || unreadCount === 0) return;
+    setMarkingAll(true);
+    try {
+      await markAllAsRead();
+    } catch (requestError) {
+      Alert.alert(
+        "Unable to update notifications",
+        requestError instanceof Error
+          ? requestError.message
+          : "Please try again.",
+      );
+    } finally {
+      setMarkingAll(false);
     }
   };
 
@@ -51,7 +71,7 @@ const Notifications = () => {
         <MaterialIcons
           name={item.is_read === true ? "notifications-none" : "notifications"}
           size={22}
-          color={item.is_read === true ? "#64748B" : "#0EA5A4"}
+          color={item.is_read === true ? "#7890A8" : "#2563EB"}
         />
       </View>
       <View style={styles.cardBody}>
@@ -79,6 +99,7 @@ const Notifications = () => {
       <ClientHeader
         title="Notifications"
         subtitle="Your latest updates"
+        style={styles.header}
         showBackButton
         notificationCount={unreadCount}
         onBackPress={() => router.back()}
@@ -88,11 +109,22 @@ const Notifications = () => {
           <Text style={styles.summaryText}>
             {unreadCount} unread notification{unreadCount === 1 ? "" : "s"}
           </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={markingAll}
+            onPress={handleMarkAllAsRead}
+            style={styles.readAllButton}
+          >
+            <MaterialIcons name="done-all" size={17} color="#1D4ED8" />
+            <Text style={styles.readAllText}>
+              {markingAll ? "Reading..." : "Read all"}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator color="#0EA5A4" />
+          <ActivityIndicator color="#2563EB" />
           <Text style={styles.stateText}>Loading notifications...</Text>
         </View>
       ) : error ? (
@@ -147,7 +179,7 @@ const Notifications = () => {
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <View style={styles.modalTopRow}>
               <View style={styles.modalIconWrap}>
-                <MaterialIcons name="notifications" size={24} color="#0EA5A4" />
+                <MaterialIcons name="notifications" size={24} color="#2563EB" />
               </View>
               <Pressable
                 style={styles.closeButton}
@@ -208,55 +240,83 @@ const Notifications = () => {
 export default Notifications;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
-  summaryBar: {
-    alignSelf: "flex-start",
-    margin: 16,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#E6FFFB",
+  container: { flex: 1, backgroundColor: "#F5F8FC" },
+  header: {
+    backgroundColor: "#173F70",
+    marginBottom: 0,
+    borderBottomWidth: 0,
+    shadowOpacity: 0.1,
   },
-  summaryText: { color: "#0F766E", fontWeight: "700", fontSize: 13 },
-  list: { padding: 16, paddingTop: 8, paddingBottom: 32, flexGrow: 1 },
+  summaryBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 2,
+    paddingLeft: 13,
+    paddingRight: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#DCE8F5",
+    borderRadius: 13,
+    backgroundColor: "#FFFFFF",
+  },
+  summaryText: {
+    flex: 1,
+    color: "#23496F",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  readAllButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+  },
+  readAllText: { color: "#1D4ED8", fontSize: 12, fontWeight: "800" },
+  list: { padding: 14, paddingTop: 10, paddingBottom: 32, flexGrow: 1 },
   card: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#CCFBF1",
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: "#E1EAF3",
+    shadowColor: "#17385F",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.045,
+    shadowRadius: 5,
+    elevation: 1,
   },
-  readCard: { borderColor: "#E2E8F0", opacity: 0.78 },
+  readCard: {
+    borderColor: "#E6ECF2",
+    backgroundColor: "#FCFDFE",
+  },
   iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "#ECFEFF",
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EEF5FF",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 11,
+    marginRight: 10,
   },
   cardBody: { flex: 1 },
-  titleRow: { flexDirection: "row", alignItems: "flex-start" },
-  cardTitle: { flex: 1, color: "#0F172A", fontSize: 15, fontWeight: "800" },
+  titleRow: { flexDirection: "row", alignItems: "center" },
+  cardTitle: { flex: 1, color: "#17385F", fontSize: 14, fontWeight: "700" },
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    backgroundColor: "#0EA5A4",
+    backgroundColor: "#2563EB",
     margin: 5,
   },
-  cardMessage: { color: "#475569", fontSize: 13, lineHeight: 19, marginTop: 5 },
-  cardTime: { color: "#94A3B8", fontSize: 11, marginTop: 8 },
+  cardMessage: { color: "#526981", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  cardTime: { color: "#8799AB", fontSize: 10, marginTop: 7 },
   centerState: {
     flex: 1,
     alignItems: "center",
@@ -264,36 +324,39 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   stateText: {
-    color: "#64748B",
+    color: "#647A90",
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
+    fontSize: 13,
   },
   emptyTitle: {
-    color: "#0F172A",
-    fontSize: 18,
+    color: "#17385F",
+    fontSize: 17,
     fontWeight: "800",
     marginTop: 12,
   },
   retryButton: {
-    backgroundColor: "#0EA5A4",
-    borderRadius: 10,
+    backgroundColor: "#1D4ED8",
+    borderRadius: 11,
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingVertical: 11,
     marginTop: 14,
   },
-  retryText: { color: "#FFFFFF", fontWeight: "700" },
+  retryText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    backgroundColor: "rgba(15, 34, 57, 0.58)",
     justifyContent: "center",
     padding: 22,
   },
   modalCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 22,
-    shadowColor: "#0F172A",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#E3EBF4",
+    shadowColor: "#17385F",
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 10,
@@ -304,10 +367,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#E6FFFB",
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: "#EEF5FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -326,27 +389,27 @@ const styles = StyleSheet.create({
     fontWeight: "300",
   },
   modalType: {
-    color: "#0F766E",
+    color: "#1D4ED8",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     marginTop: 20,
   },
   modalTitle: {
-    color: "#0F172A",
-    fontSize: 22,
-    lineHeight: 28,
+    color: "#17385F",
+    fontSize: 20,
+    lineHeight: 26,
     fontWeight: "800",
     marginTop: 7,
   },
   modalMessage: {
-    color: "#475569",
-    fontSize: 16,
-    lineHeight: 24,
+    color: "#526981",
+    fontSize: 15,
+    lineHeight: 23,
     marginTop: 12,
   },
-  divider: { height: 1, backgroundColor: "#E2E8F0", marginVertical: 18 },
-  modalMeta: { color: "#64748B", fontSize: 13, marginTop: 5 },
+  divider: { height: 1, backgroundColor: "#E4EBF2", marginVertical: 16 },
+  modalMeta: { color: "#71869C", fontSize: 12, marginTop: 5 },
   tripNotificationAction: {
     flexDirection: "row",
     alignItems: "center",
@@ -355,7 +418,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#1D4ED8",
   },
   tripNotificationActionText: {
     color: "#FFFFFF",

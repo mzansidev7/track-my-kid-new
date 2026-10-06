@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
 
 const ViewAllStudents = () => {
   const { routeId } = useLocalSearchParams();
@@ -35,11 +35,6 @@ const ViewAllStudents = () => {
 
     router.push("/(owner)/(tabs)/routes");
   };
-
-  const { renderHeader } = useOwnerPageHeader({
-    title: "All Students",
-    onBackPress: handleBackToRoute,
-  });
 
   useEffect(() => {
     let isActive = true;
@@ -73,11 +68,14 @@ const ViewAllStudents = () => {
         if (response.ok && Array.isArray(data?.route?.route_children)) {
           const mappedStudents = data.route.route_children
             .map((entry: any) => ({
-              id: entry?.id || entry?.child_id,
+              ...(entry?.children || {}),
+              id: entry?.children?.id || entry?.child_id || entry?.id,
+              routeChildId: entry?.id,
               childId: entry?.child_id,
               name: entry?.children?.name || "Unknown student",
               schoolName:
                 entry?.children?.school_name || "School not specified",
+              avatar: entry?.children?.avatar || null,
             }))
             .filter(Boolean);
 
@@ -109,10 +107,13 @@ const ViewAllStudents = () => {
 
   return (
     <View style={styles.container}>
-      {renderHeader()}
+      <OwnerCompactHeader
+        title="All Students"
+        onBackPress={handleBackToRoute}
+      />
       <View style={styles.header}>
         <Text style={styles.title}>Students on Route</Text>
-        <Text style={styles.subtitle}>{studentCount} student(s)</Text>
+        <Text style={styles.subtitle}>{studentCount} students assigned</Text>
       </View>
 
       {loading ? (
@@ -130,6 +131,15 @@ const ViewAllStudents = () => {
           keyExtractor={(item) => String(item.id || item.childId || item.name)}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <MaterialIcons name="school" size={26} color="#1769D2" />
+              <Text style={styles.emptyTitle}>No students assigned</Text>
+              <Text style={styles.emptySubtitle}>
+                Students linked to this route will appear here.
+              </Text>
+            </View>
+          }
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.studentCard}
@@ -146,7 +156,12 @@ const ViewAllStudents = () => {
               <View style={styles.avatarContainer}>
                 {item.avatar ? (
                   <Image
-                    source={{ uri: item.avatar }}
+                    source={{
+                      uri:
+                        typeof item.avatar === "string"
+                          ? item.avatar
+                          : item.avatar?.url || item.avatar?.avatar_url || "",
+                    }}
                     style={styles.avatarImage}
                   />
                 ) : (
@@ -170,22 +185,22 @@ export default ViewAllStudents;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
+    backgroundColor: "#F4F8FC",
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: "#17385F",
   },
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#6B7280",
+    marginTop: 3,
+    fontSize: 10,
+    color: "#71869C",
   },
   stateContainer: {
     flex: 1,
@@ -194,54 +209,73 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   stateText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: "#6B7280",
+    marginTop: 8,
+    fontSize: 13,
+    color: "#607A98",
     textAlign: "center",
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingHorizontal: 10,
+    paddingBottom: 16,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 28,
+    marginHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
+    backgroundColor: "#FFFFFF",
+  },
+  emptyTitle: {
+    marginTop: 8,
+    color: "#17385F",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  emptySubtitle: {
+    marginTop: 3,
+    color: "#71869C",
+    fontSize: 10,
+    textAlign: "center",
   },
   studentCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 7,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#EEF4FF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EDF5FD",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 14,
+    marginRight: 10,
     overflow: "hidden",
   },
   avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   studentInfo: {
     flex: 1,
   },
   studentName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: "#17385F",
   },
   studentSchool: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#6B7280",
+    marginTop: 3,
+    fontSize: 10,
+    color: "#71869C",
   },
 });

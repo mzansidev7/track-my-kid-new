@@ -8,6 +8,8 @@ interface TimePickerProps {
   minHour?: string;
   maxHour?: string;
   minTime?: string; // Time in HH:MM format (e.g., "06:00")
+  compact?: boolean;
+  placeholder?: string;
 }
 
 const TimePicker = ({
@@ -16,6 +18,8 @@ const TimePicker = ({
   minHour,
   maxHour,
   minTime,
+  compact = false,
+  placeholder = "Select time",
 }: TimePickerProps) => {
   const [showPicker, setShowPicker] = useState(false);
   const [selectedHour, setSelectedHour] = useState("08");
@@ -28,28 +32,32 @@ const TimePicker = ({
     return timeHour > minHour || (timeHour === minHour && timeMin > minMin);
   };
 
-  // Parse existing value if provided
   React.useEffect(() => {
-    if (value && value.includes("T")) {
-      const timePart = value.split("T")[1];
-      if (timePart) {
-        const [hour, minute] = timePart.split(":");
-        let h = hour || "08";
-        let m = minute || "00";
-        // Ensure hour is within range
-        const hNum = parseInt(h);
-        if (minHour && hNum < parseInt(minHour)) h = minHour;
-        if (maxHour && hNum > parseInt(maxHour)) h = maxHour;
-        // Ensure time is after minTime
-        if (minTime && !isTimeAfter(`${h}:${m}`, minTime)) {
-          const [minTimeHour, minTimeMin] = minTime.split(":").map(Number);
-          h = String(minTimeHour).padStart(2, "0");
-          m = String(minTimeMin + 1).padStart(2, "0");
-        }
-        setSelectedHour(h);
-        setSelectedMinute(m);
+    if (!value) return;
+    const timePart = value.includes("T") ? value.split("T")[1] : value;
+    const [hour, minute] = timePart.split(":");
+    if (!hour || !minute) return;
+    let parsedHour = Number(hour);
+    let parsedMinute = Number(minute);
+    if (!Number.isInteger(parsedHour) || !Number.isInteger(parsedMinute)) return;
+    if (minHour && parsedHour < Number(minHour)) parsedHour = Number(minHour);
+    if (maxHour && parsedHour > Number(maxHour)) parsedHour = Number(maxHour);
+    let normalized = `${String(parsedHour).padStart(2, "0")}:${String(parsedMinute).padStart(2, "0")}`;
+    if (minTime && !isTimeAfter(normalized, minTime)) {
+      const [minTimeHour, minTimeMinute] = minTime.split(":").map(Number);
+      parsedHour = minTimeHour;
+      parsedMinute = minTimeMinute + 1;
+      if (parsedMinute >= 60) {
+        parsedHour += 1;
+        parsedMinute = 0;
+      }
+      if (maxHour && parsedHour > Number(maxHour)) {
+        parsedHour = Number(maxHour);
+        parsedMinute = 59;
       }
     }
+    setSelectedHour(String(parsedHour).padStart(2, "0"));
+    setSelectedMinute(String(parsedMinute).padStart(2, "0"));
   }, [value, minHour, maxHour, minTime]);
 
   const handleConfirm = () => {
@@ -63,7 +71,7 @@ const TimePicker = ({
     ? value.includes("T")
       ? value.split("T")[1]?.substring(0, 5) || "08:00"
       : value.substring(0, 5)
-    : "08:00";
+    : placeholder;
 
   const hours = Array.from({ length: 24 }, (_, i) =>
     String(i).padStart(2, "0"),
@@ -94,11 +102,21 @@ const TimePicker = ({
   return (
     <View>
       <TouchableOpacity
-        style={styles.timeButton}
+        style={[styles.timeButton, compact && styles.timeButtonCompact]}
         onPress={() => setShowPicker(true)}
       >
-        <Text style={styles.timeButtonText}>{displayTime}</Text>
-        <Text style={styles.timeButtonSubtext}>Tap to set time</Text>
+        <Text
+          style={[
+            styles.timeButtonText,
+            compact && styles.timeButtonTextCompact,
+            !value && compact && styles.timeButtonTextPlaceholder,
+          ]}
+        >
+          {displayTime}
+        </Text>
+        {!compact ? (
+          <Text style={styles.timeButtonSubtext}>Tap to set time</Text>
+        ) : null}
       </TouchableOpacity>
 
       <Modal
@@ -174,10 +192,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E0E0E0",
   },
+  timeButtonCompact: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    borderColor: "#CBD5E1",
+    borderRadius: 11,
+    backgroundColor: "#F8FAFC",
+  },
   timeButtonText: {
     fontSize: 18,
     fontWeight: "600",
     color: "#333",
+  },
+  timeButtonTextCompact: {
+    fontSize: 15,
+    color: "#1E293B",
+  },
+  timeButtonTextPlaceholder: {
+    color: "#71869C",
   },
   timeButtonSubtext: {
     fontSize: 12,

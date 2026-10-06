@@ -1,46 +1,52 @@
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState, useRef } from "react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Animated,
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
-import FloatingInput from "../../components/FloatingInput";
 import GooglePlacesAutoComplete from "../../components/GooglePlacesAutoComplete";
+import TimePicker from "../../components/TimePicker";
 import Map from "../../components/map";
 import AppNotification from "../../components/Notification";
-import TimePicker from "../../components/TimePicker";
-import {
-  setDepartureTimePreference,
-  getDepartureTimePreference,
-  getAllDepartureTimePreferences,
-  TimeScope,
-} from "../../store/asyncStorage/timePreferences.asyncStore";
 import { resolveWorkingBaseUrl } from "../../url";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { TimeScope } from "../../store/asyncStorage/timePreferences.asyncStore";
 
-const timeToMinutes = (value: string) => {
-  const m = String(value || "")
-    .trim()
-    .match(/^(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+type RouteLocation = {
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
-const normalizePriceInput = (value: string) => {
-  const price = String(value || "").trim();
-  if (!price.includes(".")) {
-    return price;
-  }
-  return price.replace(/\.?0+$/, "");
+const formatLocalDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+const formatLocalDateTime = (date: Date, time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  const offsetMinutes = -date.getTimezoneOffset();
+  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+  const offsetHours = String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(
+    2,
+    "0",
+  );
+  const offsetRemainder = String(Math.abs(offsetMinutes) % 60).padStart(2, "0");
+  return `${formatLocalDate(date)}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00${offsetSign}${offsetHours}:${offsetRemainder}`;
+};
+
+const clockMinutes = (time: string) => {
+  const match = time.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 };
 
 const CreateRoutes = ({ setActiveButton }: any) => {
@@ -48,445 +54,460 @@ const CreateRoutes = ({ setActiveButton }: any) => {
   const { user } = useContext(AuthContext);
 
   const routePage = () => router.push("/routes");
-
-  const { renderHeader } = useOwnerPageHeader({
-    title: "Create Route",
-    subtitle: "Plan a new route for your fleet",
-    onBackPress: routePage,
-  });
-  const [routeName, setRouteName] = useState("Route");
-  const [departureTime, setDepartureTime] = useState("05:00");
-  const [timeScope, setTimeScope] = useState<TimeScope>("year");
-  const [pickupStartTime, setPickupStartTime] = useState("06:00");
-  const [pickupEndTime, setPickupEndTime] = useState("07:30");
-  const [dropoffStartTime, setDropoffStartTime] = useState("13:00");
-  const [dropoffEndTime, setDropoffEndTime] = useState("16:30");
+  const [routeName, setRouteName] = useState("");
+  const [description, setDescription] = useState("");
+  const [currentStep, setCurrentStep] = useState(0);
+  const [routeEstimate, setRouteEstimate] = useState<{
+    distanceKm: number;
+    durationMinutes: number;
+    signature: string;
+  } | null>(null);
+  const [routeEstimateError, setRouteEstimateError] = useState<{
+    signature: string;
+    message: string;
+  } | null>(null);
+  const [perChildAmount, setPerChildAmount] = useState("200");
+  const [timeReference, setTimeReference] = useState<TimeScope>("year");
+  const [departureDate, setDepartureDate] = useState<Date | null>(null);
+  const [showDepartureDatePicker, setShowDepartureDatePicker] = useState(false);
+  const [departureTime, setDepartureTime] = useState("");
+  const [pickupStartTime, setPickupStartTime] = useState("");
+  const [pickupEndTime, setPickupEndTime] = useState("");
+  const [dropoffStartTime, setDropoffStartTime] = useState("");
+  const [dropoffEndTime, setDropoffEndTime] = useState("");
+  const [routeType, setRouteType] = useState<
+    "one_way" | "round_trip" | "multi_stop"
+  >("one_way");
+  const [routeStatus, setRouteStatus] = useState<"active" | "inactive">(
+    "active",
+  );
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
-  const [routePriceCents, setRoutePriceCents] = useState("200");
   const [drivers, setDrivers] = useState<any[]>([]);
   // vehicles list not stored in this component (fetched when needed)
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showDriverPicker, setShowDriverPicker] = useState(false);
   // Location state for pickup (start) and dropoff (end)
-  const [pickupLocation, setPickupLocation] = useState({
-    latitude: null as number | null,
-    longitude: null as number | null,
+  const [pickupLocation, setPickupLocation] = useState<RouteLocation>({
+    latitude: null,
+    longitude: null,
     name: "",
+    address: "",
   });
-  const [dropoffLocation, setDropoffLocation] = useState({
-    latitude: null as number | null,
-    longitude: null as number | null,
+  const [dropoffLocation, setDropoffLocation] = useState<RouteLocation>({
+    latitude: null,
+    longitude: null,
     name: "",
+    address: "",
   });
+  const [viaStops, setViaStops] = useState<RouteLocation[]>([]);
   const [showMapPicker, setShowMapPicker] = useState<boolean>(false);
   // snapPoints removed (no bottom sheet) — kept for potential future use
   const [mapFocus, setMapFocus] = useState<{
     latitude: number;
     longitude: number;
   } | null>(null);
-  const [currentStep, setCurrentStep] = useState(1);
-  const stepLabels = [
-    "Route details",
-    "Pickup window",
-    "Dropoff window",
-    "Locations",
-    "Driver assignment",
+  const steps = [
+    { title: "Details", icon: "alt-route" as const },
+    { title: "Stops", icon: "place" as const },
+    { title: "Schedule", icon: "schedule" as const },
+    { title: "Settings", icon: "tune" as const },
   ];
+  const routeCoordinates = [
+    pickupLocation,
+    ...viaStops,
+    dropoffLocation,
+  ].filter(
+    (
+      location,
+    ): location is RouteLocation & { latitude: number; longitude: number } =>
+      location.latitude !== null && location.longitude !== null,
+  );
+  const routeCoordinateSignature = routeCoordinates
+    .map(({ latitude, longitude }) => `${latitude},${longitude}`)
+    .join("|");
+  const hasCompleteEndpoints =
+    pickupLocation.latitude !== null &&
+    pickupLocation.longitude !== null &&
+    dropoffLocation.latitude !== null &&
+    dropoffLocation.longitude !== null;
+  const routeOrigin = React.useMemo(
+    () =>
+      pickupLocation.latitude !== null &&
+      pickupLocation.longitude !== null
+        ? {
+            latitude: pickupLocation.latitude,
+            longitude: pickupLocation.longitude,
+          }
+        : null,
+    [pickupLocation.latitude, pickupLocation.longitude],
+  );
+  const routeDestination = React.useMemo(
+    () =>
+      dropoffLocation.latitude !== null &&
+      dropoffLocation.longitude !== null
+        ? {
+            latitude: dropoffLocation.latitude,
+            longitude: dropoffLocation.longitude,
+          }
+        : null,
+    [dropoffLocation.latitude, dropoffLocation.longitude],
+  );
+  const routeWaypoints = React.useMemo(
+    () =>
+      viaStops
+        .filter(
+          (stop) => stop.latitude !== null && stop.longitude !== null,
+        )
+        .map((stop) => ({
+          latitude: stop.latitude!,
+          longitude: stop.longitude!,
+        })),
+    [viaStops],
+  );
+  const handleRouteReady = React.useCallback(
+    (estimate: { distanceKm: number; durationMinutes: number }) => {
+      if (
+        Number.isFinite(estimate.distanceKm) &&
+        estimate.distanceKm > 0 &&
+        Number.isFinite(estimate.durationMinutes) &&
+        estimate.durationMinutes > 0
+      ) {
+        setRouteEstimateError(null);
+        setRouteEstimate({ ...estimate, signature: routeCoordinateSignature });
+      }
+    },
+    [routeCoordinateSignature],
+  );
+  const handleRouteError = React.useCallback(
+    (message: string) => {
+      setRouteEstimate(null);
+      setRouteEstimateError({
+        signature: routeCoordinateSignature,
+        message:
+          message ||
+          "Route estimate could not be calculated. Check the selected stops.",
+      });
+    },
+    [routeCoordinateSignature],
+  );
+  const currentRouteEstimateError =
+    routeEstimateError?.signature === routeCoordinateSignature
+      ? routeEstimateError.message
+      : null;
+  const currentRouteEstimate =
+    routeEstimate?.signature === routeCoordinateSignature
+      ? routeEstimate
+      : null;
+  const formattedEstimateDuration = currentRouteEstimate
+    ? (() => {
+        const minutes = Math.round(currentRouteEstimate.durationMinutes);
+        const hours = Math.floor(minutes / 60);
+        const remainder = minutes % 60;
+        return hours > 0
+          ? `${hours} hr ${remainder} min`
+          : `${remainder} min`;
+      })()
+    : null;
 
-  const isStepOneComplete = () => {
-    const normalizedPrice = normalizePriceInput(routePriceCents);
-    const parsedPrice = parseFloat(normalizedPrice || "0");
-    const isRouteNameValid = routeName.trim() !== "";
-    return (
-      !!routePriceCents.trim() &&
-      !isNaN(parsedPrice) &&
-      parsedPrice >= 0 &&
-      !!departureTime.trim() &&
-      isRouteNameValid
-    );
+  const validateAndAdvance = () => {
+    if (currentStep === 0 && !routeName.trim()) {
+      setNotification({
+        visible: true,
+        message: "Please enter a route name before continuing.",
+        type: "error",
+      });
+      return;
+    }
+    if (
+      currentStep === 1 &&
+      (!hasCompleteEndpoints ||
+        routeCoordinates.length !== viaStops.length + 2)
+    ) {
+      setNotification({
+        visible: true,
+        message: "Select valid start, via, and end stops to continue.",
+        type: "error",
+      });
+      return;
+    }
+    if (currentStep === 1 && !currentRouteEstimate) {
+      setNotification({
+        visible: true,
+        message:
+          currentRouteEstimateError ||
+          "Wait for the route distance and duration to be calculated.",
+        type: "error",
+      });
+      return;
+    }
+    if (
+      currentStep === 2 &&
+      (!departureDate ||
+        clockMinutes(departureTime) === null ||
+        clockMinutes(pickupStartTime) === null ||
+        clockMinutes(pickupEndTime) === null ||
+        clockMinutes(dropoffStartTime) === null ||
+        clockMinutes(dropoffEndTime) === null)
+    ) {
+      setNotification({
+        visible: true,
+        message: "Complete the departure date and all schedule times.",
+        type: "error",
+      });
+      return;
+    }
+    if (currentStep === 2) {
+      const departureMinutes = clockMinutes(departureTime)!;
+      const pickupStartMinutes = clockMinutes(pickupStartTime)!;
+      const pickupEndMinutes = clockMinutes(pickupEndTime)!;
+      const dropoffStartMinutes = clockMinutes(dropoffStartTime)!;
+      const dropoffEndMinutes = clockMinutes(dropoffEndTime)!;
+      if (
+        departureMinutes >= pickupStartMinutes ||
+        pickupStartMinutes >= pickupEndMinutes ||
+        pickupEndMinutes > dropoffStartMinutes ||
+        dropoffStartMinutes >= dropoffEndMinutes
+      ) {
+        setNotification({
+          visible: true,
+          message:
+            "Set valid times in order: departure, pickup window, then drop-off window.",
+          type: "error",
+        });
+        return;
+      }
+    }
+    setCurrentStep((step) => Math.min(step + 1, steps.length - 1));
   };
 
-  const isStepTwoComplete = () =>
-    pickupStartTime.trim() !== "" && pickupEndTime.trim() !== "";
-
-  const isStepThreeComplete = () =>
-    dropoffStartTime.trim() !== "" && dropoffEndTime.trim() !== "";
-
-  const isStepFourComplete = () =>
-    pickupLocation.name.trim() !== "" && dropoffLocation.name.trim() !== "";
-
-  const stepActionDisabled = (step: number) => {
-    if (step === 1) return !isStepOneComplete();
-    if (step === 2) return !isStepTwoComplete();
-    if (step === 3) return !isStepThreeComplete();
-    if (step === 4) return !isStepFourComplete();
-    if (step === 5) return selectedDrivers.length === 0;
-    return false;
-  };
-
-  const renderStepContent = () => {
-    switch (currentStep) {
+  const renderStepContent = (step: number) => {
+    switch (step) {
       case 1:
         return (
           <>
-            <Text style={styles.labelSubtext}>
-              Set the route name, price per child and the departure time.
+            <Text style={styles.fieldLabel}>
+              Route Name <Text style={styles.requiredMark}>*</Text>
             </Text>
-            <Text style={styles.stepTitle}>Route Details</Text>
-            <FloatingInput
-              label="Route name"
+            <TextInput
+              style={styles.routeTextInput}
+              placeholder="e.g. Pretoria → Johannesburg"
+              placeholderTextColor="#89A2BF"
               value={routeName}
               onChangeText={setRouteName}
+              maxLength={80}
             />
-            <FloatingInput
-              label="Route price..."
-              value={routePriceCents}
-              onChangeText={setRoutePriceCents}
-              keyboardType="number-pad"
+            <Text style={styles.fieldLabel}>
+              Description <Text style={styles.optionalText}>(optional)</Text>
+            </Text>
+            <TextInput
+              style={[styles.routeTextInput, styles.descriptionInput]}
+              placeholder="Add a short description of this route..."
+              placeholderTextColor="#89A2BF"
+              value={description}
+              onChangeText={setDescription}
+              maxLength={1000}
+              multiline
+              textAlignVertical="top"
             />
-            <View style={styles.divider} />
-            <Text style={styles.stepTitle}>Departure time</Text>
-            <Text style={styles.labelSubtext}>
-              This is the time when the vehicle will start the route.
-            </Text>
-            <TimePicker
-              value={departureTime}
-              onChangeTime={setDepartureTime}
-              minHour="05"
-              maxHour="08"
-            />
-
-            <View style={styles.timeScopeContainer}>
-              <Text style={styles.scopeLabel}>Save as preference</Text>
-              {(["today", "week", "month", "year"] as TimeScope[]).map(
-                (scope) => (
-                  <TouchableOpacity
-                    key={scope}
-                    style={styles.scopeOption}
-                    onPress={() => setTimeScope(scope)}
-                  >
-                    <View
-                      style={[
-                        styles.radioButton,
-                        timeScope === scope && styles.radioButtonSelected,
-                      ]}
-                    >
-                      {timeScope === scope && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                    <Text style={styles.scopeOptionText}>
-                      {scope.charAt(0).toUpperCase() + scope.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ),
-              )}
-              <Text style={styles.defaultTimeInfo}>
-                Preference will be saved when you click Next or Create.
-              </Text>
-            </View>
-          </>
-        );
-      case 2:
-        return (
-          <>
-            <Text style={styles.stepTitle}>Pickup window</Text>
-            <Text style={styles.labelSubtext}>
-              Choose the home-to-school pickup window.
-            </Text>
-            <View style={styles.windowRow}>
-              <View style={[styles.windowColumn, styles.windowColumnLeft]}>
-                <Text style={styles.labelSubtext}>Start</Text>
-                <TimePicker
-                  value={pickupStartTime}
-                  onChangeTime={setPickupStartTime}
-                  minHour="05"
-                  maxHour="10"
-                  minTime={departureTime}
-                />
-              </View>
-              <View style={styles.windowColumn}>
-                <Text style={styles.labelSubtext}>End</Text>
-                <TimePicker
-                  value={pickupEndTime}
-                  onChangeTime={setPickupEndTime}
-                  minHour="05"
-                  maxHour="10"
-                  minTime={pickupStartTime}
-                />
-              </View>
-            </View>
-          </>
-        );
-      case 3:
-        return (
-          <>
-            <Text style={styles.stepTitle}>Dropoff window</Text>
-            <Text style={styles.labelSubtext}>
-              Choose the school-to-home dropoff window.
-            </Text>
-            <View style={styles.windowRow}>
-              <View style={[styles.windowColumn, styles.windowColumnLeft]}>
-                <Text style={styles.labelSubtext}>Start</Text>
-                <TimePicker
-                  value={dropoffStartTime}
-                  onChangeTime={setDropoffStartTime}
-                  minHour="13"
-                  maxHour="17"
-                />
-              </View>
-              <View style={styles.windowColumn}>
-                <Text style={styles.labelSubtext}>End</Text>
-                <TimePicker
-                  value={dropoffEndTime}
-                  onChangeTime={setDropoffEndTime}
-                  minHour="13"
-                  maxHour="17"
-                  minTime={dropoffStartTime}
-                />
-              </View>
-            </View>
           </>
         );
       case 4:
         return (
           <>
-            <Text style={styles.stepTitle}>Locations</Text>
-            <Text style={styles.labelSubtext}>
-              Select the start and stop coordinates for this route.
+            <Text style={styles.fieldLabel}>
+              Start Location <Text style={styles.requiredMark}>*</Text>
             </Text>
-            <TouchableOpacity
-              style={styles.selectorButton}
-              onPress={() => setShowMapPicker(true)}
-              activeOpacity={0.8}
-            >
-              <View style={selectLocationButtonStyles.selectorIconContainer}>
-                <MaterialIcons name="route" size={22} color="#4A90E2" />
+            <View style={styles.locationEntryRow}>
+              <View style={styles.locationRail}>
+                <View style={styles.startLocationDot} />
+                <View style={styles.locationRailLine} />
               </View>
-
-              <View style={selectLocationButtonStyles.selectorContent}>
-                {!pickupLocation.name && !dropoffLocation.name ? (
-                  <>
-                    <Text style={selectLocationButtonStyles.selectorTitle}>
-                      Select route locations
-                    </Text>
-
-                    <Text
-                      style={selectLocationButtonStyles.selectorPlaceholderText}
-                    >
-                      Choose a start and stop location
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    {pickupLocation.name && (
-                      <View
-                        style={selectLocationButtonStyles.selectorLocationRow}
-                      >
-                        <View style={selectLocationButtonStyles.startDot} />
-
-                        <View
-                          style={
-                            selectLocationButtonStyles.selectorTextContainer
-                          }
-                        >
-                          <Text
-                            style={selectLocationButtonStyles.selectorLabel}
-                          >
-                            START
-                          </Text>
-
-                          <Text
-                            style={
-                              selectLocationButtonStyles.selectorLocationText
-                            }
-                            numberOfLines={1}
-                          >
-                            {pickupLocation.name}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {pickupLocation.name && dropoffLocation.name && (
-                      <View
-                        style={selectLocationButtonStyles.selectorConnector}
-                      />
-                    )}
-
-                    {dropoffLocation.name && (
-                      <View
-                        style={selectLocationButtonStyles.selectorLocationRow}
-                      >
-                        <View style={selectLocationButtonStyles.stopDot} />
-
-                        <View
-                          style={
-                            selectLocationButtonStyles.selectorTextContainer
-                          }
-                        >
-                          <Text
-                            style={selectLocationButtonStyles.selectorLabel}
-                          >
-                            STOP
-                          </Text>
-
-                          <Text
-                            style={
-                              selectLocationButtonStyles.selectorLocationText
-                            }
-                            numberOfLines={1}
-                          >
-                            {dropoffLocation.name}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </>
-                )}
+              <View style={styles.routePlaceField}>
+                <GooglePlacesAutoComplete
+                  compact
+                  value={pickupLocation.name}
+                  placeholder="Search or select start location"
+                  onChangeText={(name) =>
+                    setPickupLocation((current) => ({
+                      ...current,
+                      name,
+                      latitude: name === current.name ? current.latitude : null,
+                      longitude:
+                        name === current.name ? current.longitude : null,
+                    }))
+                  }
+                  onSelect={(name, coords, details) =>
+                    setPickupLocation({
+                      name,
+                      address: details?.address || name,
+                      latitude: coords?.latitude ?? null,
+                      longitude: coords?.longitude ?? null,
+                    })
+                  }
+                />
               </View>
+              <TouchableOpacity
+                style={styles.mapLocationButton}
+                onPress={() => {
+                  setPickupConfirmed(false);
+                  setShowMapPicker(true);
+                }}
+                accessibilityLabel="Choose start and end locations on map"
+              >
+                <MaterialIcons name="my-location" size={15} color="#1769D2" />
+              </TouchableOpacity>
+            </View>
 
-              <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            {(pickupLocation.name || dropoffLocation.name) && (
-              <View style={selectedLocationStyles.selectedLocationsCard}>
-                <View style={selectedLocationStyles.selectedHeader}>
-                  <Text style={selectedLocationStyles.selectedHeaderTitle}>
-                    Selected Locations
-                  </Text>
-
-                  <MaterialIcons
-                    name="check-circle"
-                    size={18}
-                    color="#22C55E"
+            <View style={styles.viaHeading}>
+              <Text style={styles.fieldLabel}>
+                Via Stops <Text style={styles.optionalText}>(optional)</Text>
+              </Text>
+              <TouchableOpacity
+                style={styles.addStopButton}
+                onPress={() =>
+                  setViaStops((current) => [
+                    ...current,
+                    {
+                      name: "",
+                      address: "",
+                      latitude: null,
+                      longitude: null,
+                    },
+                  ])
+                }
+                disabled={viaStops.length >= 20}
+              >
+                <MaterialIcons name="add" size={15} color="#1769D2" />
+                <Text style={styles.addStopText}>Add Stop</Text>
+              </TouchableOpacity>
+            </View>
+            {viaStops.map((stop, index) => (
+              <View key={`via-stop-${index}`} style={styles.viaStopRow}>
+                <View style={styles.viaStopIcon}>
+                  <MaterialIcons name="place" size={14} color="#1769D2" />
+                </View>
+                <View style={styles.routePlaceField}>
+                  <GooglePlacesAutoComplete
+                    compact
+                    value={stop.name}
+                    placeholder="Add intermediate stop..."
+                    onChangeText={(name) =>
+                      setViaStops((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                ...item,
+                                name,
+                                address: name === item.name ? item.address : "",
+                                latitude:
+                                  name === item.name ? item.latitude : null,
+                                longitude:
+                                  name === item.name ? item.longitude : null,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                    onSelect={(name, coords, details) =>
+                      setViaStops((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? {
+                                name,
+                                address: details?.address || name,
+                                latitude: coords?.latitude ?? null,
+                                longitude: coords?.longitude ?? null,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
                   />
                 </View>
-
-                {pickupLocation.name && (
-                  <View style={selectedLocationStyles.locationRow}>
-                    <View style={selectedLocationStyles.pickupIndicator}>
-                      <MaterialIcons
-                        name="radio-button-checked"
-                        size={12}
-                        color="#FFFFFF"
-                      />
-                    </View>
-
-                    <View style={selectedLocationStyles.locationContent}>
-                      <Text style={selectedLocationStyles.locationType}>
-                        START
-                      </Text>
-
-                      <Text
-                        style={selectedLocationStyles.locationAddress}
-                        numberOfLines={2}
-                      >
-                        {pickupLocation.name}
-                      </Text>
-                    </View>
-
-                    <MaterialIcons name="check" size={20} color="#22C55E" />
-                  </View>
-                )}
-
-                {pickupLocation.name && dropoffLocation.name && (
-                  <View style={selectedLocationStyles.locationConnector}>
-                    <View style={selectedLocationStyles.connectorLine} />
-                  </View>
-                )}
-
-                {dropoffLocation.name && (
-                  <View style={selectedLocationStyles.locationRow}>
-                    <View style={selectedLocationStyles.dropoffIndicator}>
-                      <MaterialIcons
-                        name="location-on"
-                        size={14}
-                        color="#FFFFFF"
-                      />
-                    </View>
-
-                    <View style={selectedLocationStyles.locationContent}>
-                      <Text style={selectedLocationStyles.locationType}>
-                        STOP
-                      </Text>
-
-                      <Text
-                        style={selectedLocationStyles.locationAddress}
-                        numberOfLines={2}
-                      >
-                        {dropoffLocation.name}
-                      </Text>
-                    </View>
-
-                    <MaterialIcons name="check" size={20} color="#22C55E" />
-                  </View>
-                )}
+                <TouchableOpacity
+                  style={styles.removeStopButton}
+                  onPress={() =>
+                    setViaStops((current) =>
+                      current.filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                  accessibilityLabel={`Remove via stop ${index + 1}`}
+                >
+                  <MaterialIcons name="close" size={15} color="#64748B" />
+                </TouchableOpacity>
               </View>
-            )}
+            ))}
+
+            <Text style={[styles.fieldLabel, styles.endLocationLabel]}>
+              End Location <Text style={styles.requiredMark}>*</Text>
+            </Text>
+            <View style={styles.locationEntryRow}>
+              <View style={styles.locationRail}>
+                <View style={styles.endLocationDot} />
+              </View>
+              <View style={styles.routePlaceField}>
+                <GooglePlacesAutoComplete
+                  compact
+                  value={dropoffLocation.name}
+                  placeholder="Search or select end location"
+                  onChangeText={(name) =>
+                    setDropoffLocation((current) => ({
+                      ...current,
+                      name,
+                      latitude: name === current.name ? current.latitude : null,
+                      longitude:
+                        name === current.name ? current.longitude : null,
+                    }))
+                  }
+                  onSelect={(name, coords, details) =>
+                    setDropoffLocation({
+                      name,
+                      address: details?.address || name,
+                      latitude: coords?.latitude ?? null,
+                      longitude: coords?.longitude ?? null,
+                    })
+                  }
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.mapLocationButton}
+                onPress={() => {
+                  setPickupConfirmed(false);
+                  setShowMapPicker(true);
+                }}
+                accessibilityLabel="Choose route locations on map"
+              >
+                <MaterialIcons name="my-location" size={15} color="#1769D2" />
+              </TouchableOpacity>
+            </View>
           </>
         );
       case 5:
         return (
           <>
-            <Text style={styles.stepTitle}>Assign drivers</Text>
-            <Text style={styles.labelSubtext}>
-              Choose one or more drivers assigned to vehicles for this route.
-            </Text>
             <TouchableOpacity
-              style={styles.selectorButton}
+              style={styles.assignmentSelectButton}
               onPress={() => setShowDriverPicker(true)}
+              activeOpacity={0.8}
             >
               <Text
                 style={
                   selectedDrivers.length > 0
-                    ? styles.selectorButtonText
-                    : styles.selectorPlaceholderText
+                    ? styles.assignmentSelectText
+                    : styles.assignmentSelectPlaceholder
                 }
               >
                 {selectedDrivers.length > 0
-                  ? `${selectedDrivers.length} driver${
-                      selectedDrivers.length === 1 ? "" : "s"
-                    } selected`
-                  : "Select drivers"}
+                  ? `${selectedDrivers.length} vehicle${selectedDrivers.length === 1 ? "" : "s"} selected`
+                  : "Select vehicle (required)"}
               </Text>
+              <MaterialIcons
+                name="keyboard-arrow-down"
+                size={16}
+                color="#71869C"
+              />
             </TouchableOpacity>
-            {selectedDrivers.length > 0 && (
-              <View style={styles.previewCard}>
-                <View style={styles.previewHeader}>
-                  <Text style={styles.previewTitle}>Selected Assignments</Text>
-                  <Text style={styles.previewSubtitle}>
-                    Multiple drivers and their assigned vehicles will run this
-                    route.
-                  </Text>
-                </View>
-                <View style={styles.previewContent}>
-                  {selectedDrivers.map((driverId) => {
-                    const driver = activeDrivers.find(
-                      (d) => String(d.id) === driverId,
-                    );
-                    const assignedVehicle = getAssignedVehicle(driver);
-                    return (
-                      <View key={driverId} style={styles.assignmentRow}>
-                        <View style={styles.assignmentText}>
-                          <Text style={styles.previewItemTitle}>
-                            {driver?.users?.name ||
-                              driver?.name ||
-                              "Unknown Driver"}
-                          </Text>
-                          <Text style={styles.previewItemSubtext}>
-                            {assignedVehicle
-                              ? `${assignedVehicle.name} (${assignedVehicle.license_plate})`
-                              : "No vehicle assigned"}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
           </>
         );
       default:
@@ -590,33 +611,6 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     }).start();
   }, [showMapPicker, sheetAnim]);
 
-  // Prefill departure time and scope from stored preferences (local or backend)
-  useEffect(() => {
-    const loadPreference = async () => {
-      try {
-        const prefTime = await getDepartureTimePreference(user?.token);
-        if (prefTime) setDepartureTime(prefTime);
-
-        const prefs = await getAllDepartureTimePreferences(user?.token);
-        if (prefs && prefs.length > 0) {
-          const today = new Date().toISOString().split("T")[0];
-          const priority: TimeScope[] = ["today", "week", "month", "year"];
-          for (const scope of priority) {
-            const p = prefs.find((x) => x.scope === scope);
-            if (p && (!p.expiryDate || p.expiryDate >= today)) {
-              setTimeScope(p.scope as TimeScope);
-              break;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Error loading preferences:", err);
-      }
-    };
-
-    loadPreference();
-  }, [user?.token]);
-
   const isDriverActive = (driver: any) =>
     String(driver?.status || "active").toLowerCase() === "active";
 
@@ -641,26 +635,71 @@ const CreateRoutes = ({ setActiveButton }: any) => {
   const assignedDrivers = activeDrivers.filter((d) => !!getAssignedVehicle(d));
 
   const handleCreateRoute = async () => {
-    const normalizedPriceValue = normalizePriceInput(routePriceCents);
-    const parsedPrice = parseFloat(normalizedPriceValue || "0");
-    if (
-      isNaN(parsedPrice) ||
-      parsedPrice < 0 ||
-      routePriceCents.trim() === ""
-    ) {
+    const parsedChildAmount = Number(perChildAmount);
+    if (!routeName.trim()) {
       setNotification({
         visible: true,
-        message: "Please enter a valid non-negative price per child.",
+        message: "Please enter a route name.",
         type: "error",
       });
       return;
     }
 
-    // Check if at least one driver is selected
-    if (selectedDrivers.length === 0) {
+    const departureMinutes = clockMinutes(departureTime);
+    const pickupStartMinutes = clockMinutes(pickupStartTime);
+    const pickupEndMinutes = clockMinutes(pickupEndTime);
+    const dropoffStartMinutes = clockMinutes(dropoffStartTime);
+    const dropoffEndMinutes = clockMinutes(dropoffEndTime);
+    if (
+      !departureDate ||
+      departureMinutes === null ||
+      pickupStartMinutes === null ||
+      pickupEndMinutes === null ||
+      dropoffStartMinutes === null ||
+      dropoffEndMinutes === null
+    ) {
       setNotification({
         visible: true,
-        message: "Please select at least one driver for this route.",
+        message: "Select a departure date and all route schedule times.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (
+      departureMinutes >= pickupStartMinutes ||
+      pickupStartMinutes >= pickupEndMinutes ||
+      pickupEndMinutes > dropoffStartMinutes ||
+      dropoffStartMinutes >= dropoffEndMinutes
+    ) {
+      setNotification({
+        visible: true,
+        message:
+          "Set valid times in order: departure, pickup window, then drop-off window.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (!currentRouteEstimate) {
+      setNotification({
+        visible: true,
+        message:
+          currentRouteEstimateError ||
+          "Wait for the route distance and duration to be calculated.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (
+      perChildAmount.trim() === "" ||
+      !Number.isFinite(parsedChildAmount) ||
+      parsedChildAmount < 0
+    ) {
+      setNotification({
+        visible: true,
+        message: "Enter a valid non-negative price per child.",
         type: "error",
       });
       return;
@@ -675,6 +714,15 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       };
     });
 
+    if (assignmentPayload.length === 0) {
+      setNotification({
+        visible: true,
+        message: "Please assign at least one vehicle to this route.",
+        type: "error",
+      });
+      return;
+    }
+
     if (assignmentPayload.some((assignment) => !assignment.vehicle_id)) {
       setNotification({
         visible: true,
@@ -685,29 +733,60 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       return;
     }
 
-    // Check if pickup location is selected
-    if (
-      pickupLocation.latitude === null ||
-      pickupLocation.longitude === null ||
-      !pickupLocation.name.trim()
-    ) {
+    if (description.trim().length > 1000) {
       setNotification({
         visible: true,
-        message: "Please select a pickup location.",
+        message: "Description must be 1000 characters or fewer.",
         type: "error",
       });
       return;
     }
 
-    // Check if dropoff location is selected
     if (
-      dropoffLocation.latitude === null ||
-      dropoffLocation.longitude === null ||
-      !dropoffLocation.name.trim()
+      pickupLocation.latitude === null ||
+      pickupLocation.longitude === null ||
+      !pickupLocation.address.trim()
     ) {
       setNotification({
         visible: true,
-        message: "Please select a dropoff location.",
+        message: "Please select a valid start location from the suggestions.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (
+      dropoffLocation.latitude === null ||
+      dropoffLocation.longitude === null ||
+      !dropoffLocation.address.trim()
+    ) {
+      setNotification({
+        visible: true,
+        message: "Please select a valid end location from the suggestions.",
+        type: "error",
+      });
+      return;
+    }
+
+    const submittedViaStops = viaStops.filter(
+      (stop) =>
+        stop.name.trim() ||
+        stop.address.trim() ||
+        stop.latitude !== null ||
+        stop.longitude !== null,
+    );
+    if (
+      submittedViaStops.some(
+        (stop) =>
+          !stop.name.trim() ||
+          !stop.address.trim() ||
+          stop.latitude === null ||
+          stop.longitude === null,
+      )
+    ) {
+      setNotification({
+        visible: true,
+        message: "Choose a location for each via stop or remove the empty row.",
         type: "error",
       });
       return;
@@ -722,107 +801,37 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       return;
     }
 
-    if (
-      !departureTime.trim() ||
-      !pickupStartTime.trim() ||
-      !pickupEndTime.trim() ||
-      !dropoffStartTime.trim() ||
-      !dropoffEndTime.trim()
-    ) {
-      setNotification({
-        visible: true,
-        message:
-          "Please complete departure time, pickup window, and dropoff window before creating the route.",
-        type: "error",
-      });
-      return;
-    }
-
-    const pickupStartM = timeToMinutes(pickupStartTime);
-    const pickupEndM = timeToMinutes(pickupEndTime);
-    if (
-      pickupStartM == null ||
-      pickupEndM == null ||
-      pickupStartM >= pickupEndM
-    ) {
-      setNotification({
-        visible: true,
-        message: "Pickup start time must be before pickup end time.",
-        type: "error",
-      });
-      return;
-    }
-
-    const dropoffStartM = timeToMinutes(dropoffStartTime);
-    const dropoffEndM = timeToMinutes(dropoffEndTime);
-    if (
-      dropoffStartM == null ||
-      dropoffEndM == null ||
-      dropoffStartM >= dropoffEndM
-    ) {
-      setNotification({
-        visible: true,
-        message: "Dropoff start time must be before dropoff end time.",
-        type: "error",
-      });
-      return;
-    }
-
-    // Validate pickup window: 05:00 to 10:00
-    const pickupStartLimit = 5 * 60; // 05:00
-    const pickupEndLimit = 10 * 60; // 10:00
-    if (pickupStartM < pickupStartLimit || pickupEndM > pickupEndLimit) {
-      setNotification({
-        visible: true,
-        message: "Pickup window must be between 05:00 and 10:00.",
-        type: "error",
-      });
-      return;
-    }
-
-    // Validate dropoff window: 13:00 to 17:00
-    const dropoffStartLimit = 13 * 60; // 13:00
-    const dropoffEndLimit = 17 * 60; // 17:00
-    if (dropoffStartM < dropoffStartLimit || dropoffEndM > dropoffEndLimit) {
-      setNotification({
-        visible: true,
-        message: "Dropoff window must be between 13:00 and 17:00.",
-        type: "error",
-      });
-      return;
-    }
-
     setSubmitting(true);
     try {
       const requestBody: Record<string, any> = {
         route_name: routeName.trim(),
+        description: description.trim() || null,
+        estimated_distance_km: currentRouteEstimate?.distanceKm ?? null,
+        estimated_duration: formattedEstimateDuration,
+        departure_time: formatLocalDateTime(departureDate, departureTime),
+        pickup_start_time: pickupStartTime,
+        pickup_end_time: pickupEndTime,
+        dropoff_start_time: dropoffStartTime,
+        dropoff_end_time: dropoffEndTime,
+        per_child_amount_cents: Math.round(parsedChildAmount * 100),
+        time_reference: timeReference,
+        route_type: routeType,
+        status: routeStatus,
         assignments: assignmentPayload,
-        per_child_amount_cents: Math.round(parsedPrice * 100),
-        // Add location fields
         start_latitude: pickupLocation.latitude,
         start_longitude: pickupLocation.longitude,
-        start_location: pickupLocation.name,
+        start_location: pickupLocation.address,
         end_latitude: dropoffLocation.latitude,
         end_longitude: dropoffLocation.longitude,
-        end_location: dropoffLocation.name,
+        end_location: dropoffLocation.address,
+        via_stops: submittedViaStops,
       };
-
-      const today = new Date().toISOString().split("T")[0];
-      requestBody.departure_time = `${today}T${departureTime.trim()}:00`;
-      requestBody.pickup_start_time = pickupStartTime.trim();
-      requestBody.pickup_end_time = pickupEndTime.trim();
-      requestBody.dropoff_start_time = dropoffStartTime.trim();
-      requestBody.dropoff_end_time = dropoffEndTime.trim();
-      // Include time preference in the create-route request so the server
-      // can persist `owner_time_preferences` in the same transaction.
-      requestBody.time_scope = timeScope;
-      requestBody.time_value = departureTime.trim();
       const baseUrl = await resolveWorkingBaseUrl();
 
       console.log("[createRoutes] creating route", {
-        baseUrl,
-        tokenPresent: !!user?.token,
-        requestBody,
+        routeType,
+        assignmentCount: assignmentPayload.length,
+        viaStopCount: submittedViaStops.length,
       });
       const response = await fetch(`${baseUrl}/owner/routes`, {
         method: "POST",
@@ -835,7 +844,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       const data = await response.json();
       console.log("[createRoutes] create route response", {
         status: response.status,
-        data,
+        succeeded: response.ok,
       });
 
       if (!response.ok) {
@@ -849,38 +858,45 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         return;
       }
 
-      const stopsCount =
-        typeof data.stops_count === "number" ? data.stops_count : 0;
+      const stopsCount = submittedViaStops.length;
       setNotification({
         visible: true,
         message:
           stopsCount > 0
-            ? `Route created successfully with ${stopsCount} stop${stopsCount === 1 ? "" : "s"}.`
+            ? `Route created successfully with ${stopsCount} via stop${stopsCount === 1 ? "" : "s"}.`
             : "Route created successfully.",
         type: "success",
       });
-      // Save time preference and associate it with the created route
-      const createdRouteId = data?.route?.id || null;
-      if (departureTime.trim()) {
-        // Fire-and-forget preference sync so UI isn't blocked if backend is slow
-        setDepartureTimePreference(
-          departureTime.trim(),
-          timeScope,
-          user?.token,
-          createdRouteId || undefined,
-        )
-          .then(() => console.log("[createRoutes] preference sync complete"))
-          .catch((err) =>
-            console.warn("[createRoutes] preference sync failed", err),
-          );
-      }
 
       setRouteName("");
-      setRoutePriceCents("");
-      setDepartureTime("05:00");
+      setDescription("");
+      setCurrentStep(0);
+      setRouteEstimate(null);
+      setRouteEstimateError(null);
+      setDepartureDate(null);
+      setDepartureTime("");
+      setPickupStartTime("");
+      setPickupEndTime("");
+      setDropoffStartTime("");
+      setDropoffEndTime("");
+      setPerChildAmount("200");
+      setTimeReference("year");
+      setRouteType("one_way");
+      setRouteStatus("active");
       setSelectedDrivers([]);
-      setPickupLocation({ latitude: null, longitude: null, name: "" });
-      setDropoffLocation({ latitude: null, longitude: null, name: "" });
+      setViaStops([]);
+      setPickupLocation({
+        latitude: null,
+        longitude: null,
+        name: "",
+        address: "",
+      });
+      setDropoffLocation({
+        latitude: null,
+        longitude: null,
+        name: "",
+        address: "",
+      });
       setSubmitting(false);
 
       console.log("[createRoutes] navigation to /routes");
@@ -896,64 +912,6 @@ const CreateRoutes = ({ setActiveButton }: any) => {
     }
   };
 
-  const handleNext = async () => {
-    if (currentStep < stepLabels.length) {
-      // Advance immediately (don't block UI on save)
-      if (currentStep === 1) {
-        // Validate route name and price before advancing
-        const normalizedPrice = normalizePriceInput(routePriceCents);
-        const parsedPrice = parseFloat(normalizedPrice || "0");
-        const isRouteNameValid = routeName.trim() !== "";
-
-        if (
-          !isRouteNameValid ||
-          routePriceCents.trim() === "" ||
-          isNaN(parsedPrice) ||
-          parsedPrice < 0
-        ) {
-          setNotification({
-            visible: true,
-            message:
-              "Please enter a valid route name and non-negative price before proceeding.",
-            type: "error",
-          });
-          return;
-        }
-
-        setCurrentStep((s) => s + 1);
-
-        if (departureTime.trim()) {
-          // Fire-and-forget preference save; report result when done
-          setDepartureTimePreference(
-            departureTime.trim(),
-            timeScope,
-            user?.token,
-          )
-            .then(() => {
-              setNotification({
-                visible: true,
-                message: `Saved ${departureTime.trim()} (${timeScope})`,
-                type: "success",
-              });
-            })
-            .catch((err: any) => {
-              setNotification({
-                visible: true,
-                message: err?.message || "Failed to save time preference.",
-                type: "warning",
-              });
-            });
-        }
-
-        return;
-      }
-
-      setCurrentStep((s) => s + 1);
-    } else {
-      await handleCreateRoute();
-    }
-  };
-
   return (
     <View style={styles.container}>
       <AppNotification
@@ -962,7 +920,23 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         type={notification.type}
         onHide={() => setNotification({ ...notification, visible: false })}
       />
-      {renderHeader()}
+      <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+        <View style={styles.pageHeader}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={routePage}
+            accessibilityLabel="Back to route management"
+          >
+            <MaterialIcons name="arrow-back" size={21} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create New Route</Text>
+          <View style={styles.headerStepBadge}>
+            <Text style={styles.headerStepText}>
+              {currentStep + 1}/{steps.length}
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -970,98 +944,489 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.card}>
-              <View style={styles.stepperHeader}>
-                <View>
-                  <Text style={styles.stepperTitle}>Create Route</Text>
-                  <Text style={styles.stepperSubtitle}>
-                    Step {currentStep} of {stepLabels.length}
-                  </Text>
-                </View>
-                <View style={styles.stepperProgress}>
-                  {stepLabels.map((label, index) => (
+          <View style={styles.stepperCard}>
+            {steps.map((step, index) => {
+              const complete = index < currentStep;
+              const active = index === currentStep;
+              return (
+                <React.Fragment key={step.title}>
+                  <TouchableOpacity
+                    style={styles.stepItem}
+                    onPress={() => {
+                      if (index < currentStep) setCurrentStep(index);
+                    }}
+                    disabled={index >= currentStep}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
                     <View
-                      key={label}
                       style={[
-                        styles.stepperDot,
-                        index + 1 <= currentStep && styles.stepperDotActive,
+                        styles.stepCircle,
+                        active && styles.stepCircleActive,
+                        complete && styles.stepCircleComplete,
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={complete ? "check" : step.icon}
+                        size={16}
+                        color={active || complete ? "#FFFFFF" : "#8293A8"}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.stepLabel,
+                        active && styles.stepLabelActive,
+                        complete && styles.stepLabelComplete,
+                      ]}
+                    >
+                      {step.title}
+                    </Text>
+                  </TouchableOpacity>
+                  {index < steps.length - 1 ? (
+                    <View
+                      style={[
+                        styles.stepConnector,
+                        complete && styles.stepConnectorComplete,
                       ]}
                     />
-                  ))}
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.formCanvas}>
+              {currentStep === 0 ? (
+                <View style={styles.formSection}>
+                  <View style={styles.formSectionHeading}>
+                    <View style={styles.formSectionIcon}>
+                      <MaterialIcons
+                        name="alt-route"
+                        size={20}
+                        color="#1769D2"
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.formSectionTitle}>
+                        Route Information
+                      </Text>
+                      <Text style={styles.sectionHint}>
+                        Give this route a name and description.
+                      </Text>
+                    </View>
+                  </View>
+                  {renderStepContent(1)}
                 </View>
-              </View>
+              ) : null}
 
-              {renderStepContent()}
-
-              <View style={styles.stepperNavRow}>
-                {currentStep > 1 ? (
-                  <TouchableOpacity
-                    style={styles.stepperNavButton}
-                    onPress={() => setCurrentStep(currentStep - 1)}
-                  >
-                    <Text style={styles.stepperNavButtonText}>Back</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.stepperNavSpacer} />
-                )}
-                <TouchableOpacity
-                  style={
-                    stepActionDisabled(currentStep)
-                      ? [
-                          styles.stepperNavButton,
-                          styles.stepperNavButtonDisabled,
-                        ]
-                      : styles.stepperNavButton
-                  }
-                  onPress={handleNext}
-                  disabled={
-                    (currentStep === 1
-                      ? false
-                      : stepActionDisabled(currentStep)) || submitting
-                  }
-                >
-                  {submitting && currentStep === stepLabels.length ? (
-                    <ActivityIndicator color="#FFF" />
+              {currentStep === 1 ? (
+                <View style={styles.formSection}>
+                  <View style={styles.formSectionHeading}>
+                    <View style={styles.formSectionIcon}>
+                      <MaterialIcons name="place" size={20} color="#1769D2" />
+                    </View>
+                    <View>
+                      <Text style={styles.formSectionTitle}>Route Stops</Text>
+                      <Text style={styles.sectionHint}>
+                        Add the start, optional stops, and destination.
+                      </Text>
+                    </View>
+                  </View>
+                  {renderStepContent(4)}
+                  {hasCompleteEndpoints &&
+                  routeCoordinates.length === viaStops.length + 2 ? (
+                    <>
+                      <Map
+                        style={styles.routePreviewMap}
+                        requestLocationPermission={false}
+                        origin={routeOrigin}
+                        destination={routeDestination}
+                        waypoints={routeWaypoints}
+                        onRouteReady={handleRouteReady}
+                        onRouteError={handleRouteError}
+                      />
+                      <View style={styles.estimateCard}>
+                        <View style={styles.estimateItem}>
+                          <MaterialIcons
+                            name="near-me"
+                            size={17}
+                            color="#1769D2"
+                          />
+                          <View>
+                            <Text style={styles.estimateLabel}>
+                              Estimated distance
+                            </Text>
+                            <Text style={styles.estimateValue}>
+                              {currentRouteEstimate
+                                ? `${currentRouteEstimate.distanceKm.toFixed(1)} km`
+                                : "Calculating…"}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.estimateDivider} />
+                        <View style={styles.estimateItem}>
+                          <MaterialIcons
+                            name="schedule"
+                            size={17}
+                            color="#1769D2"
+                          />
+                          <View>
+                            <Text style={styles.estimateLabel}>
+                              Estimated duration
+                            </Text>
+                            <Text style={styles.estimateValue}>
+                              {formattedEstimateDuration ||
+                                "Calculating…"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      {currentRouteEstimateError ? (
+                        <View style={styles.estimatePlaceholder}>
+                          <MaterialIcons
+                            name="error-outline"
+                            size={17}
+                            color="#B54745"
+                          />
+                          <Text style={styles.estimateErrorText}>
+                            {currentRouteEstimateError}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
                   ) : (
-                    <Text
-                      style={
-                        stepActionDisabled(currentStep)
-                          ? styles.stepperNavButtonTextDisabled
-                          : styles.stepperNavButtonText
-                      }
-                    >
-                      {currentStep < stepLabels.length
-                        ? "Next"
-                        : "Create Route"}
-                    </Text>
+                    <View style={styles.estimatePlaceholder}>
+                      <MaterialIcons
+                        name="info-outline"
+                        size={17}
+                        color="#72849A"
+                      />
+                      <Text style={styles.estimatePlaceholderText}>
+                        Select all route stops to calculate distance and travel
+                        time.
+                      </Text>
+                    </View>
                   )}
-                </TouchableOpacity>
-              </View>
-            </View>
+                </View>
+              ) : null}
 
-            <View style={styles.infoCard}>
-              <Text style={styles.infoTitle}>Route Details</Text>
-              <Text style={styles.infoText}>
-                • The system will include the linked children in this route
-                after the parents confirm their participation..
-              </Text>
-              <Text style={styles.infoText}>
-                • The system will automatically create pickup and drop-off stops
-                based on children&apos;s addresses
-              </Text>
-              <Text style={styles.infoText}>
-                • Select a driver to assign them to this route
-              </Text>
-              <Text style={styles.infoText}>
-                • Optionally assign a vehicle and departure time
-              </Text>
-              <Text style={styles.infoText}>
-                • Parents will receive notifications when their children are
-                picked up or dropped off
-              </Text>
+              {currentStep === 2 ? (
+                <View style={styles.formSection}>
+                  <View style={styles.formSectionHeading}>
+                    <View style={styles.formSectionIcon}>
+                      <MaterialIcons
+                        name="schedule"
+                        size={20}
+                        color="#1769D2"
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.formSectionTitle}>Route Schedule</Text>
+                      <Text style={styles.sectionHint}>
+                        Set the date and time windows for this route.
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.fieldLabel}>
+                    Departure Date <Text style={styles.requiredMark}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.scheduleDateButton}
+                    onPress={() => setShowDepartureDatePicker(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Select departure date"
+                  >
+                    <Text
+                      style={[
+                        styles.scheduleDateText,
+                        !departureDate && styles.scheduleDatePlaceholder,
+                      ]}
+                    >
+                      {departureDate
+                        ? departureDate.toLocaleDateString()
+                        : "Select departure date"}
+                    </Text>
+                    <MaterialIcons
+                      name="calendar-today"
+                      size={18}
+                      color="#1769D2"
+                    />
+                  </TouchableOpacity>
+                  {showDepartureDatePicker && (
+                    <DateTimePicker
+                      value={departureDate || new Date()}
+                      mode="date"
+                      display="default"
+                      onChange={(event, selectedDate) => {
+                        setShowDepartureDatePicker(false);
+                        if (event.type === "set" && selectedDate) {
+                          setDepartureDate(selectedDate);
+                        }
+                      }}
+                    />
+                  )}
+                  <View style={styles.scheduleTimesColumn}>
+                    <Text style={styles.fieldLabel}>
+                      Departure Time <Text style={styles.requiredMark}>*</Text>
+                    </Text>
+                    <TimePicker
+                      compact
+                      value={departureTime}
+                      placeholder="Select departure time"
+                      onChangeTime={setDepartureTime}
+                    />
+                  </View>
+                  <View style={styles.scheduleTimeRow}>
+                    <View style={styles.scheduleTimeField}>
+                      <Text style={styles.fieldLabel}>
+                        Pickup Starts <Text style={styles.requiredMark}>*</Text>
+                      </Text>
+                      <TimePicker
+                        compact
+                        value={pickupStartTime}
+                        placeholder="Select time"
+                        onChangeTime={setPickupStartTime}
+                      />
+                    </View>
+                    <View style={styles.scheduleTimeField}>
+                      <Text style={styles.fieldLabel}>
+                        Pickup Ends <Text style={styles.requiredMark}>*</Text>
+                      </Text>
+                      <TimePicker
+                        compact
+                        value={pickupEndTime}
+                        placeholder="Select time"
+                        onChangeTime={setPickupEndTime}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.scheduleTimeRow}>
+                    <View style={styles.scheduleTimeField}>
+                      <Text style={styles.fieldLabel}>
+                        Drop-off Starts{" "}
+                        <Text style={styles.requiredMark}>*</Text>
+                      </Text>
+                      <TimePicker
+                        compact
+                        value={dropoffStartTime}
+                        placeholder="Select time"
+                        onChangeTime={setDropoffStartTime}
+                      />
+                    </View>
+                    <View style={styles.scheduleTimeField}>
+                      <Text style={styles.fieldLabel}>
+                        Drop-off Ends{" "}
+                        <Text style={styles.requiredMark}>*</Text>
+                      </Text>
+                      <TimePicker
+                        compact
+                        value={dropoffEndTime}
+                        placeholder="Select time"
+                        onChangeTime={setDropoffEndTime}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {currentStep === 3 ? (
+                <View style={styles.formSection}>
+                  <View style={styles.formSectionHeading}>
+                    <View style={styles.formSectionIcon}>
+                      <MaterialIcons name="tune" size={20} color="#1769D2" />
+                    </View>
+                    <View>
+                      <Text style={styles.formSectionTitle}>Route Settings</Text>
+                      <Text style={styles.sectionHint}>
+                        Assign a vehicle and set the route fare.
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.finalEstimateCard}>
+                    <View style={styles.finalEstimateMetric}>
+                      <Text style={styles.estimateLabel}>Distance</Text>
+                      <Text style={styles.estimateValue}>
+                        {currentRouteEstimate
+                          ? `${currentRouteEstimate.distanceKm.toFixed(1)} km`
+                          : "Not calculated"}
+                      </Text>
+                    </View>
+                    <View style={styles.finalEstimateMetric}>
+                      <Text style={styles.estimateLabel}>Duration</Text>
+                      <Text style={styles.estimateValue}>
+                        {formattedEstimateDuration || "Not calculated"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.fieldLabel}>
+                    Per Child Amount (R){" "}
+                    <Text style={styles.requiredMark}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.routeTextInput}
+                    value={perChildAmount}
+                    onChangeText={setPerChildAmount}
+                    placeholder="e.g. 200"
+                    placeholderTextColor="#89A2BF"
+                    keyboardType="decimal-pad"
+                  />
+
+                  <Text style={styles.fieldLabel}>Time Reference</Text>
+                  <View style={styles.timeReferenceRow}>
+                    {(["today", "week", "month", "year"] as const).map(
+                      (reference) => (
+                        <TouchableOpacity
+                          key={reference}
+                          style={[
+                            styles.timeReferenceOption,
+                            timeReference === reference &&
+                              styles.timeReferenceOptionSelected,
+                          ]}
+                          onPress={() => setTimeReference(reference)}
+                        >
+                          <Text
+                            style={[
+                              styles.timeReferenceText,
+                              timeReference === reference &&
+                                styles.timeReferenceTextSelected,
+                            ]}
+                          >
+                            {reference.charAt(0).toUpperCase() +
+                              reference.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
+                  </View>
+
+                  <Text style={styles.fieldLabel}>
+                    Vehicle Assignment{" "}
+                    <Text style={styles.requiredMark}>*</Text>
+                  </Text>
+                  {renderStepContent(5)}
+
+                  <Text style={styles.fieldLabel}>Route Type</Text>
+                  <View style={styles.routeTypeRow}>
+                    {(
+                      [
+                        ["one_way", "One Way"],
+                        ["round_trip", "Round Trip"],
+                        ["multi_stop", "Multi Stop"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[
+                          styles.routeTypeOption,
+                          routeType === value && styles.routeTypeOptionSelected,
+                        ]}
+                        onPress={() => setRouteType(value)}
+                      >
+                        <Text
+                          style={[
+                            styles.routeTypeText,
+                            routeType === value && styles.routeTypeTextSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Status</Text>
+                  <TouchableOpacity
+                    style={styles.statusSelector}
+                    onPress={() =>
+                      setRouteStatus((current) =>
+                        current === "active" ? "inactive" : "active",
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Route status ${routeStatus}; tap to change`}
+                  >
+                    <View
+                      style={[
+                        styles.statusDot,
+                        routeStatus === "inactive" &&
+                          styles.statusDotInactive,
+                      ]}
+                    />
+                    <Text style={styles.statusText}>
+                      {routeStatus === "active" ? "Active" : "Inactive"}
+                    </Text>
+                    <MaterialIcons
+                      name="keyboard-arrow-down"
+                      size={17}
+                      color="#71869C"
+                    />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           </ScrollView>
+
+          <View style={styles.formActions}>
+            {currentStep === 0 ? (
+              <TouchableOpacity
+                style={styles.cancelRouteButton}
+                onPress={routePage}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelRouteButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.previousButton}
+                onPress={() => setCurrentStep((step) => Math.max(step - 1, 0))}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons
+                  name="arrow-back"
+                  size={17}
+                  color="#23476D"
+                />
+                <Text style={styles.previousButtonText}>Back</Text>
+              </TouchableOpacity>
+            )}
+            {currentStep < steps.length - 1 ? (
+              <TouchableOpacity
+                style={styles.saveRouteButton}
+                onPress={validateAndAdvance}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.saveRouteButtonText}>Continue</Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={17}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.saveRouteButton}
+                onPress={handleCreateRoute}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <MaterialIcons name="save" size={17} color="#FFFFFF" />
+                    <Text style={styles.saveRouteButtonText}>Save Route</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
 
           <Modal
             visible={showDriverPicker}
@@ -1071,7 +1436,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Select Driver</Text>
+                <Text style={styles.modalTitle}>Select Vehicle and Driver</Text>
                 <ScrollView style={styles.optionsList}>
                   {assignedDrivers.length > 0 ? (
                     <>
@@ -1301,6 +1666,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                             setPickupLocation((current) => ({
                               ...current,
                               name,
+                              address: name ? current.address : "",
                               latitude: name ? current.latitude : null,
                               longitude: name ? current.longitude : null,
                             }))
@@ -1309,6 +1675,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                             if (!address || !address.trim()) {
                               setPickupLocation({
                                 name: "",
+                                address: "",
                                 latitude: null,
                                 longitude: null,
                               });
@@ -1319,6 +1686,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                             if (coords) {
                               setPickupLocation({
                                 name: address,
+                                address,
                                 latitude: coords.latitude,
                                 longitude: coords.longitude,
                               });
@@ -1330,6 +1698,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                             } else {
                               setPickupLocation({
                                 name: address,
+                                address,
                                 latitude: null,
                                 longitude: null,
                               });
@@ -1367,6 +1736,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                           onPress={() => {
                             setPickupLocation({
                               name: "",
+                              address: "",
                               latitude: null,
                               longitude: null,
                             });
@@ -1419,6 +1789,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                                 setDropoffLocation((current) => ({
                                   ...current,
                                   name,
+                                  address: name ? current.address : "",
                                   latitude: name ? current.latitude : null,
                                   longitude: name ? current.longitude : null,
                                 }))
@@ -1427,6 +1798,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                                 if (!address || !address.trim()) {
                                   setDropoffLocation({
                                     name: "",
+                                    address: "",
                                     latitude: null,
                                     longitude: null,
                                   });
@@ -1437,6 +1809,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                                 if (coords) {
                                   setDropoffLocation({
                                     name: address,
+                                    address,
                                     latitude: coords.latitude,
                                     longitude: coords.longitude,
                                   });
@@ -1448,6 +1821,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                                 } else {
                                   setDropoffLocation({
                                     name: address,
+                                    address,
                                     latitude: null,
                                     longitude: null,
                                   });
@@ -1862,13 +2236,556 @@ const locationPickerStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F7FB" },
+  container: { flex: 1, backgroundColor: "#F4F8FC" },
+  headerSafeArea: {
+    backgroundColor: "#17385F",
+  },
+  pageHeader: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 13,
+    gap: 12,
+  },
+  headerButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  headerTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  headerStepBadge: {
+    minWidth: 42,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  headerStepText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  content: { padding: 20, paddingBottom: 40 },
+  stepperCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 14,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E1EAF3",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#17385F",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  stepItem: {
+    minWidth: 48,
+    alignItems: "center",
+    gap: 5,
+  },
+  stepCircle: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#EDF2F7",
+  },
+  stepCircleActive: {
+    backgroundColor: "#1769D2",
+  },
+  stepCircleComplete: {
+    backgroundColor: "#1EA56B",
+  },
+  stepLabel: {
+    color: "#8293A8",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  stepLabelActive: {
+    color: "#1769D2",
+    fontWeight: "700",
+  },
+  stepLabelComplete: {
+    color: "#1A8059",
+  },
+  stepConnector: {
+    height: 2,
+    flex: 1,
+    marginHorizontal: 4,
+    marginBottom: 16,
+    backgroundColor: "#E4EAF1",
+  },
+  stepConnectorComplete: {
+    backgroundColor: "#8ACFB2",
+  },
+  content: { flexGrow: 1, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
+  formCanvas: {
+    flex: 1,
+  },
+  formSection: {
+    padding: 17,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E1EAF3",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#17385F",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  formSectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 17,
+  },
+  formSectionIcon: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#EDF5FF",
+  },
+  formSectionTitle: {
+    color: "#17385F",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  sectionHint: {
+    marginTop: 3,
+    color: "#71849A",
+    fontSize: 12,
+  },
+  fieldLabel: {
+    marginBottom: 6,
+    color: "#17385F",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  optionalText: {
+    color: "#647C95",
+    fontWeight: "400",
+  },
+  requiredMark: {
+    color: "#E44752",
+  },
+  routeTextInput: {
+    minHeight: 48,
+    marginBottom: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    color: "#17385F",
+    backgroundColor: "#FFFFFF",
+    fontSize: 14,
+  },
+  descriptionInput: {
+    minHeight: 64,
+    marginBottom: 0,
+  },
+  locationEntryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 11,
+  },
+  locationRail: {
+    width: 20,
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+  startLocationDot: {
+    width: 11,
+    height: 11,
+    marginTop: 15,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#21B56B",
+    backgroundColor: "#FFFFFF",
+  },
+  endLocationDot: {
+    width: 11,
+    height: 11,
+    marginTop: 15,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#EF4444",
+    backgroundColor: "#FFFFFF",
+  },
+  locationRailLine: {
+    width: 1,
+    flex: 1,
+    marginVertical: 2,
+    backgroundColor: "#C7D8E8",
+  },
+  routePlaceField: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mapLocationButton: {
+    width: 46,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  viaHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 1,
+  },
+  addStopButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+  },
+  addStopText: {
+    color: "#1769D2",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  viaStopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 10,
+  },
+  viaStopIcon: {
+    width: 20,
+    alignItems: "center",
+  },
+  removeStopButton: {
+    width: 38,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  endLocationLabel: {
+    marginTop: 1,
+  },
+  scheduleDateButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 13,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  scheduleDateText: {
+    color: "#17385F",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  scheduleDatePlaceholder: {
+    color: "#71869C",
+    fontWeight: "400",
+  },
+  scheduleTimesColumn: {
+    marginBottom: 2,
+  },
+  scheduleTimeRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  scheduleTimeField: {
+    flex: 1,
+    minWidth: 0,
+  },
+  routePreviewMap: {
+    height: 185,
+    marginTop: 3,
+    borderRadius: 13,
+  },
+  estimateCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#DBE9F7",
+    borderRadius: 13,
+    backgroundColor: "#F7FAFE",
+  },
+  estimateItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  estimateDivider: {
+    width: 1,
+    height: 35,
+    marginHorizontal: 12,
+    backgroundColor: "#D8E3EF",
+  },
+  estimateLabel: {
+    color: "#72849A",
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  estimateValue: {
+    marginTop: 3,
+    color: "#17385F",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  estimatePlaceholder: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 11,
+    padding: 12,
+    borderRadius: 11,
+    backgroundColor: "#F2F6FA",
+  },
+  estimatePlaceholderText: {
+    flex: 1,
+    color: "#71849A",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  estimateErrorText: {
+    flex: 1,
+    color: "#A33836",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  finalEstimateCard: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+  finalEstimateMetric: {
+    flex: 1,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: "#DBE9F7",
+    borderRadius: 12,
+    backgroundColor: "#F7FAFE",
+  },
+  timeReferenceRow: {
+    flexDirection: "row",
+    gap: 7,
+    marginBottom: 13,
+  },
+  timeReferenceOption: {
+    flex: 1,
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  timeReferenceOptionSelected: {
+    backgroundColor: "#1769D2",
+    borderColor: "#1769D2",
+  },
+  timeReferenceText: {
+    color: "#31516F",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  timeReferenceTextSelected: {
+    color: "#FFFFFF",
+  },
+  assignmentSelectButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 13,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  assignmentSelectText: {
+    flex: 1,
+    color: "#17385F",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  assignmentSelectPlaceholder: {
+    flex: 1,
+    color: "#71869C",
+    fontSize: 14,
+  },
+  routeTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  routeTypeOption: {
+    flex: 1,
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+  },
+  routeTypeOptionSelected: {
+    borderColor: "#8BBEFF",
+    backgroundColor: "#8BBEFF",
+  },
+  routeTypeText: {
+    color: "#31516F",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  routeTypeTextSelected: {
+    color: "#FFFFFF",
+  },
+  statusSelector: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 2,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#C9E4FA",
+    borderRadius: 8,
+    backgroundColor: "#F8FBFE",
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#20B26B",
+  },
+  statusDotInactive: {
+    backgroundColor: "#94A3B8",
+  },
+  statusText: {
+    flex: 1,
+    color: "#24415D",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  compactInput: {
+    minHeight: 48,
+    marginBottom: 16,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 11,
+    color: "#1E293B",
+    backgroundColor: "#F8FAFC",
+    fontSize: 14,
+  },
+  timeColumnLabel: {
+    marginBottom: 6,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  timeWindowSection: {
+    marginTop: 10,
+  },
+  formActions: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 13,
+    borderTopWidth: 1,
+    borderTopColor: "#E4EBF3",
+    backgroundColor: "#FFFFFF",
+  },
+  saveRouteButton: {
+    flex: 1,
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9,
+    borderRadius: 12,
+    backgroundColor: "#1769D2",
+    shadowColor: "#1769D2",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 7,
+    elevation: 3,
+  },
+  saveRouteButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  cancelRouteButton: {
+    flex: 1,
+    minHeight: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#D8E3EF",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  cancelRouteButtonText: {
+    color: "#526A82",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  previousButton: {
+    minWidth: 105,
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderColor: "#D8E3EF",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  previousButtonText: {
+    color: "#23476D",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
@@ -1988,14 +2905,14 @@ const styles = StyleSheet.create({
   windowRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: 2,
+    gap: 8,
   },
   windowColumn: {
     flex: 1,
   },
   windowColumnLeft: {
-    marginRight: 12,
+    marginRight: 0,
   },
   checkmark: {
     width: 28,
@@ -2324,24 +3241,35 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeScopeContainer: {
-    marginTop: 14,
-    marginBottom: 18,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  scopeLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1E293B",
-    marginBottom: 10,
-  },
-  scopeOption: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
+    gap: 8,
+    flexWrap: "wrap",
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  scopeLabel: {
+    width: "100%",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    marginBottom: 2,
+  },
+  scopeOption: {
+    minHeight: 34,
+    minWidth: 58,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 17,
+    backgroundColor: "#FFFFFF",
+  },
+  scopeOptionSelected: {
+    borderColor: "#1769D2",
+    backgroundColor: "#1769D2",
   },
   radioButton: {
     width: 20,
@@ -2365,9 +3293,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB",
   },
   scopeOptionText: {
-    fontSize: 14,
-    color: "#1E293B",
+    fontSize: 12,
+    color: "#475569",
     fontWeight: "600",
+  },
+  scopeOptionTextSelected: {
+    color: "#FFFFFF",
   },
   savePreferenceButton: {
     backgroundColor: "#28A745",
@@ -2504,28 +3435,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   selectorButton: {
-    borderWidth: 1.5,
-    borderColor: "#D9E4F3",
-    borderRadius: 16,
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 11,
     backgroundColor: "#F8FAFC",
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    marginBottom: 20,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    marginBottom: 10,
   },
   selectorButtonText: {
-    fontSize: 15,
-    color: "#0F172A",
+    fontSize: 14,
+    color: "#1E293B",
     fontWeight: "700",
   },
   selectorPlaceholderText: {
-    fontSize: 15,
-    color: "#94A3B8",
-    fontWeight: "600",
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "500",
   },
   stepperHeader: {
     marginBottom: 20,
@@ -2669,216 +3598,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 16,
     marginTop: -8,
-  },
-});
-
-const selectedLocationStyles = StyleSheet.create({
-  selectedLocationsCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 12,
-
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  selectedHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-
-  selectedHeaderTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#374151",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 54,
-  },
-
-  locationContent: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-
-  locationType: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#9CA3AF",
-    letterSpacing: 0.8,
-    marginBottom: 3,
-  },
-
-  locationAddress: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    lineHeight: 19,
-  },
-
-  pickupIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#22C55E",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  dropoffIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  locationConnector: {
-    width: 32,
-    alignItems: "center",
-    height: 18,
-  },
-
-  connectorLine: {
-    width: 2,
-    height: 18,
-    backgroundColor: "#D1D5DB",
-    borderRadius: 1,
-  },
-});
-
-const selectLocationButtonStyles = StyleSheet.create({
-  selectorButton: {
-    width: "100%",
-    minHeight: 76,
-
-    flexDirection: "row",
-    alignItems: "center",
-
-    backgroundColor: "#FFFFFF",
-
-    borderRadius: 18,
-
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  selectorIconContainer: {
-    width: 42,
-    height: 42,
-
-    borderRadius: 13,
-
-    backgroundColor: "#EFF6FF",
-
-    alignItems: "center",
-    justifyContent: "center",
-
-    marginRight: 12,
-  },
-
-  selectorContent: {
-    flex: 1,
-  },
-
-  selectorTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 3,
-  },
-
-  selectorPlaceholderText: {
-    fontSize: 13,
-    color: "#9CA3AF",
-  },
-
-  selectorLocationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 30,
-  },
-
-  selectorTextContainer: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  selectorLabel: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#9CA3AF",
-    letterSpacing: 0.8,
-    marginBottom: 2,
-  },
-
-  selectorLocationText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111827",
-  },
-
-  startDot: {
-    width: 10,
-    height: 10,
-
-    borderRadius: 5,
-
-    backgroundColor: "#22C55E",
-
-    borderWidth: 2,
-    borderColor: "#DCFCE7",
-  },
-
-  stopDot: {
-    width: 10,
-    height: 10,
-
-    borderRadius: 5,
-
-    backgroundColor: "#EF4444",
-
-    borderWidth: 2,
-    borderColor: "#FEE2E2",
-  },
-
-  selectorConnector: {
-    width: 1,
-    height: 10,
-
-    backgroundColor: "#D1D5DB",
-
-    marginLeft: 4.5,
-    marginVertical: 1,
   },
 });

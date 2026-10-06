@@ -11,8 +11,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
-import { SafeAreaView } from "react-native-safe-area-context";
+import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
 
 const ViewAllStops = () => {
   const { routeId, routeStops } = useLocalSearchParams();
@@ -36,11 +35,6 @@ const ViewAllStops = () => {
 
     router.push("/(owner)/(tabs)/routes");
   };
-
-  const { renderHeader } = useOwnerPageHeader({
-    title: "All Stops",
-    onBackPress: handleBackToRoute,
-  });
 
   useEffect(() => {
     let isActive = true;
@@ -264,7 +258,10 @@ const ViewAllStops = () => {
 
   return (
     <View style={styles.container}>
-      {renderHeader()}
+      <OwnerCompactHeader
+        title="All Stops"
+        onBackPress={handleBackToRoute}
+      />
       <MapView style={styles.map} initialRegion={initialRegion}>
         {groupedStops.map((group) => (
           <React.Fragment key={group.childKey}>
@@ -311,7 +308,18 @@ const ViewAllStops = () => {
       </MapView>
 
       <View style={styles.bottomSheet}>
-        <Text style={styles.heading}>Route Stops ({allStops.length})</Text>
+        <View style={styles.sheetHeader}>
+          <View>
+            <Text style={styles.heading}>Route Stops</Text>
+            <Text style={styles.subheading}>
+              {allStops.length} {allStops.length === 1 ? "stop" : "stops"}
+            </Text>
+          </View>
+          <View style={styles.countBadge}>
+            <MaterialIcons name="place" size={15} color="#1769D2" />
+            <Text style={styles.countBadgeText}>{allStops.length}</Text>
+          </View>
+        </View>
 
         {loading ? (
           <View style={styles.stateContainer}>
@@ -329,6 +337,13 @@ const ViewAllStops = () => {
               item?.id || `${item?.title || "stop"}-${item?.stopOrder || 0}`
             }
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.listContent,
+              allStops.length === 0 && styles.emptyListContent,
+            ]}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No route stops are available.</Text>
+            }
             renderItem={({ item, index }) => {
               if (!item) return null;
 
@@ -364,29 +379,52 @@ export default ViewAllStops;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
+    backgroundColor: "#F4F8FC",
   },
 
   map: {
-    height: "55%",
+    height: "42%",
     width: "100%",
   },
 
   bottomSheet: {
     flex: 1,
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -18,
-    paddingHorizontal: 18,
-    paddingTop: 20,
+    backgroundColor: "#F4F8FC",
+    marginTop: -10,
+    paddingHorizontal: 10,
+    paddingTop: 10,
   },
 
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 3,
+    paddingBottom: 8,
+  },
   heading: {
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#222",
-    marginBottom: 18,
+    color: "#17385F",
+  },
+  subheading: {
+    color: "#71869C",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  countBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    backgroundColor: "#E6F1FF",
+  },
+  countBadgeText: {
+    color: "#1769D2",
+    fontSize: 10,
+    fontWeight: "700",
   },
 
   stateContainer: {
@@ -397,9 +435,9 @@ const styles = StyleSheet.create({
   },
 
   stateText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: "#6B7280",
+    marginTop: 8,
+    fontSize: 13,
+    color: "#607A98",
     textAlign: "center",
   },
 
@@ -415,7 +453,7 @@ const styles = StyleSheet.create({
 
   markerLabel: {
     marginTop: 4,
-    backgroundColor: "#111827",
+    backgroundColor: "#17385F",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
@@ -431,28 +469,22 @@ const styles = StyleSheet.create({
   stopCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    backgroundColor: "#FFFFFF",
+    borderRadius: 11,
+    padding: 9,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
   },
 
   iconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#EEF4FF",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#EDF5FD",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 14,
+    marginRight: 9,
   },
 
   stopInfo: {
@@ -460,14 +492,27 @@ const styles = StyleSheet.create({
   },
 
   stopName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#222",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#17385F",
   },
 
   stopAddress: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#777",
+    marginTop: 2,
+    fontSize: 10,
+    color: "#71869C",
+  },
+  listContent: {
+    paddingBottom: 16,
+  },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  emptyText: {
+    padding: 18,
+    color: "#71869C",
+    fontSize: 12,
+    textAlign: "center",
   },
 });

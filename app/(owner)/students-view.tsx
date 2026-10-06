@@ -1,22 +1,19 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Image,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
 
 const StudentsView = () => {
   const router = useRouter();
   const { studentData, routeId } = useLocalSearchParams();
-  const [student, setStudent] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const resolvedRouteId = Array.isArray(routeId) ? routeId[0] : routeId;
 
@@ -32,29 +29,29 @@ const StudentsView = () => {
     router.push("/(owner)/(tabs)/routes");
   };
 
-  const { renderHeader } = useOwnerPageHeader({
-    title: "Child Details",
-    onBackPress: handleBackToRoute,
-  });
-
-  React.useEffect(() => {
+  const { student, error } = useMemo(() => {
     try {
-      setError(null);
-
       if (typeof studentData === "string" && studentData.trim()) {
         const parsed = JSON.parse(studentData);
-        setStudent(parsed);
-        return;
+        return { student: parsed, error: null };
       }
 
-      if (typeof studentData === "object") {
-        setStudent(studentData);
-        return;
+      if (
+        studentData &&
+        typeof studentData === "object" &&
+        !Array.isArray(studentData)
+      ) {
+        return { student: studentData, error: null };
       }
-
-      setError("Child details are not available right now.");
+      return {
+        student: null,
+        error: "Child details are not available right now.",
+      };
     } catch {
-      setError("Child details are not available right now.");
+      return {
+        student: null,
+        error: "Child details are not available right now.",
+      };
     }
   }, [studentData]);
 
@@ -80,7 +77,7 @@ const StudentsView = () => {
       dropoffLat && dropoffLng
         ? { latitude: dropoffLat, longitude: dropoffLng }
         : null,
-    ].filter(Boolean) as Array<{ latitude: number; longitude: number }>;
+    ].filter(Boolean) as { latitude: number; longitude: number }[];
 
     if (validPoints.length === 0) {
       return {
@@ -120,13 +117,13 @@ const StudentsView = () => {
   const routeMarkers = useMemo(() => {
     if (!student) return [];
 
-    const markers: Array<{
+    const markers: {
       id: string;
       latitude: number;
       longitude: number;
       label: string;
       icon: "home" | "school";
-    }> = [];
+    }[] = [];
 
     const pickupLat = Number(student.pickup_latitude);
     const pickupLng = Number(student.pickup_longitude);
@@ -158,7 +155,10 @@ const StudentsView = () => {
 
   return (
     <View style={styles.container}>
-      {renderHeader()}
+      <OwnerCompactHeader
+        title="Child Details"
+        onBackPress={handleBackToRoute}
+      />
 
       {error ? (
         <View style={styles.stateContainer}>
@@ -170,7 +170,14 @@ const StudentsView = () => {
             <View style={styles.avatarContainer}>
               {student.avatar ? (
                 <Image
-                  source={{ uri: student.avatar }}
+                  source={{
+                    uri:
+                      typeof student.avatar === "string"
+                        ? student.avatar
+                        : student.avatar?.url ||
+                          student.avatar?.avatar_url ||
+                          "",
+                  }}
                   style={styles.avatarImage}
                 />
               ) : (
@@ -221,12 +228,6 @@ const StudentsView = () => {
             ))}
           </View>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleBackToRoute}
-          >
-            <Text style={styles.actionButtonText}>Back to route</Text>
-          </TouchableOpacity>
         </ScrollView>
       ) : null}
     </View>
@@ -238,11 +239,12 @@ export default StudentsView;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
+    backgroundColor: "#F4F8FC",
   },
   content: {
-    padding: 20,
-    paddingBottom: 32,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 18,
   },
   stateContainer: {
     flex: 1,
@@ -251,51 +253,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   stateText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: "#6B7280",
+    marginTop: 8,
+    fontSize: 13,
+    color: "#607A98",
     textAlign: "center",
   },
   heroCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
   },
   mapCard: {
     backgroundColor: "#FFF",
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
   },
   mapHeaderRow: {
-    marginBottom: 10,
+    marginBottom: 7,
   },
   mapTitle: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
     color: "#111827",
   },
   mapSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#6B7280",
+    marginTop: 2,
+    fontSize: 10,
+    color: "#71869C",
   },
   map: {
-    height: 180,
-    borderRadius: 16,
+    height: 175,
+    borderRadius: 9,
     overflow: "hidden",
   },
   markerBubble: {
@@ -306,7 +302,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#E5E7EB",
+    borderColor: "#D6E9FC",
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 4,
@@ -314,65 +310,56 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: "#EEF4FF",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 14,
+    marginRight: 10,
     overflow: "hidden",
   },
   avatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   heroMeta: {
     flex: 1,
   },
   heroTitle: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: "700",
     color: "#111827",
   },
   heroSubtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: "#6B7280",
+    marginTop: 3,
+    fontSize: 11,
+    color: "#71869C",
   },
   sectionCard: {
     backgroundColor: "#FFF",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#D6E9FC",
   },
   infoRow: {
-    paddingVertical: 12,
+    paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
   infoLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "700",
-    color: "#6B7280",
+    color: "#71869C",
     textTransform: "uppercase",
     marginBottom: 4,
   },
   infoValue: {
-    fontSize: 15,
-    color: "#111827",
-  },
-  actionButton: {
-    backgroundColor: "#2563EB",
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  actionButtonText: {
-    color: "#FFF",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 13,
+    color: "#17385F",
   },
 });

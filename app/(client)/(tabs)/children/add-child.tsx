@@ -317,8 +317,10 @@ const AddChildScreen = () => {
           school_address: selectedSchoolAddress,
           school_latitude: selectedSchoolLatitude,
           school_longitude: selectedSchoolLongitude,
+          pickup_address: pickupLocation.address.trim() || null,
           pickup_latitude: toCoordinate(pickupLocation.latitude, -90, 90),
           pickup_longitude: toCoordinate(pickupLocation.longitude, -180, 180),
+          dropoff_address: selectedSchoolAddress,
           dropoff_latitude: selectedSchoolLatitude,
           dropoff_longitude: selectedSchoolLongitude,
           vehicle_id: formValues.vehicle_id || null,
@@ -536,6 +538,10 @@ const AddChildScreen = () => {
                         child.school_location?.address ||
                         child.school_name ||
                         "";
+                      const reusedPickupAddress =
+                        child.pickup_address || reusedSchoolAddress;
+                      const reusedDropoffAddress =
+                        child.dropoff_address || reusedSchoolAddress;
                       const reusedPickupLatitude = toCoordinate(
                         child.pickup_latitude ?? reusedSchoolLatitude,
                         -90,
@@ -572,12 +578,12 @@ const AddChildScreen = () => {
                         child.school_name || formValues.school_name || "",
                       );
                       setDropoffLocation({
-                        address: reusedSchoolAddress,
+                        address: reusedDropoffAddress,
                         latitude: reusedDropoffLatitude,
                         longitude: reusedDropoffLongitude,
                       });
                       setPickupLocation({
-                        address: reusedSchoolAddress,
+                        address: reusedPickupAddress,
                         latitude: reusedPickupLatitude,
                         longitude: reusedPickupLongitude,
                       });
@@ -1086,7 +1092,7 @@ const AddChildScreen = () => {
           </View>
 
           {/* Assigned Vehicle Section */}
-          <View style={styles.section}>
+          {/* <View style={styles.section}>
             <View style={styles.vehicleHeader}>
               <MaterialCommunityIcons
                 name="car"
@@ -1196,7 +1202,7 @@ const AddChildScreen = () => {
                 </Text>
               </View>
             )}
-          </View>
+          </View> */}
 
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: colors.primary }]}

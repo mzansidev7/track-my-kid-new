@@ -17,6 +17,11 @@ import {
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import {
+  MessageAttachment,
+  getMessagePreview,
+  parseMessageAttachment,
+} from "../../../components/messages/MessageAttachment";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import {
@@ -168,6 +173,7 @@ export default function Messages() {
             }
             renderItem={({ item }) => {
               const own = item.sender_id === userId;
+              const attachment = parseMessageAttachment(item.content);
               return (
                 <View style={[styles.messageRow, own && styles.messageRowOwn]}>
                   <View
@@ -176,11 +182,17 @@ export default function Messages() {
                       own ? styles.bubbleOwn : styles.bubbleOther,
                     ]}
                   >
-                    <Text
-                      style={own ? styles.messageTextOwn : styles.messageText}
-                    >
-                      {item.content}
-                    </Text>
+                    {attachment ? (
+                      <MessageAttachment content={item.content} isOwn={own} />
+                    ) : (
+                      <Text
+                        style={
+                          own ? styles.messageTextOwn : styles.messageText
+                        }
+                      >
+                        {item.content}
+                      </Text>
+                    )}
                     <Text style={own ? styles.timeOwn : styles.time}>
                       {formatTime(item.sent_at)}
                     </Text>
@@ -321,7 +333,7 @@ function ConversationRow({
           {getRoleLabel(item.other_participant?.role)}
         </Text>
         <Text style={styles.preview} numberOfLines={1}>
-          {item.last_message?.content || "Start a conversation"}
+          {getMessagePreview(item.last_message?.content) || "Start a conversation"}
         </Text>
       </View>
       {unread && <View style={styles.unreadDot} />}

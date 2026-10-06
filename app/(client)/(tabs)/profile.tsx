@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import { File as ExpoFile } from "expo-file-system";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
@@ -68,7 +69,7 @@ const ClientProfile = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -81,26 +82,13 @@ const ClientProfile = () => {
       const uri = result.assets[0].uri;
       const fileName =
         uri.split("/").pop() || `client-avatar-${Date.now()}.jpg`;
-      const extension = fileName.split(".").pop()?.toLowerCase();
-      const contentType =
-        extension === "png"
-          ? "image/png"
-          : extension === "webp"
-            ? "image/webp"
-            : extension === "gif"
-              ? "image/gif"
-              : "image/jpeg";
       const formData = new FormData();
 
       if (Platform.OS === "web") {
         const imageResponse = await fetch(uri);
         formData.append("avatar", await imageResponse.blob(), fileName);
       } else {
-        formData.append("avatar", {
-          uri,
-          name: fileName,
-          type: contentType,
-        } as any);
+        formData.append("avatar", new ExpoFile(uri), fileName);
       }
 
       const baseUrl = await resolveWorkingBaseUrl();
@@ -113,7 +101,10 @@ const ClientProfile = () => {
 
       if (!response.ok) {
         throw new Error(
-          data.error || data.message || "Failed to upload avatar.",
+          data.detail ||
+            data.message ||
+            data.error ||
+            "Failed to upload avatar.",
         );
       }
 
