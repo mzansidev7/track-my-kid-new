@@ -73,6 +73,20 @@ export default function AdminMore() {
       color: "#B45309",
     },
     {
+      id: "school-billing",
+      title: "School EFT invoices",
+      subtitle: "Review EFT requests and confirm received payments",
+      icon: "receipt-long",
+      color: "#047857",
+    },
+    {
+      id: "school-subscriptions",
+      title: "School subscriptions",
+      subtitle: "Search school plans, billing periods, methods, and status",
+      icon: "subscriptions",
+      color: "#0369A1",
+    },
+    {
       id: "messages",
       title: "Messages",
       subtitle: "Review conversations and reply to users",
@@ -173,6 +187,10 @@ export default function AdminMore() {
                   router.push("/(admin)/(tabs)/support" as never);
                 } else if (item.id === "commissions") {
                   router.push("/(admin)/(tabs)/commissions" as never);
+                } else if (item.id === "school-billing") {
+                  router.push("/(admin)/(tabs)/school-billing" as never);
+                } else if (item.id === "school-subscriptions") {
+                  router.push("/(admin)/(tabs)/school-subscriptions" as never);
                 } else {
                   router.push(`/(admin)/(tabs)/tools/${item.id}` as never);
                 }

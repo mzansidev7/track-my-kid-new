@@ -18,6 +18,8 @@ export type ClientNotification = {
   recipient_name?: string | null;
   sender_name?: string | null;
   related_child_id?: string | null;
+  child_name?: string | null;
+  child_school_name?: string | null;
   related_route_id?: string | null;
   related_school_trip_id?: string | null;
   related_stop_id?: string | null;

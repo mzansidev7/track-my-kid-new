@@ -1,9 +1,10 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
-import React from "react";
+import React, { useContext } from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../../styles/theme";
+import { SchoolBillingAccessContext } from "../schoolBillingAccess";
 
 const tabs = [
   {
@@ -43,6 +44,7 @@ export default function SchoolTabBar() {
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { trialExpired } = useContext(SchoolBillingAccessContext);
 
   const activeSegment = String(segments[segments.length - 1] || "school");
 
@@ -91,7 +93,19 @@ export default function SchoolTabBar() {
           },
         ]}
       >
-        {tabs.map((tab) => {
+        {(trialExpired
+          ? [
+              ...tabs.filter((tab) =>
+                ["home", "students", "routes", "trips", "messages"].includes(tab.key),
+              ),
+              {
+                key: "billing",
+                icon: "credit-card",
+                route: "/(school)/billing",
+              },
+            ]
+          : tabs
+        ).map((tab) => {
           const isActive = tab.key === activeKey;
 
           return (
@@ -100,6 +114,8 @@ export default function SchoolTabBar() {
               activeOpacity={0.8}
               onPress={() => router.push(tab.route as any)}
               style={styles.tabItem}
+              accessibilityRole="button"
+              accessibilityLabel={tab.key === "billing" ? "Subscription and billing" : tab.key}
             >
               <View
                 style={[

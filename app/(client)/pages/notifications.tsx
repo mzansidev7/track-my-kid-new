@@ -84,6 +84,12 @@ const Notifications = () => {
         <Text style={styles.cardMessage} numberOfLines={2}>
           {item.message}
         </Text>
+        {item.related_child_id && item.child_name ? (
+          <Text style={styles.cardTime}>
+            For: {item.child_name}
+            {item.child_school_name ? ` - ${item.child_school_name}` : ""}
+          </Text>
+        ) : null}
         <Text style={styles.cardTime}>
           {item.created_at
             ? new Date(item.created_at).toLocaleString()
@@ -192,6 +198,14 @@ const Notifications = () => {
             <Text style={styles.modalTitle}>{selected?.title}</Text>
             <Text style={styles.modalMessage}>{selected?.message}</Text>
             <View style={styles.divider} />
+            {selected?.related_child_id ? (
+              <Text style={styles.modalMeta}>
+                For: {selected.child_name || "Your child"}
+                {selected.child_school_name
+                  ? ` - ${selected.child_school_name}`
+                  : ""}
+              </Text>
+            ) : null}
             {selected?.user_id && selected.user_id !== userId ? (
               <Text style={styles.modalMeta}>
                 To: {selected.recipient_name || "Unknown"}

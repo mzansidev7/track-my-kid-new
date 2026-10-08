@@ -105,6 +105,22 @@ const More = () => {
           <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
         </View>
 
+        <TouchableOpacity
+          style={styles.billingRow}
+          onPress={() => router.push("/(school)/billing" as never)}
+          accessibilityRole="button"
+          accessibilityLabel="Manage school subscription and billing"
+        >
+          <View style={styles.billingIcon}>
+            <MaterialIcons name="credit-card" size={21} color="#2563EB" />
+          </View>
+          <View style={styles.billingCopy}>
+            <Text style={styles.billingTitle}>Subscription &amp; Billing</Text>
+            <Text style={styles.billingSubtitle}>Plans, invoices and payment methods</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+        </TouchableOpacity>
+
         <View style={styles.statsRow}>
           <Stat value={students.length} label="Students" />
           <Stat value={routes.length} label="Routes" />
@@ -258,6 +274,28 @@ const styles = StyleSheet.create({
   profileDetails: { flex: 1 },
   profileName: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
   profileRole: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
+  billingRow: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E8EDF5",
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  billingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  billingCopy: { flex: 1 },
+  billingTitle: { color: "#172B4D", fontSize: 13, fontWeight: "800" },
+  billingSubtitle: { color: "#6B7280", fontSize: 10, marginTop: 4 },
   statusRow: { flexDirection: "row", alignItems: "center", marginTop: 5 },
   statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 6 },
   statusText: { color: "#FFFFFF", fontSize: 11, fontWeight: "600" },
