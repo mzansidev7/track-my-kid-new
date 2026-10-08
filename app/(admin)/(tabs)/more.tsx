@@ -24,22 +24,88 @@ export default function AdminMore() {
 
   const destinations = [
     {
-      title: "Dashboard",
-      subtitle: "Platform metrics and activity",
-      icon: "dashboard",
-      route: "/(admin)/(tabs)",
+      id: "live-map",
+      title: "Live map",
+      subtitle: "Open current driver GPS positions on a map",
+      icon: "map",
+      color: "#0F766E",
     },
     {
-      title: "Live trips",
-      subtitle: "Active tracking sessions and GPS",
-      icon: "location-on",
-      route: "/(admin)/(tabs)/live",
-    },
-    {
+      id: "support",
       title: "Support tickets",
       subtitle: "Review and update user requests",
       icon: "support-agent",
-      route: "/(admin)/(tabs)/support",
+      color: "#7C3AED",
+    },
+    {
+      id: "users",
+      title: "Users",
+      subtitle: "Browse platform accounts and start conversations",
+      icon: "people-outline",
+      color: "#0284C7",
+    },
+    {
+      id: "drivers",
+      title: "Drivers",
+      subtitle: "Review driver profiles, vehicles, and routes",
+      icon: "badge",
+      color: "#EA580C",
+    },
+    {
+      id: "trips",
+      title: "Trips",
+      subtitle: "Review recent trips and their status",
+      icon: "route",
+      color: "#DB2777",
+    },
+    {
+      id: "vehicles",
+      title: "Vehicles",
+      subtitle: "Browse fleet vehicles and assignments",
+      icon: "directions-bus",
+      color: "#16A34A",
+    },
+    {
+      id: "payments",
+      title: "Payments",
+      subtitle: "Review commissions, balances, and invoices",
+      icon: "payments",
+      color: "#B45309",
+    },
+    {
+      id: "messages",
+      title: "Messages",
+      subtitle: "Review conversations and reply to users",
+      icon: "chat",
+      color: "#4F46E5",
+    },
+    {
+      id: "requests",
+      title: "Requests",
+      subtitle: "Manage support tickets, incidents, and school reviews",
+      icon: "assignment",
+      color: "#DC2626",
+    },
+    {
+      id: "support-users",
+      title: "Support users",
+      subtitle: "Manage platform support accounts",
+      icon: "admin-panel-settings",
+      color: "#0F766E",
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      subtitle: "Review support controls and platform health",
+      icon: "settings",
+      color: "#475569",
+    },
+    {
+      id: "profile",
+      title: "Profile",
+      subtitle: "Update your profile and password",
+      icon: "account-circle",
+      color: "#9333EA",
     },
   ];
 
@@ -89,34 +155,53 @@ export default function AdminMore() {
           </View>
           <MaterialIcons name="verified-user" size={20} color="#059669" />
         </View>
-        <Text style={styles.section}>AVAILABLE AREAS</Text>
-        {destinations.map((item) => (
-          <TouchableOpacity
-            key={item.route}
-            style={[styles.row, { backgroundColor: colors.surface }]}
-            onPress={() => router.push(item.route as never)}
-          >
-            <View style={styles.rowIcon}>
+        <Text style={styles.section}>PLATFORM TOOLS</Text>
+        <View style={styles.tiles}>
+          {destinations.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.tile,
+                { backgroundColor: colors.surface, borderColor: "#E2E8F0" },
+              ]}
+              onPress={() => {
+                if (item.id === "dashboard") {
+                  router.push("/(admin)/(tabs)" as never);
+                } else if (item.id === "live") {
+                  router.push("/(admin)/(tabs)/live" as never);
+                } else if (item.id === "support") {
+                  router.push("/(admin)/(tabs)/support" as never);
+                } else if (item.id === "commissions") {
+                  router.push("/(admin)/(tabs)/commissions" as never);
+                } else {
+                  router.push(`/(admin)/(tabs)/tools/${item.id}` as never);
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${item.title}`}
+            >
+              <View
+                style={[
+                  styles.tileIcon,
+                  { backgroundColor: `${item.color}18` },
+                ]}
+              >
+                <MaterialIcons
+                  name={item.icon as any}
+                  size={22}
+                  color={item.color}
+                />
+              </View>
+              <Text style={styles.tileTitle}>{item.title}</Text>
+              <Text style={styles.tileSub}>{item.subtitle}</Text>
               <MaterialIcons
-                name={item.icon as any}
-                size={21}
-                color="#2563EB"
+                name="arrow-forward"
+                size={18}
+                color={item.color}
+                style={styles.tileArrow}
               />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{item.title}</Text>
-              <Text style={styles.rowSub}>{item.subtitle}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
-          </TouchableOpacity>
-        ))}
-        <View style={styles.notice}>
-          <MaterialIcons name="info-outline" size={19} color="#B45309" />
-          <Text style={styles.noticeText}>
-            Other platform-management modules are not connected to live Admin
-            APIs yet, so they are omitted rather than showing fake data or
-            broken links.
-          </Text>
+            </TouchableOpacity>
+          ))}
         </View>
         <TouchableOpacity style={styles.logout} onPress={confirmLogout}>
           <MaterialIcons name="logout" size={19} color="#B91C1C" />
@@ -169,35 +254,38 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginTop: 8,
   },
-  row: {
+  tiles: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    padding: 12,
   },
-  rowIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    backgroundColor: "#EFF6FF",
+  tile: {
+    width: "47%",
+    flexGrow: 1,
+    maxWidth: "50%",
+    minHeight: 142,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 13,
+    position: "relative",
+  },
+  tileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 10,
   },
-  rowTitle: { color: "#1E293B", fontSize: 12, fontWeight: "800" },
-  rowSub: { color: "#64748B", fontSize: 10, marginTop: 3 },
-  notice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: "#FFFBEB",
-    padding: 11,
-    borderRadius: 10,
-    marginTop: 5,
+  tileTitle: { color: "#1E293B", fontSize: 13, fontWeight: "800" },
+  tileSub: {
+    color: "#64748B",
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 4,
+    paddingRight: 8,
   },
-  noticeText: { color: "#92400E", fontSize: 10, lineHeight: 15, flex: 1 },
+  tileArrow: { position: "absolute", right: 12, top: 14 },
   logout: {
     flexDirection: "row",
     alignItems: "center",

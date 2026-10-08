@@ -43,6 +43,10 @@ export default function OwnerPayments() {
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [childStatuses, setChildStatuses] = useState<any[]>([]);
+  const [cashCommissionInvoices, setCashCommissionInvoices] = useState<any[]>([]);
+  const [confirmingCashPaymentId, setConfirmingCashPaymentId] = useState<
+    string | null
+  >(null);
   const [billingPeriod, setBillingPeriod] = useState<any>(null);
   const [connectedAccountId, setConnectedAccountId] = useState("");
   const [stripeStatus, setStripeStatus] = useState({
@@ -87,10 +91,15 @@ export default function OwnerPayments() {
           }),
         ]);
 
+      const cashInvoicesRes = await fetch(
+        `${baseUrl}/owner/payments/cash-commission-invoices`,
+        { headers: { Authorization: `Bearer ${user.token}` } },
+      );
       const profileData = await profileRes.json();
       const historyData = await historyRes.json();
       const stripeStatusData = await stripeStatusRes.json();
       const paymentStatusData = await paymentStatusRes.json();
+      const cashInvoicesData = await cashInvoicesRes.json();
 
       if (!profileRes.ok) {
         throw new Error(profileData.error || "Failed to load owner profile");
@@ -108,11 +117,19 @@ export default function OwnerPayments() {
           paymentStatusData.error || "Failed to load child payment status",
         );
       }
+      if (!cashInvoicesRes.ok) {
+        throw new Error(
+          cashInvoicesData.error || "Failed to load cash commission invoices",
+        );
+      }
 
       setConnectedAccountId(profileData.stripe_connected_account_id || "");
       setStripeStatus(stripeStatusData);
       setHistory(historyData || []);
       setChildStatuses(paymentStatusData.children || []);
+      setCashCommissionInvoices(
+        Array.isArray(cashInvoicesData) ? cashInvoicesData : [],
+      );
       setBillingPeriod(paymentStatusData);
       if (profileData.id) {
         await AsyncStorage.setItem(
@@ -128,6 +145,60 @@ export default function OwnerPayments() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const confirmCashPayment = async (paymentId: string) => {
+    if (!user?.token || confirmingCashPaymentId) return;
+    setConfirmingCashPaymentId(paymentId);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/owner/payments/${paymentId}/confirm-cash`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${user.token}` },
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Unable to confirm cash.");
+      }
+      setNotification({
+        visible: true,
+        message:
+          "Cash receipt confirmed. The 5% platform fee will be included in the monthly invoice.",
+        type: "success",
+      });
+      await loadData();
+    } catch (error: any) {
+      setNotification({
+        visible: true,
+        message: error?.message || "Unable to confirm cash payment.",
+        type: "error",
+      });
+    } finally {
+      setConfirmingCashPaymentId(null);
+    }
+  };
+
+  const openCashCommissionInvoice = async (invoice: any) => {
+    if (!invoice.hosted_invoice_url) {
+      setNotification({
+        visible: true,
+        message: "This invoice does not have a payment link yet.",
+        type: "warning",
+      });
+      return;
+    }
+    try {
+      await Linking.openURL(invoice.hosted_invoice_url);
+    } catch (error: any) {
+      setNotification({
+        visible: true,
+        message: error?.message || "Unable to open the commission invoice.",
+        type: "error",
+      });
     }
   };
 
@@ -266,21 +337,28 @@ export default function OwnerPayments() {
         "Client",
         "Children",
         "Status",
+        "Payment Method",
         "Amount",
-        "Service Fee",
-        "Payout",
+        "Platform Fee",
+        "Owner Received",
         "Currency",
         "Date",
       ];
       const rows = history.map((item) => {
         const fee =
-          item.service_fee_amount_cents ?? (item.children_count || 0) * 500;
-        const payout = (item.amount_cents || 0) - fee;
+          item.platform_fee_cents ??
+          item.service_fee_amount_cents ??
+          (item.children_count || 0) * 500;
+        const payout =
+          item.payment_method === "cash"
+            ? item.amount_cents || 0
+            : (item.amount_cents || 0) - fee;
         const date = item.created_at || item.processed_at || "";
         return [
           item.clients?.users?.name || "Client",
           item.children_count || 0,
           item.status || "",
+          item.payment_method || "card",
           formatCurrency(item.amount_cents || 0, item.currency),
           formatCurrency(fee, item.currency),
           formatCurrency(payout, item.currency),
@@ -468,6 +546,50 @@ export default function OwnerPayments() {
           </View>
 
           <View style={styles.card}>
+            <Text style={styles.title}>Cash commission invoices</Text>
+            <Text style={styles.rowSub}>
+              Monthly 5% platform fees on confirmed cash payments.
+            </Text>
+            <FlatList
+              data={cashCommissionInvoices}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>
+                  No cash commission invoices.
+                </Text>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>
+                      {item.period_start} – {item.period_end}
+                    </Text>
+                    <Text style={styles.rowSub}>
+                      {item.status === "paid"
+                        ? "Paid"
+                        : item.status === "open"
+                          ? `Due ${item.due_at ? new Date(item.due_at).toLocaleDateString("en-ZA") : "soon"}`
+                          : item.status}
+                    </Text>
+                  </View>
+                  <Text style={styles.amount}>
+                    {formatCurrency(item.amount_cents, item.currency)}
+                  </Text>
+                  {item.status === "open" && item.hosted_invoice_url ? (
+                    <TouchableOpacity
+                      style={styles.confirmCashButton}
+                      onPress={() => openCashCommissionInvoice(item)}
+                    >
+                      <Text style={styles.confirmCashButtonText}>Pay</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+            />
+          </View>
+
+          <View style={styles.card}>
             <View style={styles.historyHeader}>
               <Text style={styles.title}>Payment History</Text>
               <TouchableOpacity
@@ -486,9 +608,13 @@ export default function OwnerPayments() {
               }
               renderItem={({ item }) => {
                 const fee =
+                  item.platform_fee_cents ??
                   item.service_fee_amount_cents ??
                   (item.children_count || 0) * 500;
-                const payout = (item.amount_cents || 0) - fee;
+                const payout =
+                  item.payment_method === "cash"
+                    ? item.amount_cents || 0
+                    : (item.amount_cents || 0) - fee;
                 return (
                   <View style={styles.row}>
                     <View style={{ flex: 1 }}>
@@ -496,13 +622,31 @@ export default function OwnerPayments() {
                         {item.clients?.users?.name || "Client"}
                       </Text>
                       <Text style={styles.rowSub}>
-                        {item.children_count} child(ren) - {item.status}
+                        {item.children_count} child(ren) -{" "}
+                        {item.payment_method === "cash" ? "Cash" : "Card"} -{" "}
+                        {item.status}
                       </Text>
                       <Text style={styles.rowSub}>
-                        Vehicle: {item.vehicles?.name || "Not recorded"} - Fee:{" "}
-                        {formatCurrency(fee, item.currency)} • Payout:{" "}
-                        {formatCurrency(payout, item.currency)}
+                        Vehicle: {item.vehicles?.name || "Not recorded"} -{" "}
+                        {item.payment_method === "cash"
+                          ? `Platform fee owed: ${formatCurrency(fee, item.currency)}`
+                          : `Platform fee: ${formatCurrency(fee, item.currency)}`}{" "}
+                        • Owner received: {formatCurrency(payout, item.currency)}
                       </Text>
+                      {item.payment_method === "cash" &&
+                      item.status === "pending" ? (
+                        <TouchableOpacity
+                          style={styles.confirmCashButton}
+                          disabled={confirmingCashPaymentId !== null}
+                          onPress={() => confirmCashPayment(item.id)}
+                        >
+                          <Text style={styles.confirmCashButtonText}>
+                            {confirmingCashPaymentId === item.id
+                              ? "Confirming..."
+                              : "Confirm cash received"}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                     <Text style={styles.amount}>
                       {formatCurrency(item.amount_cents, item.currency)}
@@ -602,4 +746,13 @@ const styles = StyleSheet.create({
   rowTitle: { fontWeight: "600", color: "#333" },
   rowSub: { color: "#777", fontSize: 12, marginTop: 2 },
   amount: { fontWeight: "700", color: "#111", marginLeft: 10 },
+  confirmCashButton: {
+    alignSelf: "flex-start",
+    marginTop: 7,
+    borderRadius: 8,
+    backgroundColor: "#159B3A",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  confirmCashButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
 });

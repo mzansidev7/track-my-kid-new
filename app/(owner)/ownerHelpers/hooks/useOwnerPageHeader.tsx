@@ -11,6 +11,7 @@ export interface OwnerPageHeaderOptions {
   actionLabel?: string;
   onActionPress?: () => void;
   onBackPress?: () => void;
+  headerColors?: readonly [string, string];
 }
 
 export const useOwnerPageHeader = ({
@@ -19,6 +20,7 @@ export const useOwnerPageHeader = ({
   actionLabel,
   onActionPress,
   onBackPress,
+  headerColors,
 }: OwnerPageHeaderOptions) => {
   const router = useRouter();
   const { colors } = useTheme();
@@ -40,10 +42,12 @@ export const useOwnerPageHeader = ({
   const renderHeader = () => (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <LinearGradient
-        colors={[
-          colors.brands.owner.gradientEnd,
-          colors.brands.owner.gradientStart,
-        ]}
+        colors={
+          headerColors || [
+            colors.brands.owner.gradientEnd,
+            colors.brands.owner.gradientStart,
+          ]
+        }
         style={styles.pageHeader}
       >
         <View style={styles.headerRow}>

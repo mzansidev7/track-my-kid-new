@@ -22,6 +22,7 @@ import {
   getMessagePreview,
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
+import MessageComposer from "../../../components/messages/MessageComposer";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import {
@@ -60,8 +61,15 @@ export default function Messages() {
       return;
     }
     setLoading(true);
-    setConversations(await fetchConversationsWithCache(userId));
-    setLoading(false);
+    try {
+      const fresh = await fetchConversationsWithCache(userId, (cached) => {
+        setConversations(cached);
+        setLoading(false);
+      });
+      setConversations(fresh);
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   useEffect(() => {
@@ -77,8 +85,15 @@ export default function Messages() {
   const openConversation = async (conversation: ConversationData) => {
     setSelectedConversation(conversation);
     setLoadingMessages(true);
-    setMessages(await fetchMessagesWithCache(conversation.id));
-    setLoadingMessages(false);
+    try {
+      const fresh = await fetchMessagesWithCache(conversation.id, (cached) => {
+        setMessages(cached);
+        setLoadingMessages(false);
+      });
+      setMessages(fresh);
+    } finally {
+      setLoadingMessages(false);
+    }
   };
 
   useEffect(() => {
@@ -98,9 +113,9 @@ export default function Messages() {
       : conversations;
   }, [conversations, search]);
 
-  const sendMessage = async () => {
-    if (!draft.trim() || !selectedConversation || sending || !user?.token)
-      return;
+  const sendMessage = async (content = draft.trim()) => {
+    if (!content || !selectedConversation || sending || !user?.token)
+      return false;
     setSending(true);
     try {
       const response = await fetch(`${BASE_URL}/school/messages`, {
@@ -111,16 +126,19 @@ export default function Messages() {
         },
         body: JSON.stringify({
           conversationId: selectedConversation.id,
-          content: draft.trim(),
+          content,
         }),
       });
       if (response.ok) {
         setDraft("");
         setMessages(await fetchMessagesWithCache(selectedConversation.id));
+        return true;
       }
+      return false;
     } catch (err) {
       setSending(false);
       console.warn(err);
+      return false;
     } finally {
       setSending(false);
     }
@@ -205,30 +223,17 @@ export default function Messages() {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={styles.composer}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a message..."
-              placeholderTextColor="#9AA7B8"
-              multiline
-              style={styles.input}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                !draft.trim() && styles.sendButtonDisabled,
-              ]}
-              onPress={sendMessage}
-              disabled={!draft.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <MaterialIcons name="send" size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-          </View>
+          <MessageComposer
+            apiBaseUrl={BASE_URL}
+            role="school"
+            conversationId={selectedConversation.id}
+            token={user?.token || ""}
+            accentColor={colors.blue}
+            onSendText={sendMessage}
+            onSent={async () =>
+              setMessages(await fetchMessagesWithCache(selectedConversation.id))
+            }
+          />
         </KeyboardAvoidingView>
       </SafeAreaView>
     );

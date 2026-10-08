@@ -20,6 +20,10 @@ import { useOwnerVehicles } from "../ownerHelpers/hooks/useOwnerVehicles";
 import { useActiveRoutes, useRoutes } from "../ownerHelpers/hooks/useRoutes";
 import { getRouteStatus } from "../ownerHelpers/actionHelpers/actions";
 import { ForceProfileUpdate } from "../ownerHelpers/components/Modals";
+import {
+  subscribeToPaymentUpdates,
+  unsubscribeFromRealtime,
+} from "../../../store/subscriptions/clientRealtime";
 
 const homeDashboardStyles = StyleSheet.create({
   screen: {
@@ -305,6 +309,41 @@ const homeDashboardStyles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
   },
+  pendingPaymentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+  },
+  pendingPaymentIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+    borderRadius: 17,
+    backgroundColor: "#FEF3C7",
+  },
+  pendingPaymentCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pendingPaymentTitle: {
+    color: "#92400E",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  pendingPaymentSubtitle: {
+    marginTop: 3,
+    color: "#78350F",
+    fontSize: 9,
+    lineHeight: 13,
+  },
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -466,6 +505,18 @@ export default function Home({ user }: any) {
       setDashboardData(null);
     }
   }, [user?.token]);
+
+  useEffect(() => {
+    if (!owner?.id || !user?.token) return undefined;
+    const paymentChannel = subscribeToPaymentUpdates(
+      "owner_id",
+      owner.id,
+      fetchOwnerDashboard,
+    );
+    return () => {
+      void unsubscribeFromRealtime(paymentChannel);
+    };
+  }, [fetchOwnerDashboard, owner?.id, user?.token]);
 
   const refreshLiveLocations = useCallback(async () => {
     if (!user?.token) return;
@@ -689,6 +740,8 @@ export default function Home({ user }: any) {
       refreshUnreadCount();
       fetchVehicles();
       fetchOwnerDashboard();
+      const paymentRefreshTimer = setInterval(fetchOwnerDashboard, 30_000);
+      return () => clearInterval(paymentRefreshTimer);
     }, [
       fetchVehicles,
       refreshDrivers,
@@ -800,6 +853,8 @@ export default function Home({ user }: any) {
     Math.max(activeRoutes.length - readyRoutes, 0);
 
   const delayedCount = dashboardData?.summary?.delayedCount ?? 0;
+  const pendingCashApprovalCount =
+    dashboardData?.summary?.pendingCashApprovalCount ?? 0;
 
   if (shouldForceProfileUpdate) {
     return <ForceProfileUpdate missingOwnerFields={missingOwnerFields} />;
@@ -1170,6 +1225,34 @@ export default function Home({ user }: any) {
             </Text>
           </View>
         </View>
+
+        {pendingCashApprovalCount > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.82}
+            style={homeDashboardStyles.pendingPaymentCard}
+            onPress={() => router.push("/(owner)/payments" as never)}
+            accessibilityRole="button"
+            accessibilityLabel={`${pendingCashApprovalCount} cash payment${pendingCashApprovalCount === 1 ? "" : "s"} waiting for approval. Open payment history.`}
+          >
+            <View style={homeDashboardStyles.pendingPaymentIcon}>
+              <MaterialIcons
+                name="hourglass-top"
+                size={18}
+                color="#B45309"
+              />
+            </View>
+            <View style={homeDashboardStyles.pendingPaymentCopy}>
+              <Text style={homeDashboardStyles.pendingPaymentTitle}>
+                {pendingCashApprovalCount} cash payment
+                {pendingCashApprovalCount === 1 ? "" : "s"} waiting for approval
+              </Text>
+              <Text style={homeDashboardStyles.pendingPaymentSubtitle}>
+                Review reported cash and confirm receipt to update the child&apos;s payment status.
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={21} color="#92400E" />
+          </TouchableOpacity>
+        )}
 
         <View style={homeDashboardStyles.metricsGrid}>
           {dashboardMetrics.map((metric) => (

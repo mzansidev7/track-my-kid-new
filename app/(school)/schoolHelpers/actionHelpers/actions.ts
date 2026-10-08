@@ -1,4 +1,4 @@
-import { DashboardAction } from "../interface/client.interfaces";
+import { DashboardAction } from "@/types/school/client.interfaces";
 
 export const schoolStats = (students: any, routes: any, drivers: any) => {
   const stats: (DashboardAction & { value: string })[] = [

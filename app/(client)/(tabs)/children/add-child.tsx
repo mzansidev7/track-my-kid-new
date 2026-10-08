@@ -55,7 +55,23 @@ const toCoordinate = (value: unknown, minimum: number, maximum: number) => {
 
 const AddChildScreen = () => {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    primary: "#159B3A",
+    primaryDark: "#087C2B",
+    background: "#F4F9FF",
+    surface: "#FFFFFF",
+    surfaceHover: "#EDF7FF",
+    border: "#DCEAF8",
+    divider: "#DCEAF8",
+    text: {
+      ...themeColors.text,
+      primary: "#17365E",
+      secondary: "#607A98",
+      tertiary: "#607A98",
+    },
+  };
   const { user } = useContext(AuthContext);
   const {
     schools,
@@ -480,20 +496,20 @@ const AddChildScreen = () => {
           </View>
 
           {/* Safety Banner */}
-          <View style={[styles.banner, { backgroundColor: "#F3E8FF" }]}>
+          <View style={[styles.banner, { backgroundColor: "#E9F8EE" }]}>
             <View style={styles.bannerContent}>
-              <MaterialCommunityIcons name="shield" size={32} color="#7C3AED" />
+              <MaterialCommunityIcons name="shield" size={32} color="#159B3A" />
               <View style={styles.bannerText}>
-                <Text style={[styles.bannerTitle, { color: "#1E1B4B" }]}>
+                <Text style={[styles.bannerTitle, { color: "#17365E" }]}>
                   Your child&apos;s safety is our priority
                 </Text>
-                <Text style={[styles.bannerDesc, { color: "#6B7280" }]}>
+                <Text style={[styles.bannerDesc, { color: "#607A98" }]}>
                   Provide accurate information to ensure a smooth and safe trip.
                 </Text>
               </View>
             </View>
             <View style={styles.bannerIllustration}>
-              <MaterialCommunityIcons name="school" size={50} color="#A78BFA" />
+              <MaterialCommunityIcons name="school" size={50} color="#087C2B" />
             </View>
           </View>
 
@@ -996,9 +1012,9 @@ const AddChildScreen = () => {
                   <MaterialCommunityIcons
                     name="map-marker"
                     size={18}
-                    color="#10B981"
+                    color="#159B3A"
                   />
-                  <Text style={[styles.locationTitle, { color: "#10B981" }]}>
+                  <Text style={[styles.locationTitle, { color: "#159B3A" }]}>
                     Pickup Location
                   </Text>
                 </View>
@@ -1045,9 +1061,9 @@ const AddChildScreen = () => {
                   <MaterialCommunityIcons
                     name="map-marker"
                     size={18}
-                    color="#3B82F6"
+                    color="#087C2B"
                   />
-                  <Text style={[styles.locationTitle, { color: "#3B82F6" }]}>
+                  <Text style={[styles.locationTitle, { color: "#087C2B" }]}>
                     Drop-off Location
                   </Text>
                 </View>
@@ -1333,7 +1349,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "rgba(124,58,237,0.10)",
+    backgroundColor: "#E9F8EE",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1450,7 +1466,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.10)",
+    borderBottomColor: "#DCEAF8",
   },
 
   schoolItemText: {
@@ -1562,7 +1578,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.10)",
+    borderBottomColor: "#DCEAF8",
   },
 
   vehicleOptionText: {

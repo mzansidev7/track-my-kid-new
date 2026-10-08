@@ -49,6 +49,7 @@ type Props = {
    * Optional callback when back is pressed.
    */
   onBackPress?: () => void;
+  accentColor?: string;
 };
 
 const ClientHeader = ({
@@ -62,6 +63,7 @@ const ClientHeader = ({
   rightComponent,
   style,
   onBackPress,
+  accentColor,
 }: Props) => {
   const router = useRouter();
 
@@ -80,7 +82,13 @@ const ClientHeader = ({
       <View style={styles.leftSection}>
         {showBackButton && (
           <TouchableOpacity
-            style={styles.backButton}
+            style={[
+              styles.backButton,
+              accentColor && {
+                backgroundColor: accentColor,
+                borderColor: accentColor,
+              },
+            ]}
             onPress={handleBack}
             activeOpacity={0.8}
           >
@@ -155,12 +163,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     position: "relative",
-    backgroundColor: "#061A3A",
+    backgroundColor: "#159B3A",
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#1E40AF",
-    shadowColor: "#172554",
+    borderBottomColor: "#087C2B",
+    shadowColor: "#087C2B",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,
@@ -184,14 +192,15 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
+    letterSpacing: -0.3,
   },
 
   subtitle: {
-    color: "#DBEAFE",
-    fontSize: 11,
+    color: "#E9F8EE",
+    fontSize: 12,
     marginTop: 2,
     textAlign: "center",
   },
@@ -200,12 +209,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#1E40AF",
+    backgroundColor: "#087C2B",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#60A5FA",
-    shadowColor: "#172554",
+    borderColor: "#42B85B",
+    shadowColor: "#087C2B",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -224,13 +233,13 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#1E40AF",
+    backgroundColor: "#087C2B",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#60A5FA",
+    borderColor: "#42B85B",
     position: "relative",
-    shadowColor: "#172554",
+    shadowColor: "#087C2B",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -245,11 +254,11 @@ const styles = StyleSheet.create({
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#087C2B",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#1D4ED8",
+    borderColor: "#159B3A",
   },
 
   notificationText: {

@@ -18,7 +18,7 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { AuthContext } from "../../context/authContext/auth-context";
-import { CLIENT_COLORS, DRIVER_COLORS, useTheme } from "../../styles/theme";
+import { DRIVER_COLORS, useTheme } from "../../styles/theme";
 import { resolveWorkingBaseUrl } from "../../url";
 import { useOwnerPageHeader } from "../(owner)/ownerHelpers/hooks/useOwnerPageHeader";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -70,20 +70,31 @@ export default function IncidentReportForm({
     string | undefined
   >;
   const palette: IncidentPalette = {
-    background: brandColors.background || colors.background,
-    surface: brandColors.card || brandColors.surface || colors.surface,
-    border: brandColors.cardBorder || brandColors.border || colors.border,
-    divider: brandColors.divider || colors.divider,
-    accent: brandColors.primary || colors.primary,
+    background:
+      role === "client"
+        ? "#F4F9FF"
+        : brandColors.background || colors.background,
+    surface:
+      role === "client"
+        ? "#FFFFFF"
+        : brandColors.card || brandColors.surface || colors.surface,
+    border:
+      role === "client"
+        ? "#DCEAF8"
+        : brandColors.cardBorder || brandColors.border || colors.border,
+    divider:
+      role === "client" ? "#DCEAF8" : brandColors.divider || colors.divider,
+    accent:
+      role === "client" ? "#159B3A" : brandColors.primary || colors.primary,
     textPrimary:
       role === "client"
-        ? CLIENT_COLORS.textPrimary
+        ? "#17365E"
         : role === "driver"
           ? DRIVER_COLORS.text
           : colors.text.primary,
     textSecondary:
       role === "client"
-        ? CLIENT_COLORS.textSecondary
+        ? "#607A98"
         : role === "driver"
           ? DRIVER_COLORS.muted
           : colors.text.secondary,
@@ -108,6 +119,8 @@ export default function IncidentReportForm({
     subtitle: `Send a report to the school and support team.`,
     actionLabel: "+ Add New Driver",
     onBackPress: () => router.push("/(owner)/(tabs)"),
+    headerColors:
+      role === "client" ? (["#159B3A", "#087C2B"] as const) : undefined,
   });
 
   const loadOptions = useCallback(async () => {

@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 
@@ -22,7 +23,10 @@ import {
   getClientDate,
   useClientAttendance,
 } from "../clientHelpers/hooks/useClientAttendance";
-import { ClientMainHeader } from "../components/ClientMainHeader";
+import {
+  subscribeToPaymentUpdates,
+  unsubscribeFromRealtime,
+} from "../../../store/subscriptions/clientRealtime";
 
 type RouteStop = {
   id: string;
@@ -195,12 +199,75 @@ const getDriverName = (child: Child) => {
   );
 };
 
+const DASHBOARD_COLORS = {
+  background: "#F4F9FF",
+  surface: "#FFFFFF",
+  border: "#DCEAF8",
+  text: "#17365E",
+  muted: "#607A98",
+  green: "#159B3A",
+  greenDark: "#087C2B",
+  greenLight: "#E9F8EE",
+  paleBlue: "#EDF7FF",
+};
+
+const CHILD_PAYMENT_PRESENTATION: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    background: string;
+    icon: keyof typeof MaterialIcons.glyphMap;
+  }
+> = {
+  unpaid: {
+    label: "Payment owing",
+    color: "#B91C1C",
+    background: "#FEF2F2",
+    icon: "error-outline",
+  },
+  waiting_for_approval: {
+    label: "Cash waiting for approval",
+    color: "#B45309",
+    background: "#FFFBEB",
+    icon: "hourglass-top",
+  },
+  payment_pending: {
+    label: "Payment processing",
+    color: "#1D4ED8",
+    background: "#EFF6FF",
+    icon: "schedule",
+  },
+  paid: {
+    label: "Paid this month",
+    color: "#087C2B",
+    background: "#E9F8EE",
+    icon: "check-circle",
+  },
+};
+
 const ClientHomeScreen = () => {
   const router = useRouter();
-  const { colors, getBrandColors } = useTheme();
-  const clientBrand = getBrandColors("client");
+  const { colors: themeColors, getBrandColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    background: DASHBOARD_COLORS.background,
+    surface: DASHBOARD_COLORS.surface,
+    border: DASHBOARD_COLORS.border,
+    text: {
+      ...themeColors.text,
+      primary: DASHBOARD_COLORS.text,
+      secondary: DASHBOARD_COLORS.muted,
+    },
+  };
+  const clientBrand = {
+    ...getBrandColors("client"),
+    primary: DASHBOARD_COLORS.green,
+    primaryDark: DASHBOARD_COLORS.greenDark,
+  };
 
   const { user } = useContext(AuthContext);
+  const userToken = user?.token;
   const { client, refreshClient } = useClientProfile();
   const { children, isWeekend } = useChildren();
   const [attendanceDate, setAttendanceDate] = useState(() => getClientDate());
@@ -211,11 +278,63 @@ const ClientHomeScreen = () => {
   const [stopsByChild, setStopsByChild] = useState<Record<string, RouteStop[]>>(
     {},
   );
+  const [paymentStatusByChild, setPaymentStatusByChild] = useState<
+    Record<string, { status: string; payment_method: string }>
+  >({});
   const [schoolTrips, setSchoolTrips] = useState<any[]>([]);
   const [schoolTripsLoading, setSchoolTripsLoading] = useState(true);
   const [notificationTicker] = useState(() => new Animated.Value(0));
   const latestUnreadNotification = notifications.find(
     (notification) => notification.is_read !== true,
+  );
+
+  const refreshPaymentStatuses = React.useCallback(async () => {
+    if (!userToken) {
+      setPaymentStatusByChild({});
+      return;
+    }
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/client/payments/summary`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load child payment status.");
+      }
+      const statuses = Array.isArray(data.child_payment_statuses)
+        ? data.child_payment_statuses
+        : [];
+      setPaymentStatusByChild(
+        Object.fromEntries(
+          statuses.map((item: any) => [
+            item.child_id,
+            {
+              status: item.status,
+              payment_method: item.payment_method || "card",
+            },
+          ]),
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to load payment statuses on client dashboard", error);
+    }
+  }, [userToken]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refreshPaymentStatuses();
+      const paymentChannel = client?.id
+        ? subscribeToPaymentUpdates("client_id", client.id, () => {
+            void refreshPaymentStatuses();
+          })
+        : null;
+      const timer = setInterval(() => void refreshPaymentStatuses(), 30_000);
+      return () => {
+        clearInterval(timer);
+        void unsubscribeFromRealtime(paymentChannel);
+      };
+    }, [client, refreshPaymentStatuses]),
   );
 
   useEffect(() => {
@@ -352,6 +471,7 @@ const ClientHomeScreen = () => {
     [children, currentTime, stopsByChild],
   );
   const activeChild = onTripChildren[0];
+  const activeTripDriver = activeChild?.vehicle?.driver;
   const scheduledChildren = children.filter(hasAssignedVehicle);
   const todayDate = getClientDate();
 
@@ -395,21 +515,50 @@ const ClientHomeScreen = () => {
     return "Good night";
   };
 
+  const profileAvatar = client?.avatar || user?.userData?.avatar;
+  const getPaymentStatus = (child: Child) =>
+    paymentStatusByChild[child.id]?.status ||
+    (hasAssignedVehicle(child) && child.route ? "unpaid" : "not_due");
+  const childrenOwing = children.filter(
+    (child) => getPaymentStatus(child) === "unpaid",
+  );
+  const childrenAwaitingCashApproval = children.filter(
+    (child) => getPaymentStatus(child) === "waiting_for_approval",
+  );
+  const showPaymentNotice =
+    childrenOwing.length > 0 || childrenAwaitingCashApproval.length > 0;
+
   return (
     <SafeAreaView
+      edges={["left", "right", "bottom", "top"]}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.dashboardContent}
       >
-        {/* HEADER */}
-        <ClientMainHeader
-          name={clientName}
-          greeting={getGreeting()}
-          subtitle="Here’s what’s happening with your children today."
-          avatarStatusColor="#22C55E"
-          rightAccessory={
+        <LinearGradient
+          colors={["#BDE6FF", "#D8F4E5", "#86D99B"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.brandHeader}
+        >
+          <View style={styles.brandHeaderTop}>
+            <View style={styles.brandIdentity}>
+              <View style={styles.brandLogo}>
+                <MaterialIcons
+                  name="location-on"
+                  size={23}
+                  color={DASHBOARD_COLORS.green}
+                />
+              </View>
+              <View>
+                <Text style={styles.brandName}>Track My Kid</Text>
+                <Text style={styles.brandTagline}>
+                  Safe Journeys. Brighter Futures.
+                </Text>
+              </View>
+            </View>
             <TouchableOpacity
               style={styles.headerNotificationButton}
               activeOpacity={0.8}
@@ -430,17 +579,37 @@ const ClientHomeScreen = () => {
                 </View>
               )}
             </TouchableOpacity>
-          }
-        />
+          </View>
+          <View style={styles.greetingCard}>
+            <View style={styles.greetingCopy}>
+              <Text style={styles.dashboardGreeting}>{getGreeting()},</Text>
+              <Text numberOfLines={1} style={styles.dashboardParentName}>
+                {clientName}
+              </Text>
+              <Text style={styles.dashboardRole}>Parent</Text>
+            </View>
+            <View style={styles.parentAvatarWrap}>
+              <Image
+                source={
+                  profileAvatar
+                    ? { uri: profileAvatar }
+                    : require("@/assets/images/client.png")
+                }
+                style={styles.parentAvatar}
+              />
+            </View>
+          </View>
+        </LinearGradient>
 
         {/* SAFETY STATUS */}
         <TouchableOpacity
           activeOpacity={0.8}
+          onPress={() => router.push("/(client)/(tabs)/children" as never)}
           style={[
             styles.safetyCard,
             {
-              backgroundColor: `${clientBrand.primary}12`,
-              borderColor: `${clientBrand.primary}25`,
+              backgroundColor: DASHBOARD_COLORS.greenLight,
+              borderColor: "#C8EFD3",
             },
           ]}
         >
@@ -458,7 +627,11 @@ const ClientHomeScreen = () => {
               <Text
                 style={[styles.safetyTitle, { color: colors.text.primary }]}
               >
-                All children are safe
+                {children.length === 0
+                  ? "Set up your child's safety"
+                  : children.length > 1
+                    ? "Your children are safe"
+                    : "Your child is safe"}
               </Text>
 
               <View style={styles.safeDot} />
@@ -467,7 +640,9 @@ const ClientHomeScreen = () => {
             <Text
               style={[styles.safetySubtitle, { color: colors.text.secondary }]}
             >
-              Live tracking and trip alerts are active
+              {children.length === 0
+                ? "Add a child to enable live journey tracking."
+                : "We're tracking the journey in real-time."}
             </Text>
           </View>
 
@@ -478,181 +653,226 @@ const ClientHomeScreen = () => {
           />
         </TouchableOpacity>
 
-        {/* TODAY */}
+        {showPaymentNotice && (
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={() => router.push("/(client)/pages/payments" as never)}
+            style={styles.paymentDashboardCard}
+          >
+            <View style={styles.paymentDashboardIcon}>
+              <MaterialIcons
+                name={
+                  childrenAwaitingCashApproval.length > 0
+                    ? "hourglass-top"
+                    : "payments"
+                }
+                size={18}
+                color={
+                  childrenAwaitingCashApproval.length > 0
+                    ? "#B45309"
+                    : "#B91C1C"
+                }
+              />
+            </View>
+            <View style={styles.paymentDashboardCopy}>
+              <Text style={styles.paymentDashboardTitle}>
+                {childrenAwaitingCashApproval.length > 0
+                  ? "Payment awaiting owner approval"
+                  : "Payment owing"}
+              </Text>
+              <Text style={styles.paymentDashboardSubtitle}>
+                {[
+                  childrenOwing.length > 0
+                    ? `${childrenOwing.length} child(ren) still owe payment`
+                    : null,
+                  childrenAwaitingCashApproval.length > 0
+                    ? `Cash reported for ${childrenAwaitingCashApproval.map((child) => child.name).join(", ")} is awaiting approval`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={21} color="#607A98" />
+          </TouchableOpacity>
+        )}
+
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-            Today
+            My Children
           </Text>
-
           <TouchableOpacity
-            onPress={() => router.replace("/(client)/(tabs)/trips")}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-            }}
+            onPress={() => router.push("/(client)/(tabs)/children" as never)}
           >
-            <MaterialIcons
-              name="view-list"
-              size={18}
-              color={clientBrand.primary}
-            />
             <Text style={[styles.sectionLink, { color: clientBrand.primary }]}>
-              View all
+              View All
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* STATS */}
-        <View style={styles.statsGrid}>
-          {/* ON TRIP */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[
-              styles.statCard,
-              {
-                backgroundColor: `${clientBrand.primary}10`,
-                borderColor: `${clientBrand.primary}20`,
-              },
-            ]}
-          >
-            <View
+        {children.slice(0, 2).map((child) => {
+          const status = getChildStatus(
+            child,
+            stopsByChild[child.id],
+            currentTime,
+          );
+          const paymentStatus = getPaymentStatus(child);
+          const paymentPresentation = CHILD_PAYMENT_PRESENTATION[paymentStatus] || {
+            label: "Payment not due",
+            color: "#607A98",
+            background: "#EDF7FF",
+            icon: "info-outline",
+          };
+          return (
+            <TouchableOpacity
+              key={child.id}
+              activeOpacity={0.82}
+              onPress={() =>
+                router.push(`/(client)/(tabs)/children/${child.id}` as never)
+              }
               style={[
-                styles.statIcon,
-                { backgroundColor: `${clientBrand.primary}18` },
+                styles.dashboardChildCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
+              <Image
+                source={
+                  child.avatar
+                    ? { uri: child.avatar }
+                    : require("@/assets/images/client.png")
+                }
+                style={styles.dashboardChildAvatar}
+              />
+              <View style={styles.dashboardChildInfo}>
+                <Text style={styles.dashboardChildName}>
+                  {`${child.name} ${child.lastname || ""}`.trim()}
+                </Text>
+                <Text numberOfLines={1} style={styles.dashboardChildSchool}>
+                  {[
+                    child.grade ? `Grade ${child.grade}` : null,
+                    child.school_name,
+                  ]
+                    .filter(Boolean)
+                    .join("  •  ") || "School not set"}
+                </Text>
+                <View style={styles.childStatusPill}>
+                  <MaterialIcons
+                    name={
+                      status === "on a trip" ? "directions-bus" : "check-circle"
+                    }
+                    size={12}
+                    color={clientBrand.primary}
+                  />
+                  <Text style={styles.childStatusText}>
+                    {status === "on a trip"
+                      ? "On board"
+                      : status === "at school"
+                        ? "At school"
+                        : "Upcoming"}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.childPaymentStatusPill,
+                    { backgroundColor: paymentPresentation.background },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={paymentPresentation.icon as keyof typeof MaterialIcons.glyphMap}
+                    size={11}
+                    color={paymentPresentation.color}
+                  />
+                  <Text
+                    style={[
+                      styles.childPaymentStatusText,
+                      { color: paymentPresentation.color },
+                    ]}
+                  >
+                    {paymentPresentation.label}
+                  </Text>
+                </View>
+              </View>
               <MaterialIcons
-                name="directions-bus"
-                size={20}
+                name="chevron-right"
+                size={22}
+                color={clientBrand.primaryDark}
+              />
+            </TouchableOpacity>
+          );
+        })}
+
+        {children.length === 0 && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push("/(client)/(tabs)/children" as never)}
+            style={[
+              styles.dashboardChildCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.emptyChildAvatar}>
+              <MaterialIcons
+                name="person-add"
+                size={22}
                 color={clientBrand.primary}
               />
             </View>
+            <View style={styles.dashboardChildInfo}>
+              <Text style={styles.dashboardChildName}>Add your child</Text>
+              <Text style={styles.dashboardChildSchool}>
+                Set up school transport and live updates
+              </Text>
+            </View>
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={clientBrand.primaryDark}
+            />
+          </TouchableOpacity>
+        )}
 
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
+        <View style={styles.dashboardStats}>
+          <View style={styles.dashboardStatItem}>
+            <MaterialIcons
+              name="people"
+              size={21}
+              color={clientBrand.primaryDark}
+            />
+            <Text style={styles.dashboardStatValue}>{children.length}</Text>
+            <Text style={styles.dashboardStatLabel}>
+              {children.length === 1 ? "Child" : "Children"}
+            </Text>
+          </View>
+          <View style={styles.dashboardStatDivider} />
+          <View style={styles.dashboardStatItem}>
+            <MaterialIcons
+              name="directions-bus"
+              size={21}
+              color={clientBrand.primaryDark}
+            />
+            <Text style={styles.dashboardStatValue}>
               {onTripChildren.length}
             </Text>
-
-            <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-              On a trip
+            <Text style={styles.dashboardStatLabel}>Active Trip</Text>
+          </View>
+          <View style={styles.dashboardStatDivider} />
+          <View style={styles.dashboardStatItem}>
+            <MaterialIcons
+              name="location-on"
+              size={21}
+              color={clientBrand.primaryDark}
+            />
+            <Text style={styles.dashboardStatValue}>
+              {scheduledChildren.length}
             </Text>
-
-            <Text style={[styles.statLink, { color: clientBrand.primary }]}>
-              Live
-            </Text>
-          </TouchableOpacity>
-
-          {/* SCHOOL */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push("/(client)/pages/school" as never)}
-            style={[
-              styles.statCard,
-              {
-                backgroundColor: "#FFF8E7",
-                borderColor: "#FDE68A",
-              },
-            ]}
-          >
-            <View style={[styles.statIcon, { backgroundColor: "#FEF3C7" }]}>
-              <MaterialIcons name="school" size={20} color="#D97706" />
-            </View>
-
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {atSchoolChildren.length}
-            </Text>
-
-            <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-              At school
-            </Text>
-
-            <Text style={[styles.statLink, { color: "#D97706" }]}>
-              Checked in
-            </Text>
-          </TouchableOpacity>
-
-          {/* UPCOMING */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[
-              styles.statCard,
-              {
-                backgroundColor: "#F5F0FF",
-                borderColor: "#E9D5FF",
-              },
-            ]}
-          >
-            <View style={[styles.statIcon, { backgroundColor: "#EDE9FE" }]}>
-              <MaterialIcons name="schedule" size={20} color="#7C3AED" />
-            </View>
-
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {scheduledChildren?.length}
-            </Text>
-
-            <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-              Upcoming
-            </Text>
-
-            <Text style={[styles.statLink, { color: "#7C3AED" }]}>
-              Later today
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[
-              styles.statCard,
-              {
-                backgroundColor: "#EFF6FF",
-                borderColor: "#DBEAFE",
-              },
-            ]}
-            onPress={() =>
-              router.push("/(client)/pages/notifications" as never)
-            }
-          >
-            <View style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}>
-              <MaterialIcons name="notifications" size={20} color="#2563EB" />
-              {unreadNotifications > 0 && (
-                <View style={styles.notificationStatBadge}>
-                  <Text style={styles.notificationStatBadgeText}>
-                    {unreadNotifications > 99 ? "99+" : unreadNotifications}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <Text style={[styles.statNumber, { color: colors.text.primary }]}>
-              {unreadNotifications}
-            </Text>
-
-            <Text style={[styles.statLabel, { color: colors.text.secondary }]}>
-              Notifications
-            </Text>
-
-            <View style={styles.notificationTicker}>
-              <Animated.Text
-                numberOfLines={1}
-                style={[
-                  styles.notificationTickerText,
-                  { color: colors.text.secondary },
-                  { transform: [{ translateX: notificationTicker }] },
-                ]}
-              >
-                {latestUnreadNotification
-                  ? `${latestUnreadNotification.title}: ${latestUnreadNotification.message}`
-                  : "No unread notifications"}
-              </Animated.Text>
-            </View>
-          </TouchableOpacity>
+            <Text style={styles.dashboardStatLabel}>Upcoming Trips</Text>
+          </View>
         </View>
 
-        {/* ATTENDANCE */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-              School attendance
+              School Attendance
             </Text>
             <Text
               style={[
@@ -660,26 +880,28 @@ const ClientHomeScreen = () => {
                 { color: colors.text.secondary },
               ]}
             >
-              Today&apos;s attendance updates
+              Attendance updates for your children
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.attendanceDateButton}
-            onPress={() => {
-              const next = new Date(`${attendanceDate}T12:00:00`);
-              next.setDate(next.getDate() - 1);
-              setAttendanceDate(getClientDate(next));
-            }}
-          >
-            <MaterialIcons
-              name="chevron-left"
-              size={18}
-              color={clientBrand.primary}
-            />
+          <View style={styles.attendanceDateButton}>
+            <TouchableOpacity
+              accessibilityLabel="Previous attendance date"
+              onPress={() => {
+                const next = new Date(`${attendanceDate}T12:00:00`);
+                next.setDate(next.getDate() - 1);
+                setAttendanceDate(getClientDate(next));
+              }}
+            >
+              <MaterialIcons
+                name="chevron-left"
+                size={19}
+                color={clientBrand.primary}
+              />
+            </TouchableOpacity>
             <Text
               style={[
                 styles.attendanceDateText,
-                { color: clientBrand.primary },
+                { color: clientBrand.primaryDark },
               ]}
             >
               {new Date(`${attendanceDate}T12:00:00`).toLocaleDateString([], {
@@ -688,6 +910,7 @@ const ClientHomeScreen = () => {
               })}
             </Text>
             <TouchableOpacity
+              accessibilityLabel="Next attendance date"
               onPress={() => {
                 const next = new Date(`${attendanceDate}T12:00:00`);
                 next.setDate(next.getDate() + 1);
@@ -696,11 +919,11 @@ const ClientHomeScreen = () => {
             >
               <MaterialIcons
                 name="chevron-right"
-                size={18}
+                size={19}
                 color={clientBrand.primary}
               />
             </TouchableOpacity>
-          </TouchableOpacity>
+          </View>
         </View>
         <View
           style={[
@@ -716,8 +939,7 @@ const ClientHomeScreen = () => {
             </Text>
           ) : (
             attendanceItems.map((item) => {
-              const { label: statusLabel, color: statusColor } =
-                getAttendanceDisplay(item);
+              const { label, color } = getAttendanceDisplay(item);
               return (
                 <View
                   key={item.childId}
@@ -727,11 +949,7 @@ const ClientHomeScreen = () => {
                   ]}
                 >
                   <View style={styles.attendanceChildIcon}>
-                    <MaterialIcons
-                      name="person"
-                      size={18}
-                      color={statusColor}
-                    />
+                    <MaterialIcons name="person" size={18} color={color} />
                   </View>
                   <View style={styles.attendanceChildInfo}>
                     <Text
@@ -758,24 +976,17 @@ const ClientHomeScreen = () => {
                         { color: colors.text.secondary },
                       ]}
                     >
-                      {item.schoolName} ·{" "}
-                      {formatScheduleTime(item.schoolStartTime)} -{" "}
-                      {formatScheduleTime(item.schoolEndTime)}
+                      {item.schoolName}
                     </Text>
                   </View>
                   <View
                     style={[
                       styles.attendanceStatusBadge,
-                      { backgroundColor: `${statusColor}18` },
+                      { backgroundColor: `${color}18` },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.attendanceStatusText,
-                        { color: statusColor },
-                      ]}
-                    >
-                      {statusLabel}
+                    <Text style={[styles.attendanceStatusText, { color }]}>
+                      {label}
                     </Text>
                   </View>
                 </View>
@@ -784,11 +995,353 @@ const ClientHomeScreen = () => {
           )}
         </View>
 
+        {false && (
+          <>
+            {/* TODAY */}
+            <View style={styles.sectionHeader}>
+              <Text
+                style={[styles.sectionTitle, { color: colors.text.primary }]}
+              >
+                Today
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => router.replace("/(client)/(tabs)/trips")}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <MaterialIcons
+                  name="view-list"
+                  size={18}
+                  color={clientBrand.primary}
+                />
+                <Text
+                  style={[styles.sectionLink, { color: clientBrand.primary }]}
+                >
+                  View all
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* STATS */}
+            <View style={styles.statsGrid}>
+              {/* ON TRIP */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor: `${clientBrand.primary}10`,
+                    borderColor: `${clientBrand.primary}20`,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statIcon,
+                    { backgroundColor: `${clientBrand.primary}18` },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="directions-bus"
+                    size={20}
+                    color={clientBrand.primary}
+                  />
+                </View>
+
+                <Text
+                  style={[styles.statNumber, { color: colors.text.primary }]}
+                >
+                  {onTripChildren.length}
+                </Text>
+
+                <Text
+                  style={[styles.statLabel, { color: colors.text.secondary }]}
+                >
+                  On a trip
+                </Text>
+
+                <Text style={[styles.statLink, { color: clientBrand.primary }]}>
+                  Live
+                </Text>
+              </TouchableOpacity>
+
+              {/* SCHOOL */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push("/(client)/pages/school" as never)}
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor: "#FFF8E7",
+                    borderColor: "#FDE68A",
+                  },
+                ]}
+              >
+                <View style={[styles.statIcon, { backgroundColor: "#FEF3C7" }]}>
+                  <MaterialIcons name="school" size={20} color="#D97706" />
+                </View>
+
+                <Text
+                  style={[styles.statNumber, { color: colors.text.primary }]}
+                >
+                  {atSchoolChildren.length}
+                </Text>
+
+                <Text
+                  style={[styles.statLabel, { color: colors.text.secondary }]}
+                >
+                  At school
+                </Text>
+
+                <Text style={[styles.statLink, { color: "#D97706" }]}>
+                  Checked in
+                </Text>
+              </TouchableOpacity>
+
+              {/* UPCOMING */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor: "#F5F0FF",
+                    borderColor: "#E9D5FF",
+                  },
+                ]}
+              >
+                <View style={[styles.statIcon, { backgroundColor: "#EDE9FE" }]}>
+                  <MaterialIcons name="schedule" size={20} color="#7C3AED" />
+                </View>
+
+                <Text
+                  style={[styles.statNumber, { color: colors.text.primary }]}
+                >
+                  {scheduledChildren?.length}
+                </Text>
+
+                <Text
+                  style={[styles.statLabel, { color: colors.text.secondary }]}
+                >
+                  Upcoming
+                </Text>
+
+                <Text style={[styles.statLink, { color: "#7C3AED" }]}>
+                  Later today
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor: "#EFF6FF",
+                    borderColor: "#DBEAFE",
+                  },
+                ]}
+                onPress={() =>
+                  router.push("/(client)/pages/notifications" as never)
+                }
+              >
+                <View style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}>
+                  <MaterialIcons
+                    name="notifications"
+                    size={20}
+                    color="#2563EB"
+                  />
+                  {unreadNotifications > 0 && (
+                    <View style={styles.notificationStatBadge}>
+                      <Text style={styles.notificationStatBadgeText}>
+                        {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text
+                  style={[styles.statNumber, { color: colors.text.primary }]}
+                >
+                  {unreadNotifications}
+                </Text>
+
+                <Text
+                  style={[styles.statLabel, { color: colors.text.secondary }]}
+                >
+                  Notifications
+                </Text>
+
+                <View style={styles.notificationTicker}>
+                  <Animated.Text
+                    numberOfLines={1}
+                    style={[
+                      styles.notificationTickerText,
+                      { color: colors.text.secondary },
+                      { transform: [{ translateX: notificationTicker }] },
+                    ]}
+                  >
+                    {latestUnreadNotification
+                      ? `${latestUnreadNotification?.title}: ${latestUnreadNotification?.message}`
+                      : "No unread notifications"}
+                  </Animated.Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* ATTENDANCE */}
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text
+                  style={[styles.sectionTitle, { color: colors.text.primary }]}
+                >
+                  School attendance
+                </Text>
+                <Text
+                  style={[
+                    styles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Today&apos;s attendance updates
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.attendanceDateButton}
+                onPress={() => {
+                  const next = new Date(`${attendanceDate}T12:00:00`);
+                  next.setDate(next.getDate() - 1);
+                  setAttendanceDate(getClientDate(next));
+                }}
+              >
+                <MaterialIcons
+                  name="chevron-left"
+                  size={18}
+                  color={clientBrand.primary}
+                />
+                <Text
+                  style={[
+                    styles.attendanceDateText,
+                    { color: clientBrand.primary },
+                  ]}
+                >
+                  {new Date(`${attendanceDate}T12:00:00`).toLocaleDateString(
+                    [],
+                    {
+                      month: "short",
+                      day: "numeric",
+                    },
+                  )}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const next = new Date(`${attendanceDate}T12:00:00`);
+                    next.setDate(next.getDate() + 1);
+                    setAttendanceDate(getClientDate(next));
+                  }}
+                >
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={18}
+                    color={clientBrand.primary}
+                  />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+            <View
+              style={[
+                styles.attendanceCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              {attendanceItems.length === 0 ? (
+                <Text
+                  style={[
+                    styles.attendanceEmpty,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  No attendance records yet.
+                </Text>
+              ) : (
+                attendanceItems.map((item) => {
+                  const { label: statusLabel, color: statusColor } =
+                    getAttendanceDisplay(item);
+                  return (
+                    <View
+                      key={item.childId}
+                      style={[
+                        styles.attendanceRow,
+                        { borderBottomColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.attendanceChildIcon}>
+                        <MaterialIcons
+                          name="person"
+                          size={18}
+                          color={statusColor}
+                        />
+                      </View>
+                      <View style={styles.attendanceChildInfo}>
+                        <Text
+                          style={[
+                            styles.attendanceChildName,
+                            { color: colors.text.primary },
+                          ]}
+                        >
+                          {item.childName}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.attendanceChildTime,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          {item.arrivalTime
+                            ? `Arrival ${formatTime(item.arrivalTime)}`
+                            : "No arrival time"}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.attendanceChildTime,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          {item.schoolName} ·{" "}
+                          {formatScheduleTime(item.schoolStartTime)} -{" "}
+                          {formatScheduleTime(item.schoolEndTime)}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.attendanceStatusBadge,
+                          { backgroundColor: `${statusColor}18` },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.attendanceStatusText,
+                            { color: statusColor },
+                          ]}
+                        >
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </>
+        )}
+
         {/* ACTIVE TRIPS */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-              Active trips
+              Active Trip
             </Text>
 
             <Text
@@ -797,7 +1350,7 @@ const ClientHomeScreen = () => {
                 { color: colors.text.secondary },
               ]}
             >
-              Your children currently travelling
+              Your child&apos;s current journey
             </Text>
           </View>
 
@@ -893,32 +1446,75 @@ const ClientHomeScreen = () => {
             </View>
 
             {/* DRIVER */}
-            <View style={[styles.driverRow, { borderTopColor: colors.border }]}>
-              <MaterialIcons
-                name="directions-car"
-                size={17}
-                color={colors.text.secondary}
-              />
-
-              <Text
-                style={[styles.driverText, { color: colors.text.secondary }]}
-              >
-                {getDriverName(activeChild)}
-              </Text>
-
-              <View style={styles.driverDivider} />
-
-              <Text
-                style={[styles.driverText, { color: colors.text.secondary }]}
-              >
-                ETA
-              </Text>
-
-              <Text style={[styles.etaText, { color: colors.text.primary }]}>
-                {formatTime(
-                  activeChild.route?.dropoff_start_time || activeChild.eta,
-                )}
-              </Text>
+            <View style={styles.activeDriverCard}>
+              <View style={styles.activeDriverIdentity}>
+                <Image
+                  source={
+                    activeTripDriver?.avatar
+                      ? { uri: activeTripDriver.avatar }
+                      : require("@/assets/images/client.png")
+                  }
+                  style={styles.activeDriverAvatar}
+                />
+                <View style={styles.activeDriverInfo}>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.activeDriverName,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    Driver:{" "}
+                    {activeTripDriver?.name ||
+                      [
+                        activeTripDriver?.first_name,
+                        activeTripDriver?.last_name,
+                      ]
+                        .filter(Boolean)
+                        .join(" ") ||
+                      "Not assigned"}
+                  </Text>
+                  <View style={styles.activeDriverPhoneRow}>
+                    <MaterialIcons
+                      name="call"
+                      size={12}
+                      color={clientBrand.primaryDark}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.activeDriverPhone,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {activeTripDriver?.phone || "Contact not available"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.activeVehicle}>
+                <View style={styles.activeVehicleIcon}>
+                  <MaterialIcons
+                    name="directions-bus"
+                    size={19}
+                    color={clientBrand.primaryDark}
+                  />
+                </View>
+                <View style={styles.activeDriverInfo}>
+                  <Text style={styles.activeVehicleLabel}>Vehicle</Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.activeVehicleValue,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    {activeChild.vehicle?.license_plate ||
+                      activeChild.vehicle?.name ||
+                      "Not assigned"}
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* ROUTE */}
@@ -1077,7 +1673,7 @@ const ClientHomeScreen = () => {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-              Upcoming trips
+              Upcoming Trips
             </Text>
 
             <Text
@@ -1394,8 +1990,17 @@ const ClientHomeScreen = () => {
               },
             ]}
           >
-            <View style={[styles.quickIcon, { backgroundColor: "#EEF2FF" }]}>
-              <MaterialIcons name="people" size={19} color="#4F46E5" />
+            <View
+              style={[
+                styles.quickIcon,
+                { backgroundColor: DASHBOARD_COLORS.greenLight },
+              ]}
+            >
+              <MaterialIcons
+                name="people"
+                size={19}
+                color={DASHBOARD_COLORS.green}
+              />
             </View>
 
             <Text style={[styles.quickLabel, { color: colors.text.primary }]}>
@@ -1419,8 +2024,17 @@ const ClientHomeScreen = () => {
               },
             ]}
           >
-            <View style={[styles.quickIcon, { backgroundColor: "#ECFDF5" }]}>
-              <MaterialIcons name="map" size={19} color="#059669" />
+            <View
+              style={[
+                styles.quickIcon,
+                { backgroundColor: DASHBOARD_COLORS.paleBlue },
+              ]}
+            >
+              <MaterialIcons
+                name="map"
+                size={19}
+                color={DASHBOARD_COLORS.greenDark}
+              />
             </View>
 
             <Text style={[styles.quickLabel, { color: colors.text.primary }]}>
@@ -1438,8 +2052,17 @@ const ClientHomeScreen = () => {
               },
             ]}
           >
-            <View style={[styles.quickIcon, { backgroundColor: "#FFF7ED" }]}>
-              <MaterialIcons name="headset-mic" size={19} color="#EA580C" />
+            <View
+              style={[
+                styles.quickIcon,
+                { backgroundColor: DASHBOARD_COLORS.paleBlue },
+              ]}
+            >
+              <MaterialIcons
+                name="headset-mic"
+                size={19}
+                color={DASHBOARD_COLORS.greenDark}
+              />
             </View>
 
             <Text style={[styles.quickLabel, { color: colors.text.primary }]}>
@@ -1457,6 +2080,116 @@ export default ClientHomeScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  dashboardContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 18,
+  },
+
+  brandHeader: {
+    minHeight: 160,
+    marginHorizontal: -14,
+    paddingTop: 8,
+    paddingHorizontal: 18,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+
+  brandHeaderTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  brandIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  brandLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+
+  brandName: {
+    color: DASHBOARD_COLORS.text,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  brandTagline: {
+    color: "#355B75",
+    fontSize: 9,
+    marginTop: 1,
+  },
+
+  greetingCard: {
+    minHeight: 92,
+    marginTop: 14,
+    marginHorizontal: -18,
+    paddingHorizontal: 22,
+    paddingTop: 11,
+    paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+
+  greetingCopy: {
+    flex: 1,
+    paddingRight: 8,
+  },
+
+  dashboardGreeting: {
+    color: DASHBOARD_COLORS.text,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+
+  dashboardParentName: {
+    color: DASHBOARD_COLORS.text,
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 1,
+  },
+
+  dashboardRole: {
+    color: DASHBOARD_COLORS.muted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+
+  parentAvatarWrap: {
+    width: 76,
+    height: 76,
+    marginTop: -24,
+    padding: 3,
+    borderRadius: 36,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: DASHBOARD_COLORS.border,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+
+  parentAvatar: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 35,
   },
 
   headerNotificationButton: {
@@ -1495,6 +2228,165 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 
+  paymentDashboardCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 14,
+    backgroundColor: "#FFFBEB",
+  },
+
+  paymentDashboardIcon: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+    borderRadius: 17,
+    backgroundColor: "#FEF3C7",
+  },
+
+  paymentDashboardCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  paymentDashboardTitle: {
+    color: "#92400E",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  paymentDashboardSubtitle: {
+    marginTop: 3,
+    color: "#78350F",
+    fontSize: 10,
+    lineHeight: 14,
+  },
+
+  dashboardChildCard: {
+    minHeight: 82,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 15,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    marginBottom: 10,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+
+  dashboardChildAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginRight: 10,
+  },
+
+  emptyChildAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    backgroundColor: DASHBOARD_COLORS.greenLight,
+  },
+
+  dashboardChildInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  dashboardChildName: {
+    color: DASHBOARD_COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  dashboardChildSchool: {
+    color: DASHBOARD_COLORS.muted,
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  childStatusPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 14,
+    backgroundColor: DASHBOARD_COLORS.greenLight,
+  },
+
+  childStatusText: {
+    color: DASHBOARD_COLORS.greenDark,
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  childPaymentStatusPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 14,
+  },
+
+  childPaymentStatusText: {
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  dashboardStats: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: DASHBOARD_COLORS.paleBlue,
+    marginTop: 1,
+    marginBottom: 17,
+    paddingVertical: 7,
+  },
+
+  dashboardStatItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+
+  dashboardStatValue: {
+    color: DASHBOARD_COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  dashboardStatLabel: {
+    color: DASHBOARD_COLORS.muted,
+    fontSize: 9,
+  },
+
+  dashboardStatDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: DASHBOARD_COLORS.border,
+  },
+
   /* LOADING */
 
   loadingContainer: {
@@ -1514,11 +2406,16 @@ const styles = StyleSheet.create({
   safetyCard: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
-    padding: 11,
+    borderRadius: 15,
+    padding: 12,
     borderWidth: 1,
-    marginTop: 4,
-    marginBottom: 18,
+    marginTop: 10,
+    marginBottom: 16,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.035,
+    shadowRadius: 7,
+    elevation: 1,
   },
 
   safetyIcon: {
@@ -1563,13 +2460,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    marginTop: 4,
-    marginBottom: 9,
+    marginTop: 5,
+    marginBottom: 10,
   },
 
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
+    letterSpacing: -0.15,
   },
 
   sectionDescription: {
@@ -1668,10 +2566,15 @@ const styles = StyleSheet.create({
   /* ACTIVE TRIP */
 
   tripCard: {
-    borderRadius: 17,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 12,
-    marginBottom: 18,
+    padding: 13,
+    marginBottom: 16,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   emptyCard: {
@@ -1768,6 +2671,85 @@ const styles = StyleSheet.create({
     marginTop: 11,
     paddingTop: 9,
     borderTopWidth: 1,
+  },
+
+  activeDriverCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 11,
+    padding: 8,
+    borderRadius: 11,
+    backgroundColor: DASHBOARD_COLORS.paleBlue,
+  },
+
+  activeDriverIdentity: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+  },
+
+  activeDriverAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 7,
+    backgroundColor: "#FFFFFF",
+  },
+
+  activeDriverInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  activeDriverName: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  activeDriverPhoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 3,
+  },
+
+  activeDriverPhone: {
+    flexShrink: 1,
+    fontSize: 9,
+  },
+
+  activeVehicle: {
+    flex: 0.85,
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+    paddingLeft: 7,
+    borderLeftWidth: 1,
+    borderLeftColor: DASHBOARD_COLORS.border,
+  },
+
+  activeVehicleIcon: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 5,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+
+  activeVehicleLabel: {
+    color: DASHBOARD_COLORS.muted,
+    fontSize: 8,
+  },
+
+  activeVehicleValue: {
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 2,
   },
 
   driverText: {
@@ -1895,8 +2877,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 14,
     borderWidth: 1,
-    padding: 9,
-    marginBottom: 8,
+    padding: 10,
+    marginBottom: 9,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.035,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
   dateBox: {

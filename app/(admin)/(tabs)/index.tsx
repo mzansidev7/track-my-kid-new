@@ -15,6 +15,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAdminDashboard } from "../../../adminHelpers/hooks/useAdminDashboard";
 import { useAdminProfile } from "../../../adminHelpers/hooks/useAdminProfile";
+import AdminPageHeader, {
+  AdminHeaderAction,
+} from "../components/AdminPageHeader";
 import { useTheme } from "../../../styles/theme";
 
 const formatTime = (value?: string) => {
@@ -86,28 +89,34 @@ export default function AdminDashboard() {
           />
         }
       >
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.kicker}>PLATFORM OPERATIONS</Text>
-            <Text style={[styles.title, { color: colors.text.primary }]}>
-              Admin dashboard
+        <AdminPageHeader
+          eyebrow="PLATFORM OPERATIONS"
+          title="Admin dashboard"
+          subtitle="A clear view of platform health, fleet activity, and support."
+          adminName={adminName}
+          adminRole={admin?.admin_role}
+          action={
+            <AdminHeaderAction
+              onPress={() => void refresh()}
+              loading={refreshing}
+              accessibilityLabel="Refresh dashboard"
+            />
+          }
+        />
+
+        <View style={styles.sectionIntro}>
+          <View>
+            <Text style={[styles.overviewTitle, { color: colors.text.primary }]}>
+              At a glance
             </Text>
-            <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              Welcome, {adminName}
+            <Text style={styles.overviewSubtitle}>
+              Key figures across your platform
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={() => void refresh()}
-            disabled={refreshing}
-            accessibilityLabel="Refresh dashboard"
-          >
-            {refreshing ? (
-              <ActivityIndicator color="#2563EB" />
-            ) : (
-              <MaterialIcons name="refresh" size={22} color="#2563EB" />
-            )}
-          </TouchableOpacity>
+          <View style={styles.liveBadge}>
+            <View style={styles.liveBadgeDot} />
+            <Text style={styles.liveBadgeText}>LIVE</Text>
+          </View>
         </View>
 
         {error || profileError ? (
@@ -128,7 +137,7 @@ export default function AdminDashboard() {
         {loading && !data.generatedAt ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.subtitle}>Loading platform metrics…</Text>
+            <Text style={styles.overviewSubtitle}>Loading platform metrics…</Text>
           </View>
         ) : (
           <>
@@ -378,11 +387,12 @@ export default function AdminDashboard() {
 type AdminDashboardStyles = {
   safe: ViewStyle;
   content: ViewStyle;
-  header: ViewStyle;
-  kicker: TextStyle;
-  title: TextStyle;
-  subtitle: TextStyle;
-  refreshButton: ViewStyle;
+  sectionIntro: ViewStyle;
+  overviewTitle: TextStyle;
+  overviewSubtitle: TextStyle;
+  liveBadge: ViewStyle;
+  liveBadgeDot: ViewStyle;
+  liveBadgeText: TextStyle;
   metricsGrid: ViewStyle;
   metricCard: ViewStyle;
   metricIcon: ViewStyle;
@@ -417,43 +427,45 @@ type AdminDashboardStyles = {
 
 const styles = StyleSheet.create<AdminDashboardStyles>({
   safe: { flex: 1 },
-  content: { padding: 16, paddingBottom: 32, gap: 14 },
-  header: {
+  content: { padding: 16, paddingBottom: 36, gap: 16 },
+  sectionIntro: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 4,
+    justifyContent: "space-between",
+    marginTop: 2,
   },
-  kicker: {
-    color: "#2563EB",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  title: { fontSize: 25, fontWeight: "900", marginTop: 4 },
-  subtitle: { fontSize: 12, marginTop: 4 },
-  refreshButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "#EFF6FF",
+  overviewTitle: { fontSize: 17, fontWeight: "900" },
+  overviewSubtitle: { color: "#64748B", fontSize: 10, marginTop: 3 },
+  liveBadge: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
   },
+  liveBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" },
+  liveBadgeText: { color: "#047857", fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
   metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   metricCard: {
     width: "48%",
     flexGrow: 1,
-    minHeight: 116,
-    borderRadius: 14,
-    padding: 13,
+    minHeight: 112,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
     borderColor: "#E6EAF0",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   metricIcon: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
@@ -461,10 +473,15 @@ const styles = StyleSheet.create<AdminDashboardStyles>({
   metricLabel: { color: "#64748B", fontSize: 11, fontWeight: "600" },
   metricValue: { fontSize: 23, fontWeight: "900", marginTop: 3 },
   operationsCard: {
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E6EAF0",
     padding: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   sectionHeading: {
     flexDirection: "row",

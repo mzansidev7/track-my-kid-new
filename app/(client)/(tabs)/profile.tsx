@@ -296,9 +296,9 @@ const ClientProfile = () => {
                   onPress={handlePickAvatar}
                 >
                   {uploadingAvatar ? (
-                    <ActivityIndicator size="small" color="#2563EB" />
+                    <ActivityIndicator size="small" color="#159B3A" />
                   ) : (
-                    <Ionicons name="camera-outline" size={16} color="#2563EB" />
+                    <Ionicons name="camera-outline" size={16} color="#159B3A" />
                   )}
                 </TouchableOpacity>
               </View>
@@ -309,13 +309,13 @@ const ClientProfile = () => {
                 </Text>
 
                 <View style={styles.contactRow}>
-                  <Ionicons name="call-outline" size={17} color="#2563EB" />
+                  <Ionicons name="call-outline" size={17} color="#159B3A" />
 
                   <Text style={styles.contactText}>{phone}</Text>
                 </View>
 
                 <View style={styles.contactRow}>
-                  <Ionicons name="mail-outline" size={17} color="#2563EB" />
+                  <Ionicons name="mail-outline" size={17} color="#159B3A" />
 
                   <Text style={styles.contactText} numberOfLines={1}>
                     {email}
@@ -323,7 +323,7 @@ const ClientProfile = () => {
                 </View>
               </View>
 
-              <MaterialIcons name="chevron-right" size={28} color="#64748B" />
+              <MaterialIcons name="chevron-right" size={28} color="#607A98" />
             </View>
 
             {/* Quick Actions */}
@@ -336,9 +336,9 @@ const ClientProfile = () => {
                 }
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#E8F0FF" }]}
+                  style={[styles.quickIcon, { backgroundColor: "#EDF7FF" }]}
                 >
-                  <Ionicons name="people-outline" size={25} color="#2563EB" />
+                  <Ionicons name="people-outline" size={25} color="#159B3A" />
                 </View>
 
                 <Text style={styles.quickTitle}>My Children</Text>
@@ -358,12 +358,12 @@ const ClientProfile = () => {
                 }
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#E8F8EF" }]}
+                  style={[styles.quickIcon, { backgroundColor: "#E9F8EE" }]}
                 >
                   <MaterialIcons
                     name="verified-user"
                     size={25}
-                    color="#16A34A"
+                    color="#159B3A"
                   />
                 </View>
 
@@ -382,9 +382,9 @@ const ClientProfile = () => {
                 onPress={() => router.push("/(client)/pages/payments" as never)}
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#F2E9FF" }]}
+                  style={[styles.quickIcon, { backgroundColor: "#E9F8EE" }]}
                 >
-                  <Ionicons name="card-outline" size={25} color="#8B5CF6" />
+                  <Ionicons name="card-outline" size={25} color="#159B3A" />
                 </View>
 
                 <Text style={styles.quickTitle}>Payment</Text>
@@ -433,7 +433,7 @@ const ClientProfile = () => {
                       <MaterialIcons
                         name={item.icon as any}
                         size={23}
-                        color="#2563EB"
+                        color="#159B3A"
                       />
                     </View>
 
@@ -446,7 +446,7 @@ const ClientProfile = () => {
                     <MaterialIcons
                       name="chevron-right"
                       size={26}
-                      color="#64748B"
+                      color="#607A98"
                     />
                   </TouchableOpacity>
                 ))}
@@ -473,7 +473,7 @@ const ClientProfile = () => {
                       <MaterialIcons
                         name={item.icon as any}
                         size={23}
-                        color="#2563EB"
+                        color="#159B3A"
                       />
                     </View>
 
@@ -486,7 +486,7 @@ const ClientProfile = () => {
                     <MaterialIcons
                       name="chevron-right"
                       size={26}
-                      color="#64748B"
+                      color="#607A98"
                     />
                   </TouchableOpacity>
                 ))}
@@ -517,12 +517,12 @@ export default ClientProfile;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F9FF",
   },
 
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F9FF",
     paddingHorizontal: 20,
   },
 
@@ -540,14 +540,14 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 36,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#17365E",
     letterSpacing: -0.8,
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 14,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "500",
   },
 
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E8EDF5",
+    borderColor: "#DCEAF8",
     alignItems: "center",
     justifyContent: "center",
 
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     borderWidth: 1.5,
     borderColor: "#FFFFFF",
   },
@@ -688,11 +688,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
 
     overflow: "hidden",
 
-    shadowColor: "#0F172A",
+    shadowColor: "#17365E",
     shadowOffset: {
       width: 0,
       height: 4,
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   },
 
   profileTop: {
-    backgroundColor: "#F4F8FF",
+    backgroundColor: "#EDF7FF",
     padding: 22,
     flexDirection: "row",
     alignItems: "center",
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#DCEAF8",
     overflow: "visible",
     marginRight: 18,
   },
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
 
     borderWidth: 1,
-    borderColor: "#DCE5F2",
+    borderColor: "#DCEAF8",
 
     shadowColor: "#000",
     shadowOffset: {
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 23,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#17365E",
     marginBottom: 10,
     letterSpacing: -0.4,
   },
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     fontSize: 14,
-    color: "#475569",
+    color: "#607A98",
     fontWeight: "500",
   },
 
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
 
   quickDivider: {
     width: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DCEAF8",
     marginVertical: 4,
   },
 
@@ -814,20 +814,20 @@ const styles = StyleSheet.create({
 
   quickTitle: {
     fontSize: 13,
-    color: "#475569",
+    color: "#607A98",
     fontWeight: "600",
     marginBottom: 3,
   },
 
   quickValue: {
     fontSize: 20,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
   },
 
   pinValue: {
     fontSize: 16,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
     letterSpacing: 3,
     marginVertical: 2,
@@ -835,14 +835,14 @@ const styles = StyleSheet.create({
 
   paymentValue: {
     fontSize: 17,
-    color: "#16A34A",
+    color: "#159B3A",
     fontWeight: "800",
   },
 
   quickLink: {
     marginTop: 3,
     fontSize: 13,
-    color: "#2563EB",
+    color: "#159B3A",
     fontWeight: "700",
   },
 
@@ -855,7 +855,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#17365E",
     marginBottom: 12,
     letterSpacing: -0.3,
   },
@@ -866,11 +866,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
 
     overflow: "hidden",
 
-    shadowColor: "#0F172A",
+    shadowColor: "#17365E",
     shadowOffset: {
       width: 0,
       height: 3,
@@ -890,7 +890,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
 
     borderBottomWidth: 1,
-    borderBottomColor: "#EDF0F4",
+    borderBottomColor: "#DCEAF8",
   },
 
   menuRowLast: {
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 14,
 
-    backgroundColor: "#EEF4FF",
+    backgroundColor: "#EDF7FF",
 
     alignItems: "center",
     justifyContent: "center",
@@ -922,13 +922,13 @@ const styles = StyleSheet.create({
   menuTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#17365E",
     marginBottom: 3,
   },
 
   menuDescription: {
     fontSize: 12.5,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "500",
   },
 

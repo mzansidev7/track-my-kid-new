@@ -13,7 +13,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   Alert,
 } from "react-native";
@@ -23,6 +22,7 @@ import {
   getMessagePreview,
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
+import MessageComposer from "../../../components/messages/MessageComposer";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ClientHeader from "../components/ClientHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
@@ -40,13 +40,13 @@ const tabs = ["All", "Drivers", "Schools", "Owners"];
 const getRoleColor = (role) => {
   switch (role) {
     case "driver":
-      return "#CFEAF7";
+      return "#EDF7FF";
     case "school":
-      return "#D9F2FF";
+      return "#EDF7FF";
     case "owner":
-      return "#E7E5FF";
+      return "#E9F8EE";
     default:
-      return "#E2E8F0";
+      return "#DCEAF8";
   }
 };
 
@@ -268,9 +268,9 @@ const ClientMessages = () => {
     };
   }, [selectedConversation]);
 
-  const sendMessage = async () => {
-    if (!draft.trim() || !selectedConversation || sending || !user?.token) {
-      return;
+  const sendMessage = async (content = draft.trim()) => {
+    if (!content || !selectedConversation || sending || !user?.token) {
+      return false;
     }
 
     setSending(true);
@@ -283,7 +283,7 @@ const ClientMessages = () => {
         },
         body: JSON.stringify({
           conversationId: selectedConversation.id,
-          content: draft.trim(),
+          content,
         }),
       });
       if (!response.ok) throw new Error("Unable to send message");
@@ -291,9 +291,11 @@ const ClientMessages = () => {
       setConversationMessages(
         await fetchMessagesWithCache(selectedConversation.id),
       );
+      return true;
     } catch (error) {
       console.error("Error sending client message:", error);
       Alert.alert("Message failed", "Unable to send this message.");
+      return false;
     } finally {
       setSending(false);
     }
@@ -324,7 +326,7 @@ const ClientMessages = () => {
             style={styles.chatBackButton}
             onPress={() => setSelectedConversation(null)}
           >
-            <MaterialIcons name="arrow-back" size={22} color="#111827" />
+            <MaterialIcons name="arrow-back" size={22} color="#17365E" />
           </TouchableOpacity>
           <View style={styles.chatHeaderIdentity}>
             <View style={styles.chatAvatar}>
@@ -345,7 +347,7 @@ const ClientMessages = () => {
 
         {loadingMessages ? (
           <View style={styles.chatLoading}>
-            <ActivityIndicator size="large" color="#2563EB" />
+            <ActivityIndicator size="large" color="#159B3A" />
           </View>
         ) : (
           <ScrollView
@@ -406,30 +408,19 @@ const ClientMessages = () => {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={styles.composer}>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a message..."
-              placeholderTextColor="#94A3B8"
-              multiline
-              style={styles.composerInput}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                !draft.trim() && styles.sendButtonDisabled,
-              ]}
-              onPress={sendMessage}
-              disabled={!draft.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <MaterialIcons name="send" size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-          </View>
+          <MessageComposer
+            apiBaseUrl={BASE_URL}
+            role="client"
+            conversationId={selectedConversation.id}
+            token={user?.token || ""}
+            accentColor="#159B3A"
+            onSendText={sendMessage}
+            onSent={async () =>
+              setConversationMessages(
+                await fetchMessagesWithCache(selectedConversation.id),
+              )
+            }
+          />
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
@@ -444,10 +435,10 @@ const ClientMessages = () => {
       />
       <View style={styles.container}>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={24} color="#64748B" />
+          <Ionicons name="search-outline" size={24} color="#607A98" />
           <Text style={styles.searchText}>Search messages or contacts</Text>
           <TouchableOpacity style={styles.filterButton}>
-            <MaterialIcons name="tune" size={22} color="#111827" />
+            <MaterialIcons name="tune" size={22} color="#17365E" />
           </TouchableOpacity>
         </View>
 
@@ -456,7 +447,7 @@ const ClientMessages = () => {
             <View style={styles.contactHeaderRow}>
               <Text style={styles.contactTitle}>Start a conversation</Text>
               <TouchableOpacity onPress={() => setContactSheetVisible(false)}>
-                <MaterialIcons name="close" size={22} color="#334155" />
+                <MaterialIcons name="close" size={22} color="#607A98" />
               </TouchableOpacity>
             </View>
 
@@ -493,7 +484,7 @@ const ClientMessages = () => {
                   <MaterialIcons
                     name="chevron-right"
                     size={20}
-                    color="#64748B"
+                    color="#607A98"
                   />
                 </TouchableOpacity>
               ))
@@ -625,11 +616,11 @@ export default ClientMessages;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
   },
   container: {
     flex: 1,
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
     paddingHorizontal: 14,
   },
   chatHeader: {
@@ -638,7 +629,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#DCEAF8",
     backgroundColor: "#FFFFFF",
   },
   chatBackButton: {
@@ -660,16 +651,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
-    backgroundColor: "#D9F2FF",
+    backgroundColor: "#EDF7FF",
   },
   chatName: {
-    color: "#111827",
+    color: "#17365E",
     fontSize: 16,
     fontWeight: "800",
   },
   chatRole: {
     marginTop: 2,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 12,
     textTransform: "capitalize",
   },
@@ -680,7 +671,7 @@ const styles = StyleSheet.create({
   },
   chatList: {
     flex: 1,
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
   },
   chatListContent: {
     padding: 14,
@@ -707,14 +698,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderBottomLeftRadius: 4,
     backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
   },
   chatBubbleOwn: {
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 4,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
   chatMessage: {
-    color: "#1F2937",
+    color: "#17365E",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -725,12 +718,12 @@ const styles = StyleSheet.create({
   },
   chatTime: {
     marginTop: 4,
-    color: "#94A3B8",
+    color: "#607A98",
     fontSize: 10,
   },
   chatTimeOwn: {
     marginTop: 4,
-    color: "#DBEAFE",
+    color: "#E9F8EE",
     fontSize: 10,
     textAlign: "right",
   },
@@ -740,7 +733,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#DCEAF8",
     backgroundColor: "#FFFFFF",
   },
   composerInput: {
@@ -750,9 +743,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#D7DFEA",
+    borderColor: "#DCEAF8",
     borderRadius: 14,
-    color: "#111827",
+    color: "#17365E",
     fontSize: 14,
   },
   sendButton: {
@@ -761,10 +754,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 21,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
   sendButtonDisabled: {
-    backgroundColor: "#94A3B8",
+    backgroundColor: "#607A98",
   },
   topBar: {
     flexDirection: "row",
@@ -777,7 +770,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     letterSpacing: -0.5,
-    color: "#111827",
+    color: "#17365E",
   },
   statusIcons: {
     flexDirection: "row",
@@ -794,13 +787,13 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 36,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
     letterSpacing: -1,
   },
   subtitle: {
     marginTop: 2,
     fontSize: 13,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "500",
   },
   bellButton: {
@@ -808,8 +801,8 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: "#D7DFEA",
-    backgroundColor: "#F8FAFC",
+    borderColor: "#DCEAF8",
+    backgroundColor: "#F4F9FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -821,19 +814,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
   },
   searchText: {
     flex: 1,
     marginLeft: 10,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 13,
   },
   filterButton: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DCEAF8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -841,9 +834,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: 14,
     borderRadius: 14,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EDF7FF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     overflow: "hidden",
   },
   tab: {
@@ -854,16 +847,16 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 3,
-    borderBottomColor: "#2563EB",
-    backgroundColor: "#F8FAFC",
+    borderBottomColor: "#159B3A",
+    backgroundColor: "#F4F9FF",
   },
   tabText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#475569",
+    color: "#607A98",
   },
   tabTextActive: {
-    color: "#111827",
+    color: "#17365E",
   },
   list: {
     flex: 1,
@@ -875,7 +868,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
   },
   contactHeaderRow: {
     flexDirection: "row",
@@ -886,14 +879,14 @@ const styles = StyleSheet.create({
   contactTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#17365E",
   },
   contactItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#EEF2F7",
+    borderTopColor: "#DCEAF8",
   },
   contactAvatar: {
     width: 38,
@@ -909,19 +902,23 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: "#17365E",
   },
   contactSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#607A98",
     marginTop: 2,
   },
   messageRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
+    borderRadius: 16,
   },
   avatar: {
     width: 46,
@@ -932,7 +929,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -948,16 +945,16 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
   },
   time: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
   },
   messageTitle: {
     fontSize: 12,
-    color: "#2563EB",
+    color: "#159B3A",
     fontWeight: "700",
     marginBottom: 4,
   },
@@ -967,7 +964,7 @@ const styles = StyleSheet.create({
   },
   previewText: {
     flex: 1,
-    color: "#475569",
+    color: "#607A98",
     fontSize: 12,
     lineHeight: 18,
   },
@@ -975,7 +972,7 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
@@ -987,7 +984,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   ctaCard: {
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#EDF7FF",
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 16,
@@ -999,7 +996,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -1008,13 +1005,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
     textAlign: "center",
     marginBottom: 6,
   },
   ctaSub: {
     fontSize: 13,
-    color: "#475569",
+    color: "#607A98",
     textAlign: "center",
     marginBottom: 14,
   },
@@ -1022,7 +1019,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 18,
@@ -1038,11 +1035,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
     paddingTop: 10,
     paddingBottom: 18,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#DCEAF8",
   },
   navItem: {
     flex: 1,
@@ -1052,11 +1049,11 @@ const styles = StyleSheet.create({
   navText: {
     marginTop: 6,
     fontSize: 12,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
   },
   navTextActive: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontWeight: "800",
   },
 });

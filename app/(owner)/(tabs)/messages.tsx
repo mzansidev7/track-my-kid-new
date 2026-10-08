@@ -6,6 +6,7 @@ import {
   useAudioRecorder,
 } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import React, {
   useCallback,
   useContext,
@@ -21,7 +22,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,7 +29,10 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
@@ -88,7 +91,9 @@ export default function Messages({ setActiveButton }: any) {
   const [conversationFilter, setConversationFilter] = useState<
     "all" | "unread" | "drivers" | "groups"
   >("all");
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showAttachmentActions, setShowAttachmentActions] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [recording, setRecording] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -115,16 +120,11 @@ export default function Messages({ setActiveButton }: any) {
   const { drivers, loadingDrivers } = useDrivers();
   useEffect(
     () => () => {
-      if (recorder.isRecording) {
-        recorder.stop().catch((error) => {
-          console.error("Unable to stop voice recording on chat close:", error);
-        });
-        setAudioModeAsync({ allowsRecording: false }).catch((error) => {
-          console.error("Unable to reset audio mode on chat close:", error);
-        });
-      }
+      setAudioModeAsync({ allowsRecording: false }).catch((error) => {
+        console.error("Unable to reset audio mode on chat close:", error);
+      });
     },
-    [recorder],
+    [],
   );
   const renderHeader = () => (
     <SafeAreaView edges={["top"]} style={styles.safeAreaHeader}>
@@ -138,10 +138,8 @@ export default function Messages({ setActiveButton }: any) {
         </View>
         <TouchableOpacity
           style={styles.headerAction}
-          onPress={() => Alert.alert(
-            "New conversation",
-            "Choose who you want to message.",
-            [
+          onPress={() =>
+            Alert.alert("New conversation", "Choose who you want to message.", [
               {
                 text: "Driver",
                 onPress: () => {
@@ -167,8 +165,8 @@ export default function Messages({ setActiveButton }: any) {
                 },
               },
               { text: "Cancel", style: "cancel" },
-            ],
-          )}
+            ])
+          }
           accessibilityLabel="Start a new conversation"
         >
           <MaterialIcons name="person-add-alt-1" size={21} color="#FFFFFF" />
@@ -178,11 +176,7 @@ export default function Messages({ setActiveButton }: any) {
           onPress={() => router.push("/(owner)/notifications")}
           accessibilityLabel="Open notifications"
         >
-          <MaterialIcons
-            name="notifications-none"
-            size={22}
-            color="#FFFFFF"
-          />
+          <MaterialIcons name="notifications-none" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -329,6 +323,18 @@ export default function Messages({ setActiveButton }: any) {
 
         // Mark messages as read
         await markAsRead(conversationId);
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === conversationId
+              ? { ...conversation, unread_count: 0 }
+              : conversation,
+          ),
+        );
+        setSelectedConversation((current) =>
+          current?.id === conversationId
+            ? { ...current, unread_count: 0 }
+            : current,
+        );
 
         // Subscribe to real-time updates
         messagesChannelRef.current = subscribeToMessages(
@@ -561,7 +567,7 @@ export default function Messages({ setActiveButton }: any) {
       const data = await response.json();
 
       if (response.ok) {
-        if (content === newMessage.trim()) setNewMessage("");
+        setNewMessage("");
 
         // Fallback: If realtime subscription doesn't fire within 2 seconds, manually refresh
         setTimeout(async () => {
@@ -614,21 +620,26 @@ export default function Messages({ setActiveButton }: any) {
     uri: string,
     name: string,
     mimeType: string,
-    mediaType: "image" | "audio",
+    mediaType: "image" | "audio" | "pdf",
   ) => {
-    if (!selectedConversation || !user?.token || uploadingAttachment || sending) {
+    if (
+      !selectedConversation ||
+      !user?.token ||
+      uploadingAttachment ||
+      sending
+    ) {
       return false;
     }
 
     setUploadingAttachment(true);
     try {
-      const formData = new FormData();
-      if (Platform.OS === "web") {
-        const file = await fetch(uri);
-        formData.append("file", await file.blob(), name);
-      } else {
-        formData.append("file", { uri, name, type: mimeType } as any);
+      const fileResponse = await fetch(uri);
+      const fileBlob = await fileResponse.blob();
+      if (!fileBlob.size) {
+        throw new Error("The selected attachment is empty or unavailable.");
       }
+      const formData = new FormData();
+      formData.append("file", fileBlob.slice(0, fileBlob.size, mimeType), name);
       const uploadResponse = await fetch(
         `${BASE_URL}/owner/conversations/${selectedConversation.id}/attachments`,
         {
@@ -648,9 +659,13 @@ export default function Messages({ setActiveButton }: any) {
         url: uploaded.url,
         name: uploaded.name || name,
         mimeType: uploaded.mimeType || mimeType,
+        caption: newMessage.trim(),
       });
       const sent = await sendMessage(mediaContent);
-      if (sent) setShowAttachmentActions(false);
+      if (sent) {
+        setShowAttachmentActions(false);
+        setShowEmojiPicker(false);
+      }
       return sent;
     } catch (error) {
       console.error("Unable to upload message attachment:", error);
@@ -665,6 +680,31 @@ export default function Messages({ setActiveButton }: any) {
       return false;
     } finally {
       setUploadingAttachment(false);
+    }
+  };
+
+  const selectDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf"],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const document = result.assets[0];
+      await uploadAndSendAttachment(
+        document.uri,
+        document.name,
+        document.mimeType || "application/pdf",
+        "pdf",
+      );
+    } catch (error) {
+      console.error("Unable to select PDF attachment:", error);
+      setNotification({
+        visible: true,
+        message:
+          error instanceof Error ? error.message : "Unable to select the PDF.",
+        type: "error",
+      });
     }
   };
 
@@ -700,7 +740,9 @@ export default function Messages({ setActiveButton }: any) {
       if (!asset?.uri) return;
       await uploadAndSendAttachment(
         asset.uri,
-        asset.fileName || asset.uri.split("/").pop() || `image-${Date.now()}.jpg`,
+        asset.fileName ||
+          asset.uri.split("/").pop() ||
+          `image-${Date.now()}.jpg`,
         asset.mimeType || "image/jpeg",
         "image",
       );
@@ -751,12 +793,16 @@ export default function Messages({ setActiveButton }: any) {
       if (!permission.granted) {
         setNotification({
           visible: true,
-          message: "Microphone permission is required to record a voice message.",
+          message:
+            "Microphone permission is required to record a voice message.",
           type: "warning",
         });
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setRecording(true);
@@ -870,7 +916,9 @@ export default function Messages({ setActiveButton }: any) {
             {item.other_participant.name}
           </Text>
           <Text style={styles.conversationTime}>
-            {formatConversationTime(item.last_message?.sent_at || item.created_at)}
+            {formatConversationTime(
+              item.last_message?.sent_at || item.created_at,
+            )}
           </Text>
         </View>
         <Text style={styles.conversationPreview} numberOfLines={1}>
@@ -885,13 +933,13 @@ export default function Messages({ setActiveButton }: any) {
                   : item.other_participant.role}
         </Text>
       </View>
-      {(item.unread_count ?? 0) > 0 && (
-        <View style={styles.unreadIndicator}>
-          <Text style={styles.unreadIndicatorText}>
-            {item.unread_count ?? 0}
-          </Text>
-        </View>
-      )}
+      <View style={styles.conversationCountColumn}>
+        {(item.unread_count ?? 0) > 0 && (
+          <View style={styles.unreadIndicator}>
+            <Text style={styles.unreadIndicatorText}>{item.unread_count}</Text>
+          </View>
+        )}
+      </View>
     </TouchableOpacity>
   );
 
@@ -901,7 +949,10 @@ export default function Messages({ setActiveButton }: any) {
     if (Number.isNaN(date.getTime())) return "";
     const today = new Date();
     if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
@@ -961,68 +1012,95 @@ export default function Messages({ setActiveButton }: any) {
               : styles.otherMessageContainer,
           ]}
         >
-        {!isOwnMessage && (
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              {senderAvatar ? (
-                <Image
-                  source={{ uri: senderAvatar }}
-                  style={styles.avatarImage}
+          {!isOwnMessage && (
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                {senderAvatar ? (
+                  <Image
+                    source={{ uri: senderAvatar }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>{senderInitial}</Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          <View
+            style={
+              isOwnMessage ? styles.ownMessageGroup : styles.otherMessageGroup
+            }
+          >
+            <View
+              style={[
+                styles.messageBubble,
+                attachment?.mediaType === "image" && styles.imageBubble,
+                isOwnMessage ? styles.ownBubble : styles.otherBubble,
+                isOwnMessage && { backgroundColor: bubbleColors.primary },
+              ]}
+            >
+              {attachment ? (
+                <MessageAttachment
+                  content={item.content}
+                  isOwn={isOwnMessage}
                 />
               ) : (
-                <Text style={styles.avatarText}>{senderInitial}</Text>
+                <Text
+                  style={[
+                    styles.messageText,
+                    isOwnMessage ? styles.ownText : styles.otherText,
+                  ]}
+                >
+                  {item.content}
+                </Text>
+              )}
+            </View>
+            <View
+              style={[
+                styles.messageMetadata,
+                isOwnMessage ? styles.ownMetadata : styles.otherMetadata,
+              ]}
+            >
+              <Text style={styles.messageTime}>{displayTime}</Text>
+              {isOwnMessage && (
+                <MaterialIcons
+                  name={item.is_read ? "done-all" : "done"}
+                  size={14}
+                  color={item.is_read ? "#1683F8" : "#91A3B5"}
+                />
               )}
             </View>
           </View>
-        )}
-
-        <View
-          style={
-            isOwnMessage ? styles.ownMessageGroup : styles.otherMessageGroup
-          }
-        >
-          <View
-            style={[
-              styles.messageBubble,
-              attachment?.mediaType === "image" && styles.imageBubble,
-              isOwnMessage
-                ? styles.ownBubble
-                : styles.otherBubble,
-              isOwnMessage && { backgroundColor: bubbleColors.primary },
-            ]}
-          >
-            {attachment ? (
-              <MessageAttachment content={item.content} isOwn={isOwnMessage} />
-            ) : (
-              <Text
-                style={[
-                  styles.messageText,
-                  isOwnMessage ? styles.ownText : styles.otherText,
-                ]}
-              >
-                {item.content}
-              </Text>
-            )}
-          </View>
-          <View
-            style={[
-              styles.messageMetadata,
-              isOwnMessage ? styles.ownMetadata : styles.otherMetadata,
-            ]}
-          >
-            <Text style={styles.messageTime}>{displayTime}</Text>
-            {isOwnMessage && (
-              <MaterialIcons
-                name={item.is_read ? "done-all" : "done"}
-                size={14}
-                color={item.is_read ? "#1683F8" : "#91A3B5"}
-              />
-            )}
-          </View>
         </View>
-      </View>
       </React.Fragment>
     );
+  };
+
+  const isDriverConversation = (conversation: ConversationData) =>
+    conversation.other_participant.role === "driver" ||
+    conversation.conversation_type === "admin_driver";
+
+  const getConversationParticipantLabel = (conversation: ConversationData) => {
+    if (
+      conversation.conversation_type === "admin_driver" ||
+      conversation.conversation_type === "admin_user"
+    ) {
+      return "Support team";
+    }
+
+    switch (conversation.other_participant.role) {
+      case "client":
+        return "Parent";
+      case "driver":
+        return "Driver";
+      case "school":
+        return "School admin";
+      case "admin":
+        return "Admin";
+      default:
+        return "Owner";
+    }
   };
 
   const filteredConversations = conversations.filter((conversation) => {
@@ -1037,7 +1115,7 @@ export default function Messages({ setActiveButton }: any) {
       (conversationFilter === "unread" &&
         (conversation.unread_count ?? 0) > 0) ||
       (conversationFilter === "drivers" &&
-        conversation.other_participant.role === "driver") ||
+        isDriverConversation(conversation)) ||
       (conversationFilter === "groups" && isGroup);
     return (
       matchesFilter &&
@@ -1052,7 +1130,7 @@ export default function Messages({ setActiveButton }: any) {
     },
     {
       key: "drivers",
-      label: `Drivers (${conversations.filter((item) => item.other_participant.role === "driver").length})`,
+      label: `Drivers (${conversations.filter(isDriverConversation).length})`,
     },
     {
       key: "groups",
@@ -1080,11 +1158,11 @@ export default function Messages({ setActiveButton }: any) {
         type={notification.type}
         onHide={() => setNotification({ ...notification, visible: false })}
       />
-      {renderHeader()}
 
       {viewMode === "list" ? (
         // Conversations List View
         <View style={styles.content}>
+          {renderHeader()}
           <View style={styles.searchBar}>
             <MaterialIcons name="search" size={20} color="#6F89A2" />
             <TextInput
@@ -1105,40 +1183,80 @@ export default function Messages({ setActiveButton }: any) {
               </TouchableOpacity>
             ) : null}
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterList}
-          >
-            {filterOptions.map((option) => {
-              const selected = conversationFilter === option.key;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.filterChip,
-                    selected && styles.filterChipSelected,
-                  ]}
-                  onPress={() => {
-                    setConversationFilter(option.key);
-                    setShowDriversList(false);
-                    setShowSchoolsList(false);
-                    setShowParentsList(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      selected && styles.filterChipTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          {(showDriversList || showSchoolsList || showParentsList) ? (
+          <View style={styles.filterDropdownContainer}>
+            <TouchableOpacity
+              style={[
+                styles.filterDropdownTrigger,
+                conversationFilter !== "all" &&
+                  styles.filterDropdownTriggerActive,
+              ]}
+              onPress={() => setShowFilterDropdown((open) => !open)}
+              accessibilityRole="button"
+              accessibilityLabel="Filter conversations"
+              accessibilityState={{ expanded: showFilterDropdown }}
+            >
+              <MaterialIcons
+                name="filter-list"
+                size={20}
+                color={conversationFilter === "all" ? "#526981" : "#1769D2"}
+              />
+              <Text
+                style={[
+                  styles.filterDropdownLabel,
+                  conversationFilter !== "all" &&
+                    styles.filterDropdownLabelActive,
+                ]}
+              >
+                {
+                  filterOptions.find(
+                    (option) => option.key === conversationFilter,
+                  )?.label
+                }
+              </Text>
+              <MaterialIcons
+                name={
+                  showFilterDropdown
+                    ? "keyboard-arrow-up"
+                    : "keyboard-arrow-down"
+                }
+                size={20}
+                color="#526981"
+              />
+            </TouchableOpacity>
+            {showFilterDropdown ? (
+              <View style={styles.filterDropdownMenu}>
+                {filterOptions.map((option) => {
+                  const selected = conversationFilter === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={styles.filterDropdownOption}
+                      onPress={() => {
+                        setConversationFilter(option.key);
+                        setShowFilterDropdown(false);
+                        setShowDriversList(false);
+                        setShowSchoolsList(false);
+                        setShowParentsList(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.filterDropdownOptionText,
+                          selected && styles.filterDropdownOptionTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                      {selected ? (
+                        <MaterialIcons name="check" size={18} color="#1769D2" />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+          {showDriversList || showSchoolsList || showParentsList ? (
             <View style={styles.directoryBar}>
               <Text style={styles.directoryTitle}>
                 {showDriversList
@@ -1272,17 +1390,18 @@ export default function Messages({ setActiveButton }: any) {
         <View style={styles.chatViewContainer}>
           {selectedConversation ? (
             <>
-              <SafeAreaView
-                edges={["top"]}
-                style={styles.chatSafeAreaHeader}
-              >
+              <SafeAreaView edges={["top"]} style={styles.chatSafeAreaHeader}>
                 <View style={styles.chatHeaderWithBack}>
                   <TouchableOpacity
                     style={styles.chatBackButton}
                     onPress={() => setViewMode("list")}
                     accessibilityLabel="Back to conversations"
                   >
-                    <MaterialIcons name="arrow-back" size={23} color="#FFFFFF" />
+                    <MaterialIcons
+                      name="arrow-back"
+                      size={23}
+                      color="#FFFFFF"
+                    />
                   </TouchableOpacity>
                   <View style={styles.chatHeaderAvatar}>
                     {selectedConversation.other_participant.profile?.avatar ? (
@@ -1306,15 +1425,7 @@ export default function Messages({ setActiveButton }: any) {
                       {selectedConversation.other_participant.name}
                     </Text>
                     <Text style={styles.chatSubtitle}>
-                      {selectedConversation.other_participant.role === "client"
-                        ? "Parent"
-                        : selectedConversation.other_participant.role ===
-                            "driver"
-                          ? "Driver"
-                          : selectedConversation.other_participant.role ===
-                              "school"
-                            ? "School admin"
-                            : "Owner"}
+                      {getConversationParticipantLabel(selectedConversation)}
                     </Text>
                   </View>
                   {selectedConversation.other_participant.phone ? (
@@ -1353,11 +1464,7 @@ export default function Messages({ setActiveButton }: any) {
                     }
                     accessibilityLabel="Contact details"
                   >
-                    <MaterialIcons
-                      name="more-vert"
-                      size={22}
-                      color="#FFFFFF"
-                    />
+                    <MaterialIcons name="more-vert" size={22} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
               </SafeAreaView>
@@ -1417,20 +1524,61 @@ export default function Messages({ setActiveButton }: any) {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.attachmentAction}
+                      onPress={selectDocument}
+                      disabled={uploadingAttachment || sending}
+                      accessibilityLabel="Attach a PDF"
+                    >
+                      <MaterialIcons
+                        name="picture-as-pdf"
+                        size={20}
+                        color="#53718F"
+                      />
+                      <Text style={styles.attachmentActionLabel}>PDF</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.attachmentAction}
                       onPress={toggleAudioRecording}
                       disabled={uploadingAttachment || sending}
                       accessibilityLabel="Record a voice message"
                     >
-                      <MaterialIcons
-                        name="mic"
-                        size={20}
-                        color="#53718F"
-                      />
+                      <MaterialIcons name="mic" size={20} color="#53718F" />
                       <Text style={styles.attachmentActionLabel}>Voice</Text>
                     </TouchableOpacity>
                   </View>
                 ) : null}
+                {showEmojiPicker ? (
+                  <View style={styles.emojiPicker}>
+                    {["😀", "😊", "👍", "❤️", "🙏", "🎉", "👋", "✅"].map(
+                      (emoji) => (
+                        <TouchableOpacity
+                          key={emoji}
+                          style={styles.emojiButton}
+                          onPress={() =>
+                            setNewMessage((value) => `${value}${emoji}`)
+                          }
+                          accessibilityLabel={`Insert ${emoji}`}
+                        >
+                          <Text style={styles.emojiText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
+                  </View>
+                ) : null}
                 <View style={styles.composerRow}>
+                  <TouchableOpacity
+                    style={styles.attachToggle}
+                    onPress={() => setShowEmojiPicker((visible) => !visible)}
+                    disabled={recording || uploadingAttachment || sending}
+                    accessibilityLabel={
+                      showEmojiPicker ? "Hide emoji picker" : "Choose emoji"
+                    }
+                  >
+                    <MaterialIcons
+                      name="sentiment-satisfied-alt"
+                      size={22}
+                      color="#53718F"
+                    />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.attachToggle}
                     onPress={() =>
@@ -1626,30 +1774,66 @@ const styles = StyleSheet.create({
     color: "#17385F",
     fontSize: 14,
   },
-  filterList: {
+  filterDropdownContainer: {
+    zIndex: 10,
+    alignSelf: "flex-start",
     paddingHorizontal: 16,
-    paddingBottom: 13,
-    gap: 8,
+    paddingBottom: 10,
   },
-  filterChip: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+  filterDropdownTrigger: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#DCE6F0",
-    borderRadius: 18,
+    borderRadius: 11,
     backgroundColor: "#FFFFFF",
   },
-  filterChipSelected: {
+  filterDropdownTriggerActive: {
     borderColor: "#1769D2",
-    backgroundColor: "#1769D2",
+    backgroundColor: "#F0F6FD",
   },
-  filterChipText: {
+  filterDropdownLabel: {
     color: "#526981",
     fontSize: 12,
     fontWeight: "700",
   },
-  filterChipTextSelected: {
-    color: "#FFFFFF",
+  filterDropdownLabelActive: {
+    color: "#1769D2",
+  },
+  filterDropdownMenu: {
+    position: "absolute",
+    top: 48,
+    left: 16,
+    minWidth: 190,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E1EAF3",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#17385F",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  filterDropdownOption: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 13,
+  },
+  filterDropdownOptionText: {
+    color: "#526981",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  filterDropdownOptionTextSelected: {
+    color: "#1769D2",
+    fontWeight: "700",
   },
   directoryBar: {
     minHeight: 45,
@@ -1777,6 +1961,18 @@ const styles = StyleSheet.create({
     color: "#647A90",
     fontSize: 12,
     lineHeight: 17,
+  },
+  conversationCountColumn: {
+    minWidth: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginLeft: 8,
+  },
+  messageCount: {
+    color: "#8497AA",
+    fontSize: 11,
+    fontWeight: "600",
   },
   listAvatarText: {
     color: "#315575",
@@ -2032,6 +2228,18 @@ const styles = StyleSheet.create({
     color: "#647A90",
     fontSize: 10,
     fontWeight: "600",
+  },
+  emojiPicker: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+  },
+  emojiButton: {
+    padding: 4,
+  },
+  emojiText: {
+    fontSize: 22,
   },
   composerRow: {
     flexDirection: "row",

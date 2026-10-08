@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -44,7 +44,7 @@ const lightRouteMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#EEF2F5" }] },
   {
     elementType: "labels.text.fill",
-    stylers: [{ color: "#475569" }],
+    stylers: [{ color: "#607A98" }],
   },
   {
     elementType: "labels.text.stroke",
@@ -104,8 +104,26 @@ const ChildDetailScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams<{ childId: string }>();
   const childId = params.childId;
-  const { colors } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    primary: "#159B3A",
+    primaryDark: "#087C2B",
+    background: "#F4F9FF",
+    surface: "#FFFFFF",
+    surfaceHover: "#EDF7FF",
+    border: "#DCEAF8",
+    divider: "#E7EFF7",
+    text: {
+      ...themeColors.text,
+      primary: "#17365E",
+      secondary: "#607A98",
+      tertiary: "#7D94AC",
+    },
+  };
   const { user } = useContext(AuthContext);
+  const detailScrollRef = useRef<ScrollView>(null);
+  const tripCardOffset = useRef(0);
 
   const [child, setChild] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +146,7 @@ const ChildDetailScreen = () => {
   const [isMapModalVisible, setIsMapModalVisible] = useState(false);
   const [isVehicleModalVisible, setIsVehicleModalVisible] = useState(false);
   const [isActivityModalVisible, setIsActivityModalVisible] = useState(false);
+  const [selectedDetailTab, setSelectedDetailTab] = useState("live");
   const [mapModalTitle, setMapModalTitle] = useState("");
   const [mapMarkers, setMapMarkers] = useState<any[]>([]);
   const [mapRegion, setMapRegion] = useState<any>(null);
@@ -1168,6 +1187,78 @@ const ChildDetailScreen = () => {
     },
   ];
 
+  const routePreviewPoints = [
+    {
+      id: "pickup",
+      latitude: Number(child?.pickup_latitude ?? child?.route?.start_latitude),
+      longitude: Number(
+        child?.pickup_longitude ?? child?.route?.start_longitude,
+      ),
+      title: "Pickup",
+    },
+    {
+      id: "dropoff",
+      latitude: Number(
+        child?.dropoff_latitude ??
+          child?.school_latitude ??
+          child?.route?.end_latitude,
+      ),
+      longitude: Number(
+        child?.dropoff_longitude ??
+          child?.school_longitude ??
+          child?.route?.end_longitude,
+      ),
+      title: child?.school_name || "School",
+    },
+  ].filter(
+    (point) =>
+      Number.isFinite(point.latitude) && Number.isFinite(point.longitude),
+  );
+  const routePreviewRegion =
+    routePreviewPoints.length > 0
+      ? {
+          latitude:
+            routePreviewPoints.reduce((sum, point) => sum + point.latitude, 0) /
+            routePreviewPoints.length,
+          longitude:
+            routePreviewPoints.reduce(
+              (sum, point) => sum + point.longitude,
+              0,
+            ) / routePreviewPoints.length,
+          latitudeDelta:
+            Math.max(...routePreviewPoints.map((point) => point.latitude)) -
+              Math.min(...routePreviewPoints.map((point) => point.latitude)) ||
+            0.02,
+          longitudeDelta:
+            Math.max(...routePreviewPoints.map((point) => point.longitude)) -
+              Math.min(...routePreviewPoints.map((point) => point.longitude)) ||
+            0.02,
+        }
+      : null;
+
+  const handleDetailTabPress = (tab: string) => {
+    setSelectedDetailTab(tab);
+    switch (tab) {
+      case "live":
+        void openLiveTrip();
+        break;
+      case "trip":
+        detailScrollRef.current?.scrollTo({
+          y: tripCardOffset.current,
+          animated: true,
+        });
+        break;
+      case "history":
+        setIsActivityModalVisible(true);
+        break;
+      case "attendance":
+        router.push("/(client)/pages/attendance" as never);
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -1191,13 +1282,21 @@ const ChildDetailScreen = () => {
             />
           </TouchableOpacity>
           <View style={styles.topRowTitle}>
-            <Text style={[styles.pageTitle, { color: colors.text.primary }]}>
-              Child Details
+            <Text
+              numberOfLines={1}
+              style={[styles.pageTitle, { color: colors.text.primary }]}
+            >
+              {child
+                ? `${child.name || ""} ${child.lastname || ""}`.trim()
+                : "Child details"}
             </Text>
             <Text
+              numberOfLines={1}
               style={[styles.pageSubtitle, { color: colors.text.secondary }]}
             >
-              View and manage your child&apos;s information
+              {child
+                ? `${child.grade ? `Grade ${child.grade}` : "Grade not set"} · ${child.school_name || "School not set"}`
+                : "Your child's journey"}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -1207,7 +1306,7 @@ const ChildDetailScreen = () => {
             >
               <MaterialIcons
                 name="edit"
-                size={20}
+                size={18}
                 color={colors.text.primary}
               />
             </TouchableOpacity>
@@ -1223,8 +1322,45 @@ const ChildDetailScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.detailTabs}
+        >
+          {[
+            { key: "live", label: "Live Tracking", icon: "my-location" },
+            { key: "trip", label: "Trip Details", icon: "route" },
+            { key: "history", label: "History", icon: "history" },
+            { key: "attendance", label: "Attendance", icon: "event-note" },
+          ].map((tab) => {
+            const selected = selectedDetailTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                activeOpacity={0.8}
+                style={[styles.detailTab, selected && styles.detailTabSelected]}
+                onPress={() => handleDetailTabPress(tab.key)}
+              >
+                <MaterialIcons
+                  name={tab.icon as never}
+                  size={14}
+                  color={selected ? "#FFFFFF" : colors.text.secondary}
+                />
+                <Text
+                  style={[
+                    styles.detailTabText,
+                    selected && styles.detailTabTextSelected,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
       <ScrollView
+        ref={detailScrollRef}
         contentContainerStyle={styles.content}
         onScroll={({ nativeEvent }) =>
           setIsScrolled(nativeEvent.contentOffset.y > 10)
@@ -1275,7 +1411,7 @@ const ChildDetailScreen = () => {
                   </View>
                   <View style={styles.heroMetaRow}>
                     <View style={styles.heroMetaItem}>
-                      <MaterialIcons name="school" size={16} color="#8B5CF6" />
+                      <MaterialIcons name="school" size={16} color="#159B3A" />
                       <Text
                         style={[
                           styles.heroMetaText,
@@ -1290,7 +1426,7 @@ const ChildDetailScreen = () => {
                       <MaterialIcons
                         name="location-city"
                         size={16}
-                        color="#10B981"
+                        color="#159B3A"
                       />
                       <Text
                         style={[
@@ -1308,7 +1444,7 @@ const ChildDetailScreen = () => {
                       <MaterialIcons
                         name="calendar-today"
                         size={16}
-                        color="#2563EB"
+                        color="#159B3A"
                       />
                       <Text
                         style={[
@@ -1348,7 +1484,7 @@ const ChildDetailScreen = () => {
             >
               <View style={styles.bannerContent}>
                 <View style={styles.bannerIconContainer}>
-                  <MaterialIcons name="shield" size={24} color="#2563EB" />
+                  <MaterialIcons name="shield" size={24} color="#159B3A" />
                 </View>
                 <View style={styles.bannerText}>
                   <Text
@@ -1369,9 +1505,143 @@ const ChildDetailScreen = () => {
               </View>
             </View>
 
+            <View
+              style={[
+                styles.locationPreviewCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <View style={styles.locationPreviewHeader}>
+                <View style={styles.locationPreviewTitleGroup}>
+                  <View style={styles.locationPreviewIcon}>
+                    <MaterialIcons
+                      name="location-on"
+                      size={18}
+                      color="#FFFFFF"
+                    />
+                  </View>
+                  <View>
+                    <Text
+                      style={[
+                        styles.locationPreviewTitle,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      Route Overview
+                    </Text>
+                    <Text
+                      style={[
+                        styles.locationPreviewSubtitle,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      {child.school_name || "School route"}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.mapRefreshButton}
+                  onPress={openRouteMap}
+                >
+                  <Text style={styles.mapRefreshText}>View route</Text>
+                  <MaterialIcons name="open-in-new" size={14} color="#087C2B" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={openRouteMap}
+                style={styles.routePreviewMapWrap}
+              >
+                {routePreviewRegion ? (
+                  <MapView
+                    style={styles.routePreviewMap}
+                    initialRegion={routePreviewRegion}
+                    mapType="standard"
+                    customMapStyle={lightRouteMapStyle}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    pointerEvents="none"
+                  >
+                    {routePreviewPoints.map((point) => (
+                      <Marker
+                        key={point.id}
+                        coordinate={{
+                          latitude: point.latitude,
+                          longitude: point.longitude,
+                        }}
+                        title={point.title}
+                        pinColor={point.id === "pickup" ? "#087C2B" : "#159B3A"}
+                      />
+                    ))}
+                    {routePreviewPoints.length > 1 && GOOGLE_API_KEY ? (
+                      <MapViewDirections
+                        origin={{
+                          latitude: routePreviewPoints[0].latitude,
+                          longitude: routePreviewPoints[0].longitude,
+                        }}
+                        destination={{
+                          latitude: routePreviewPoints[1].latitude,
+                          longitude: routePreviewPoints[1].longitude,
+                        }}
+                        apikey={GOOGLE_API_KEY}
+                        strokeWidth={4}
+                        strokeColor="#159B3A"
+                      />
+                    ) : null}
+                  </MapView>
+                ) : (
+                  <View style={styles.routePreviewEmpty}>
+                    <MaterialIcons name="map" size={28} color="#607A98" />
+                    <Text style={styles.routePreviewEmptyText}>
+                      Route map will appear when locations are available
+                    </Text>
+                  </View>
+                )}
+                {routePreviewRegion ? (
+                  <View style={styles.mapRoutePill}>
+                    <View style={styles.mapRouteDot} />
+                    <Text style={styles.mapRoutePillText}>
+                      {routeInfo?.route_name || "School Route"}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+              <View style={styles.nextStopRow}>
+                <View style={styles.nextStopDetails}>
+                  <MaterialIcons name="place" size={17} color="#159B3A" />
+                  <View style={styles.nextStopText}>
+                    <Text style={styles.nextStopLabel}>Next Stop</Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.nextStopName,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      {dropoffAddress}
+                    </Text>
+                    <Text style={styles.nextStopTime}>
+                      ETA {formatDisplayTime(dropoffStartTime)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.routeStatusSummary}>
+                  <MaterialIcons name="schedule" size={18} color="#159B3A" />
+                  <View>
+                    <Text style={styles.nextStopLabel}>Route Status</Text>
+                    <Text style={styles.routeStatusPillText}>
+                      {tripStatusText}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
             {isWeekend && (
               <View style={styles.weekendBanner}>
-                <MaterialIcons name="event" size={20} color="#92400E" />
+                <MaterialIcons name="event" size={20} color="#087C2B" />
                 <View style={styles.weekendBannerContent}>
                   <Text style={styles.weekendBannerTitle}>
                     It&apos;s the weekend
@@ -1388,6 +1658,9 @@ const ChildDetailScreen = () => {
             )}
 
             <View
+              onLayout={(event) => {
+                tripCardOffset.current = event.nativeEvent.layout.y;
+              }}
               style={[styles.tripCard, { backgroundColor: colors.surface }]}
             >
               <View style={styles.tripHeader}>
@@ -1408,7 +1681,7 @@ const ChildDetailScreen = () => {
                   <MaterialIcons
                     name="directions-car"
                     size={14}
-                    color="#16A34A"
+                    color="#159B3A"
                   />
                   <Text style={styles.tripStatusText}>
                     {isWeekend
@@ -1442,7 +1715,7 @@ const ChildDetailScreen = () => {
                 <View style={styles.tripTimeline}>
                   <View style={styles.tripPoint}>
                     <View
-                      style={[styles.tripDot, { backgroundColor: "#10B981" }]}
+                      style={[styles.tripDot, { backgroundColor: "#159B3A" }]}
                     />
                     <View style={styles.tripPointContent}>
                       <Text
@@ -1499,7 +1772,7 @@ const ChildDetailScreen = () => {
                   <View style={styles.tripSeparator} />
                   <View style={styles.tripPoint}>
                     <View
-                      style={[styles.tripDot, { backgroundColor: "#3B82F6" }]}
+                      style={[styles.tripDot, { backgroundColor: "#087C2B" }]}
                     />
                     <View style={styles.tripPointContent}>
                       <Text
@@ -1708,7 +1981,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="location-on"
                       size={18}
-                      color="#10B981"
+                      color="#159B3A"
                     />
                   </View>
                   <View style={styles.locationTextWrap}>
@@ -1735,7 +2008,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="location-on"
                       size={18}
-                      color="#3B82F6"
+                      color="#087C2B"
                     />
                   </View>
                   <View style={styles.locationTextWrap}>
@@ -1781,7 +2054,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="directions-car"
                       size={20}
-                      color="#2563EB"
+                      color="#159B3A"
                     />
                     <View style={styles.vehicleSummaryText}>
                       <Text
@@ -2128,7 +2401,7 @@ const ChildDetailScreen = () => {
                   coordinate={marker.coordinate}
                   title={marker.title}
                   description={marker.description}
-                  pinColor={marker.id === "live-driver" ? "#16A34A" : undefined}
+                  pinColor={marker.id === "live-driver" ? "#159B3A" : undefined}
                 />
               ))}
               {mapMarkers.length > 1 && GOOGLE_API_KEY ? (
@@ -2137,14 +2410,14 @@ const ChildDetailScreen = () => {
                   destination={mapMarkers[mapMarkers.length - 1].coordinate}
                   apikey={GOOGLE_API_KEY}
                   strokeWidth={5}
-                  strokeColor="#2563EB"
+                  strokeColor="#159B3A"
                   optimizeWaypoints
                 />
               ) : null}
             </MapView>
           ) : (
             <View style={styles.mapEmptyState}>
-              <MaterialIcons name="map" size={34} color="#64748B" />
+              <MaterialIcons name="map" size={34} color="#607A98" />
               <Text style={styles.mapEmptyTitle}>Map data unavailable</Text>
             </View>
           )}
@@ -2154,7 +2427,7 @@ const ChildDetailScreen = () => {
               style={styles.mapBackButton}
               onPress={() => setIsMapModalVisible(false)}
             >
-              <MaterialIcons name="arrow-back" size={22} color="#172033" />
+              <MaterialIcons name="arrow-back" size={22} color="#17365E" />
             </TouchableOpacity>
             <View style={styles.mapHeaderText}>
               <Text style={styles.mapEyebrow}>CHILD ROUTE</Text>
@@ -2231,7 +2504,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="event"
                       size={16}
-                      color={isSelected ? "#fff" : "#2563EB"}
+                      color={isSelected ? "#fff" : "#159B3A"}
                     />
                     <Text
                       style={[
@@ -2264,7 +2537,7 @@ const ChildDetailScreen = () => {
                 setShowWeekendTimePicker(true);
               }}
             >
-              <MaterialIcons name="schedule" size={18} color="#2563EB" />
+              <MaterialIcons name="schedule" size={18} color="#159B3A" />
               <Text style={styles.pickerButtonText}>
                 {(weekendTimeType === "pickup"
                   ? weekendPickupTime
@@ -2302,7 +2575,7 @@ const ChildDetailScreen = () => {
                 setShowWeekendTimePicker(true);
               }}
             >
-              <MaterialIcons name="schedule" size={18} color="#2563EB" />
+              <MaterialIcons name="schedule" size={18} color="#159B3A" />
               <Text style={styles.pickerButtonText}>
                 Drop-off:{" "}
                 {weekendDropoffTime.toLocaleTimeString([], {
@@ -2869,9 +3142,9 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
     paddingTop: 12,
-    paddingBottom: 40,
+    paddingBottom: 34,
   },
 
   /* =========================
@@ -2881,9 +3154,10 @@ const styles = StyleSheet.create({
   topRowWrapper: {
     width: "100%",
     paddingHorizontal: 16,
+    paddingTop: 2,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.10)",
+    borderBottomColor: "#DCEAF8",
     zIndex: 10,
   },
 
@@ -2901,16 +3175,16 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 56,
+    minHeight: 54,
   },
 
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(15,23,42,0.045)",
+    backgroundColor: "#EDF7FF",
   },
 
   topRowTitle: {
@@ -2919,15 +3193,15 @@ const styles = StyleSheet.create({
   },
 
   pageTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
 
   pageSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 2,
-    lineHeight: 17,
+    lineHeight: 14,
   },
 
   headerActions: {
@@ -2938,12 +3212,45 @@ const styles = StyleSheet.create({
   },
 
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(15,23,42,0.045)",
+    backgroundColor: "#EDF7FF",
+  },
+
+  detailTabs: {
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 9,
+    paddingBottom: 2,
+  },
+
+  detailTab: {
+    minHeight: 33,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    backgroundColor: "#EDF7FF",
+  },
+
+  detailTabSelected: {
+    backgroundColor: "#159B3A",
+  },
+
+  detailTabText: {
+    color: "#607A98",
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
+  detailTabTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
 
   /* =========================
@@ -2952,29 +3259,208 @@ const styles = StyleSheet.create({
 
   heroCard: {
     borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
+    padding: 15,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
+    shadowColor: "#24415D",
     shadowOffset: {
       width: 0,
       height: 5,
     },
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOpacity: 0.045,
+    shadowRadius: 9,
+    elevation: 1,
   },
 
   bannerCard: {
+    borderRadius: 15,
+    padding: 13,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
+  },
+
+  locationPreviewCard: {
+    borderWidth: 1,
     borderRadius: 16,
-    padding: 14,
+    padding: 10,
     marginBottom: 12,
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.045,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+
+  locationPreviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+    paddingBottom: 9,
+  },
+
+  locationPreviewTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+
+  locationPreviewIcon: {
+    width: 29,
+    height: 29,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#159B3A",
+  },
+
+  locationPreviewTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  locationPreviewSubtitle: {
+    fontSize: 9,
+    marginTop: 2,
+  },
+
+  mapRefreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "#EDF7FF",
+  },
+
+  mapRefreshText: {
+    color: "#087C2B",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+
+  routePreviewMapWrap: {
+    height: 152,
+    borderRadius: 11,
+    overflow: "hidden",
+    backgroundColor: "#EDF7FF",
+  },
+
+  routePreviewMap: {
+    width: "100%",
+    height: "100%",
+  },
+
+  routePreviewEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+    gap: 7,
+    backgroundColor: "#EDF7FF",
+  },
+
+  routePreviewEmptyText: {
+    color: "#607A98",
+    fontSize: 10,
+    textAlign: "center",
+  },
+
+  mapRoutePill: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  mapRouteDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginBottom: 3,
+    backgroundColor: "#159B3A",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+
+  mapRoutePillText: {
+    color: "#17365E",
+    backgroundColor: "rgba(255,255,255,0.94)",
+    overflow: "hidden",
+    borderRadius: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 9,
+    fontWeight: "800",
+  },
+
+  nextStopRow: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingHorizontal: 5,
+  },
+
+  nextStopDetails: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+    paddingRight: 8,
+  },
+
+  nextStopText: {
+    flex: 1,
+  },
+
+  nextStopLabel: {
+    color: "#607A98",
+    fontSize: 8,
+  },
+
+  nextStopName: {
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+
+  nextStopTime: {
+    color: "#607A98",
+    fontSize: 8,
+    marginTop: 2,
+  },
+
+  routeStatusSummary: {
+    minWidth: 106,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingLeft: 9,
+    borderLeftWidth: 1,
+    borderLeftColor: "#DCEAF8",
+  },
+
+  routeStatusPillText: {
+    color: "#087C2B",
+    fontSize: 8,
+    fontWeight: "700",
+    marginTop: 3,
   },
 
   weekendBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#FEF3C7",
-    borderColor: "#FCD34D",
+    backgroundColor: "#E9F8EE",
+    borderColor: "#DCEAF8",
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
@@ -2987,28 +3473,42 @@ const styles = StyleSheet.create({
   },
 
   weekendBannerTitle: {
-    color: "#92400E",
+    color: "#087C2B",
     fontSize: 14,
     fontWeight: "800",
     marginBottom: 3,
   },
 
   weekendBannerText: {
-    color: "#92400E",
+    color: "#607A98",
     fontSize: 12,
     lineHeight: 18,
   },
 
   tripCard: {
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 17,
+    padding: 15,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   sectionCard: {
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
+    shadowColor: "#24415D",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.035,
+    shadowRadius: 7,
+    elevation: 1,
   },
 
   /* =========================
@@ -3021,12 +3521,12 @@ const styles = StyleSheet.create({
   },
 
   avatarWrapper: {
-    width: 78,
-    height: 78,
-    borderRadius: 22,
+    width: 80,
+    height: 80,
+    borderRadius: 25,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#EDF7FF",
   },
 
   heroAvatar: {
@@ -3044,7 +3544,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
 
   heroInfo: {
@@ -3069,13 +3569,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#E9F8EE",
   },
 
   statusPillText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#166534",
+    color: "#087C2B",
   },
 
   heroMetaRow: {
@@ -3170,13 +3670,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: "#E9F8EE",
   },
 
   tripStatusText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#166534",
+    color: "#087C2B",
   },
 
   tripTimeline: {
@@ -3231,7 +3731,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3243,7 +3743,7 @@ const styles = StyleSheet.create({
   liveTripButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#4338CA",
+    color: "#087C2B",
   },
 
   weekendScheduleButton: {
@@ -3296,13 +3796,13 @@ const styles = StyleSheet.create({
   },
 
   scheduledTripRowDate: {
-    color: "#1E3A8A",
+    color: "#17365E",
     fontSize: 12,
     fontWeight: "800",
   },
 
   scheduledTripRowTimes: {
-    color: "#475569",
+    color: "#607A98",
     fontSize: 11,
     marginTop: 3,
   },
@@ -3414,7 +3914,7 @@ const styles = StyleSheet.create({
   locationActionText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   /* =========================
@@ -3459,7 +3959,7 @@ const styles = StyleSheet.create({
   vehicleViewButtonText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   scanButton: {
@@ -3489,7 +3989,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 13,
     overflow: "hidden",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#EDF7FF",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -3525,7 +4025,7 @@ const styles = StyleSheet.create({
   driverActionText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   /* =========================
@@ -3558,7 +4058,7 @@ const styles = StyleSheet.create({
   },
 
   activityModalEyebrow: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1,
@@ -3602,7 +4102,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   activityRow: {
@@ -3622,15 +4122,15 @@ const styles = StyleSheet.create({
   },
 
   activityMarkerDone: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#159B3A",
   },
 
   activityMarkerProgress: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#087C2B",
   },
 
   activityMarkerPending: {
-    backgroundColor: "#60A5FA",
+    backgroundColor: "#607A98",
   },
 
   activityTextWrap: {
@@ -3968,11 +4468,11 @@ const styles = StyleSheet.create({
   },
 
   weekendDateOptionSelected: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
 
   weekendDateOptionText: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -3999,7 +4499,7 @@ const styles = StyleSheet.create({
   },
 
   pickerButtonText: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -4170,7 +4670,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     marginTop: 4,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#EDF7FF",
   },
 
   mapView: {
@@ -4180,7 +4680,7 @@ const styles = StyleSheet.create({
 
   fullScreenMapScreen: {
     flex: 1,
-    backgroundColor: "#E8EDF2",
+    backgroundColor: "#EDF7FF",
   },
 
   mapScreenHeader: {
@@ -4207,7 +4707,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EDF7FF",
   },
 
   mapHeaderText: {
@@ -4216,14 +4716,14 @@ const styles = StyleSheet.create({
   },
 
   mapEyebrow: {
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1,
   },
 
   mapScreenTitle: {
-    color: "#172033",
+    color: "#17365E",
     fontSize: 15,
     fontWeight: "800",
     marginTop: 2,
@@ -4257,7 +4757,7 @@ const styles = StyleSheet.create({
   },
 
   mapPanelTitle: {
-    color: "#172033",
+    color: "#17365E",
     fontSize: 16,
     fontWeight: "800",
     marginBottom: 8,
@@ -4268,24 +4768,24 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#DCEAF8",
   },
 
   mapLocationDot: {
     width: 11,
     height: 11,
     borderRadius: 6,
-    backgroundColor: "#10B981",
+    backgroundColor: "#159B3A",
     marginTop: 3,
     marginRight: 12,
   },
 
   mapDropoffDot: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#087C2B",
   },
 
   mapDriverDot: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#087C2B",
   },
 
   mapLocationText: {
@@ -4293,21 +4793,21 @@ const styles = StyleSheet.create({
   },
 
   mapLocationTitle: {
-    color: "#172033",
+    color: "#17365E",
     fontSize: 13,
     fontWeight: "700",
   },
 
   mapLocationAddress: {
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 12,
     lineHeight: 17,
     marginTop: 2,
   },
 
   mapKeyHint: {
-    color: "#92400E",
-    backgroundColor: "#FEF3C7",
+    color: "#087C2B",
+    backgroundColor: "#E9F8EE",
     borderRadius: 10,
     padding: 10,
     fontSize: 11,
@@ -4319,11 +4819,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E8EDF2",
+    backgroundColor: "#EDF7FF",
   },
 
   mapEmptyTitle: {
-    color: "#334155",
+    color: "#17365E",
     fontSize: 15,
     fontWeight: "700",
     marginTop: 10,

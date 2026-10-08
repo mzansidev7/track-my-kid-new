@@ -88,7 +88,23 @@ export default function SchoolTripDetails() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const { user } = useContext(AuthContext);
   const token = user?.token;
-  const { colors } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    primary: "#159B3A",
+    primaryDark: "#087C2B",
+    background: "#F4F9FF",
+    surface: "#FFFFFF",
+    surfaceHover: "#EDF7FF",
+    border: "#DCEAF8",
+    divider: "#DCEAF8",
+    text: {
+      ...themeColors.text,
+      primary: "#17365E",
+      secondary: "#607A98",
+      tertiary: "#607A98",
+    },
+  };
   const [trips, setTrips] = useState<SchoolTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -475,7 +491,15 @@ export default function SchoolTripDetails() {
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
-  const { colors } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    text: {
+      ...themeColors.text,
+      primary: "#17365E",
+      secondary: "#607A98",
+    },
+  };
   return (
     <View style={styles.fact}>
       <Text style={[styles.factLabel, { color: colors.text.secondary }]}>
@@ -508,34 +532,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroCopy: { flex: 1 },
-  title: { fontSize: 18, fontWeight: "800" },
+  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
   subTitle: { marginTop: 4, fontSize: 12 },
   status: {
     overflow: "hidden",
     borderRadius: 99,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    backgroundColor: "#EDE9FE",
-    color: "#6D28D9",
+    backgroundColor: "#EDF7FF",
+    color: "#17365E",
     fontSize: 9,
     fontWeight: "800",
     textTransform: "capitalize",
   },
-  liveStatus: { backgroundColor: "#DCFCE7", color: "#15803D" },
+  liveStatus: { backgroundColor: "#E9F8EE", color: "#087C2B" },
   description: { fontSize: 13, lineHeight: 19 },
   facts: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   fact: {
     minWidth: "45%",
     flexGrow: 1,
     borderRadius: 10,
-    backgroundColor: "rgba(148,163,184,0.12)",
+    backgroundColor: "#EDF7FF",
     padding: 10,
   },
   factLabel: { fontSize: 10 },
   factValue: { marginTop: 4, fontSize: 12, fontWeight: "700" },
   notes: { fontSize: 12, lineHeight: 18 },
   card: { borderWidth: 1, borderRadius: 16, padding: 15, gap: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: "800", marginBottom: 2 },
+  sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 2 },
   vehicleCard: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 7 },
   vehicleHead: { flexDirection: "row", alignItems: "center", gap: 9 },
   vehicleCopy: { flex: 1 },
@@ -543,14 +567,14 @@ const styles = StyleSheet.create({
   muted: { fontSize: 11, lineHeight: 16 },
   livePill: {
     borderRadius: 99,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EDF7FF",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 9,
     fontWeight: "800",
   },
-  livePillOn: { backgroundColor: "#DCFCE7", color: "#15803D" },
+  livePillOn: { backgroundColor: "#E9F8EE", color: "#087C2B" },
   map: {
     width: "100%",
     height: 270,
@@ -569,7 +593,7 @@ const styles = StyleSheet.create({
   backButton: {
     marginTop: 6,
     borderRadius: 10,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },

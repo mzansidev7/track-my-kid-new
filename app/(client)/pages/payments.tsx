@@ -1,6 +1,7 @@
 import React, { useCallback, useContext, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  Alert,
   ActivityIndicator,
   Linking,
   RefreshControl,
@@ -39,7 +40,9 @@ const PaymentHistory = ({ payments }: { payments: any[] }) => (
         <View key={payment.id} style={styles.historyRow}>
           <View style={styles.historyCopy}>
             <Text style={styles.historyStatus}>
-              {payment.status === "paid"
+              {payment.payment_method === "cash" && payment.status === "pending"
+                ? "Cash payment awaiting owner confirmation"
+                : payment.status === "paid"
                 ? "Payment successful"
                 : payment.status === "failed"
                   ? "Payment failed"
@@ -48,6 +51,7 @@ const PaymentHistory = ({ payments }: { payments: any[] }) => (
                     : "Payment pending"}
             </Text>
             <Text style={styles.historyDetails}>
+              {payment.payment_method === "cash" ? "Cash • " : "Card • "}
               {payment.owners?.company_name ||
                 payment.owners?.users?.name ||
                 "Owner unavailable"}{" "}
@@ -74,6 +78,9 @@ const ClientPayments = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [payingGroupId, setPayingGroupId] = useState<string | null>(null);
+  const [reportingCashGroupId, setReportingCashGroupId] = useState<
+    string | null
+  >(null);
 
   const loadSummary = useCallback(
     async (isRefresh = false) => {
@@ -221,6 +228,40 @@ const ClientPayments = () => {
     }
   };
 
+  const reportCashPayment = async (groupId: string) => {
+    if (!user?.token || reportingCashGroupId) return;
+    setReportingCashGroupId(groupId);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/client/payments/cash-report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({ group_id: groupId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to report cash payment.");
+      }
+      await loadSummary(true);
+      Alert.alert(
+        "Cash payment reported",
+        "Your fleet owner must confirm they received the cash. Tracking remains available while they confirm.",
+      );
+    } catch (reportError) {
+      Alert.alert(
+        "Unable to report cash payment",
+        reportError instanceof Error
+          ? reportError.message
+          : "Please try again.",
+      );
+    } finally {
+      setReportingCashGroupId(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <View style={styles.header}>
@@ -228,7 +269,7 @@ const ClientPayments = () => {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={23} color="#0F172A" />
+          <MaterialIcons name="arrow-back" size={23} color="#17365E" />
         </TouchableOpacity>
         <View>
           <Text style={styles.title}>Payments</Text>
@@ -247,7 +288,7 @@ const ClientPayments = () => {
       >
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#8B5CF6" />
+            <ActivityIndicator color="#159B3A" />
             <Text style={styles.stateText}>Loading payment details...</Text>
           </View>
         ) : error ? (
@@ -266,7 +307,7 @@ const ClientPayments = () => {
           <>
             <View style={styles.summaryCard}>
               <View style={styles.paymentIcon}>
-                <MaterialIcons name="payments" size={28} color="#8B5CF6" />
+                <MaterialIcons name="payments" size={28} color="#159B3A" />
               </View>
               <Text style={styles.cardTitle}>Current transport amount</Text>
               <Text style={styles.amount}>
@@ -370,6 +411,24 @@ const ClientPayments = () => {
                         : `Pay ${formatCurrency(group.total_amount_cents, summary?.currency)}`}
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.cashButton,
+                    !group.owner_id && styles.payButtonDisabled,
+                  ]}
+                  onPress={() => reportCashPayment(group.group_id)}
+                  disabled={
+                    reportingCashGroupId !== null ||
+                    payingGroupId !== null ||
+                    !group.owner_id
+                  }
+                >
+                  <Text style={styles.cashButtonText}>
+                    {reportingCashGroupId === group.group_id
+                      ? "Reporting cash payment..."
+                      : "Already paid cash? Report it"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             ))}
 
@@ -395,14 +454,14 @@ const Row = ({ label, value }: { label: string; value: string }) => (
 export default ClientPayments;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
+  safeArea: { flex: 1, backgroundColor: "#F4F9FF" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#DCEAF8",
   },
   backButton: {
     width: 40,
@@ -411,12 +470,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  title: { color: "#0F172A", fontSize: 22, fontWeight: "800" },
-  subtitle: { color: "#64748B", fontSize: 12, marginTop: 3 },
+  title: { color: "#17365E", fontSize: 22, fontWeight: "800" },
+  subtitle: { color: "#607A98", fontSize: 12, marginTop: 3 },
   content: { padding: 20, paddingBottom: 40 },
   summaryCard: {
-    backgroundColor: "#F2E9FF",
+    backgroundColor: "#E9F8EE",
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
     padding: 22,
     alignItems: "center",
     marginBottom: 16,
@@ -430,14 +491,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 12,
   },
-  cardTitle: { color: "#5B21B6", fontSize: 14, fontWeight: "700" },
-  amount: { color: "#2E1065", fontSize: 32, fontWeight: "800", marginTop: 8 },
-  mutedText: { color: "#6D28D9", fontSize: 12, marginTop: 4 },
+  cardTitle: { color: "#087C2B", fontSize: 14, fontWeight: "700" },
+  amount: { color: "#17365E", fontSize: 32, fontWeight: "800", marginTop: 8 },
+  mutedText: { color: "#607A98", fontSize: 12, marginTop: 4 },
   detailCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     paddingHorizontal: 16,
   },
   paymentNotice: {
@@ -459,7 +520,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     padding: 14,
     marginTop: 12,
   },
@@ -469,50 +530,60 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  routeName: { color: "#0F172A", fontSize: 14, fontWeight: "700", flex: 1 },
-  routeAmount: { color: "#5B21B6", fontSize: 14, fontWeight: "800" },
-  routeDetails: { color: "#64748B", fontSize: 12, marginTop: 6 },
+  routeName: { color: "#17365E", fontSize: 14, fontWeight: "700", flex: 1 },
+  routeAmount: { color: "#087C2B", fontSize: 14, fontWeight: "800" },
+  routeDetails: { color: "#607A98", fontSize: 12, marginTop: 6 },
   childNames: {
-    color: "#334155",
+    color: "#607A98",
     fontSize: 12,
     fontWeight: "700",
     marginTop: 6,
   },
   groupTitle: { flex: 1 },
-  ownerName: { color: "#64748B", fontSize: 11, marginBottom: 2 },
+  ownerName: { color: "#607A98", fontSize: 11, marginBottom: 2 },
   payButton: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: "#159B3A",
     borderRadius: 9,
     alignItems: "center",
     paddingVertical: 11,
     marginTop: 12,
   },
   payButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
-  payButtonDisabled: { backgroundColor: "#94A3B8" },
+  payButtonDisabled: { backgroundColor: "#607A98" },
+  cashButton: {
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#159B3A",
+    borderRadius: 9,
+    paddingVertical: 10,
+    marginTop: 8,
+    backgroundColor: "#E9F8EE",
+  },
+  cashButtonText: { color: "#087C2B", fontWeight: "700", fontSize: 12 },
   historyCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     padding: 16,
     marginTop: 14,
   },
-  historyTitle: { color: "#0F172A", fontSize: 16, fontWeight: "800" },
-  historyEmpty: { color: "#64748B", fontSize: 13, marginTop: 10 },
+  historyTitle: { color: "#17365E", fontSize: 16, fontWeight: "800" },
+  historyEmpty: { color: "#607A98", fontSize: 13, marginTop: 10 },
   historyRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#EDF7FF",
     paddingVertical: 12,
     marginTop: 10,
   },
   historyCopy: { flex: 1 },
-  historyStatus: { color: "#0F172A", fontSize: 13, fontWeight: "700" },
-  historyDetails: { color: "#64748B", fontSize: 12, marginTop: 4 },
+  historyStatus: { color: "#17365E", fontSize: 13, fontWeight: "700" },
+  historyDetails: { color: "#607A98", fontSize: 12, marginTop: 4 },
   historyAmount: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 13,
     fontWeight: "800",
     marginLeft: 12,
@@ -523,12 +594,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: "#EDF7FF",
   },
-  rowLabel: { color: "#64748B", fontSize: 13 },
-  rowValue: { color: "#0F172A", fontSize: 13, fontWeight: "700" },
+  rowLabel: { color: "#607A98", fontSize: 13 },
+  rowValue: { color: "#17365E", fontSize: 13, fontWeight: "700" },
   note: {
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 12,
     lineHeight: 18,
     marginTop: 16,
@@ -540,9 +611,9 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     gap: 10,
   },
-  stateText: { color: "#64748B", fontSize: 13, textAlign: "center" },
+  stateText: { color: "#607A98", fontSize: 13, textAlign: "center" },
   retryButton: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: "#159B3A",
     borderRadius: 9,
     paddingHorizontal: 16,
     paddingVertical: 9,

@@ -235,7 +235,7 @@ export default function FamilySafetyPage() {
           style={styles.incidentReportButton}
           onPress={() => router.push("/(client)/incident-report" as never)}
         >
-          <MaterialIcons name="report-problem" size={22} color="#B45309" />
+          <MaterialIcons name="report-problem" size={22} color="#087C2B" />
           <View style={styles.sosCopy}>
             <Text style={styles.incidentReportTitle}>
               Report a transport incident
@@ -244,7 +244,7 @@ export default function FamilySafetyPage() {
               Send a safety, route, vehicle, or student concern to the school.
             </Text>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color="#B45309" />
+          <MaterialIcons name="chevron-right" size={24} color="#087C2B" />
         </TouchableOpacity>
 
         <View style={styles.sectionHeader}>
@@ -265,7 +265,7 @@ export default function FamilySafetyPage() {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator color="#2563EB" />
+            <ActivityIndicator color="#159B3A" />
           </View>
         ) : contacts.length === 0 ? (
           <View style={styles.empty}>
@@ -288,7 +288,7 @@ export default function FamilySafetyPage() {
                         : "person"
                   }
                   size={22}
-                  color="#2563EB"
+                  color="#159B3A"
                 />
               </View>
               <View style={styles.contactCopy}>
@@ -330,6 +330,7 @@ export default function FamilySafetyPage() {
                 <TextInput
                   key={field}
                   style={styles.input}
+                  placeholderTextColor="#607A98"
                   value={form[field]}
                   onChangeText={(value) =>
                     setForm((current) => ({ ...current, [field]: value }))
@@ -466,10 +467,10 @@ export default function FamilySafetyPage() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  safe: { flex: 1, backgroundColor: "#F4F9FF" },
   content: { padding: 16, paddingBottom: 40 },
   childPicker: { marginTop: 14 },
-  pickerLabel: { color: "#475569", fontSize: 12, fontWeight: "800" },
+  pickerLabel: { color: "#607A98", fontSize: 12, fontWeight: "800" },
   sosButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -488,12 +489,12 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#FDE68A",
-    backgroundColor: "#FFFBEB",
+    borderColor: "#DCEAF8",
+    backgroundColor: "#EDF7FF",
   },
-  incidentReportTitle: { color: "#92400E", fontSize: 14, fontWeight: "800" },
+  incidentReportTitle: { color: "#17365E", fontSize: 14, fontWeight: "800" },
   incidentReportText: {
-    color: "#A16207",
+    color: "#607A98",
     fontSize: 11,
     lineHeight: 16,
     marginTop: 3,
@@ -507,13 +508,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
-  sectionTitle: { color: "#0F172A", fontSize: 18, fontWeight: "800" },
-  muted: { color: "#64748B", fontSize: 12, marginTop: 4 },
+  sectionTitle: { color: "#17365E", fontSize: 18, fontWeight: "800" },
+  muted: { color: "#607A98", fontSize: 12, marginTop: 4 },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     borderRadius: 9,
     paddingHorizontal: 11,
     paddingVertical: 8,
@@ -522,10 +523,10 @@ const styles = StyleSheet.create({
   contactCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     padding: 14,
     marginBottom: 10,
   },
@@ -533,22 +534,24 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
   },
   contactCopy: { flex: 1, marginLeft: 11 },
-  contactName: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
-  contactMeta: { color: "#64748B", fontSize: 12, marginTop: 3 },
+  contactName: { color: "#17365E", fontSize: 15, fontWeight: "800" },
+  contactMeta: { color: "#607A98", fontSize: 12, marginTop: 3 },
   center: { paddingVertical: 60, alignItems: "center" },
   empty: {
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCEAF8",
     borderRadius: 16,
     padding: 26,
   },
   emptyTitle: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 16,
     fontWeight: "800",
     marginTop: 10,
@@ -559,48 +562,50 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15,23,42,0.45)",
   },
   modal: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 22,
   },
-  modalTitle: { color: "#0F172A", fontSize: 20, fontWeight: "800" },
+  modalTitle: { color: "#17365E", fontSize: 20, fontWeight: "800" },
   input: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DCEAF8",
     borderRadius: 10,
     padding: 12,
     marginTop: 12,
-    color: "#0F172A",
+    backgroundColor: "#FFFFFF",
+    color: "#17365E",
+    fontSize: 14,
   },
   typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
   typeButton: {
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DCEAF8",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  typeButtonActive: { borderColor: "#2563EB", backgroundColor: "#EFF6FF" },
-  typeText: { color: "#475569", fontSize: 11, fontWeight: "700" },
-  typeTextActive: { color: "#2563EB" },
+  typeButtonActive: { borderColor: "#159B3A", backgroundColor: "#E9F8EE" },
+  typeText: { color: "#607A98", fontSize: 11, fontWeight: "700" },
+  typeTextActive: { color: "#087C2B" },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 18 },
   cancelButton: {
     flex: 1,
     alignItems: "center",
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DCEAF8",
     borderRadius: 10,
   },
-  cancelText: { color: "#475569", fontWeight: "800" },
+  cancelText: { color: "#607A98", fontWeight: "800" },
   saveButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
   saveText: { color: "#FFF", fontWeight: "800" },
   disabled: { opacity: 0.5 },

@@ -74,14 +74,14 @@ const School = () => {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <MaterialIcons name="arrow-back" size={25} color="#0F172A" />
+          <MaterialIcons name="arrow-back" size={25} color="#17365E" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>School</Text>
         <View style={styles.back} />
       </View>
       {childrenLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#159B3A" />
           <Text style={styles.muted}>Loading school details...</Text>
         </View>
       ) : (
@@ -126,7 +126,7 @@ const School = () => {
                     : undefined
                 }
               >
-                <MaterialIcons name="phone" size={20} color="#2563EB" />
+                <MaterialIcons name="phone" size={20} color="#159B3A" />
                 <Text style={styles.contactText}>Contact{"\n"}School</Text>
               </TouchableOpacity>
             </View>
@@ -140,25 +140,25 @@ const School = () => {
                     ? `${time(school.start_time)} - ${time(school.end_time)}`
                     : "Not available"
                 }
-                color="#2563EB"
+                color="#159B3A"
               />
               <Stat
                 icon="school"
                 label="Grades"
                 value={school.children.length ? "Enrolled" : "Not set"}
-                color="#10B981"
+                color="#159B3A"
               />
               <Stat
                 icon="badge"
                 label="School ID"
                 value={school.emis_number || school.id.slice(0, 8)}
-                color="#2563EB"
+                color="#159B3A"
               />
               <Stat
                 icon="location-on"
                 label="Distance"
                 value="Not available"
-                color="#10B981"
+                color="#159B3A"
               />
             </View>
           </View>
@@ -210,7 +210,7 @@ const School = () => {
                     text={child.vehicle?.driver?.name || "Driver not assigned"}
                   />
                 </View>
-                <MaterialIcons name="chevron-right" size={22} color="#64748B" />
+                <MaterialIcons name="chevron-right" size={22} color="#607A98" />
               </TouchableOpacity>
             ))
           ) : (
@@ -248,7 +248,7 @@ const School = () => {
                   label="Pickup"
                   value={time(route.pickup_start_time || route.departure_time)}
                   detail={lead.pickup_address || route.start_location || "Home"}
-                  color="#10B981"
+                  color="#159B3A"
                 />
                 <View style={styles.connector} />
                 <Point
@@ -256,7 +256,7 @@ const School = () => {
                   label="School"
                   value={time(route.dropoff_start_time)}
                   detail={school.name || lead.school_name}
-                  color="#2563EB"
+                  color="#159B3A"
                 />
                 <View style={styles.connector} />
                 <Point
@@ -264,7 +264,7 @@ const School = () => {
                   label="Drop-off"
                   value={time(route.dropoff_end_time)}
                   detail={lead.dropoff_address || route.end_location || "Home"}
-                  color="#F97316"
+                  color="#087C2B"
                 />
                 <View style={styles.connector} />
                 <Point
@@ -276,7 +276,7 @@ const School = () => {
                       ? "Live transport"
                       : "Scheduled transport"
                   }
-                  color="#10B981"
+                  color="#159B3A"
                 />
               </View>
             </View>
@@ -285,38 +285,38 @@ const School = () => {
           )}
 
           <View style={styles.columns}>
-            <Panel icon="campaign" title="Announcements" color="#F97316" />
-            <Panel icon="event" title="Upcoming Events" color="#7C3AED" />
+            <Panel icon="campaign" title="Announcements" color="#159B3A" />
+            <Panel icon="event" title="Upcoming Events" color="#087C2B" />
           </View>
           <View style={styles.quick}>
             <Quick
               icon="pie-chart"
               label="Attendance"
-              color="#10B981"
+              color="#159B3A"
               onPress={() => router.push("/(client)/pages/attendance" as never)}
             />
             <Quick
               icon="chat-bubble"
               label="Messages"
-              color="#2563EB"
+              color="#087C2B"
               onPress={() => router.push("/(client)/(tabs)/messages" as never)}
             />
             <Quick
               icon="description"
               label="Documents"
-              color="#F59E0B"
+              color="#087C2B"
               onPress={() => router.push("/(client)/pages/documents" as never)}
             />
             <Quick
               icon="people"
               label="Teachers"
-              color="#7C3AED"
+              color="#087C2B"
               onPress={() => router.push("/(client)/pages/teachers" as never)}
             />
             <Quick
               icon="info"
               label="School Info"
-              color="#10B981"
+              color="#159B3A"
               onPress={() =>
                 router.push("/(client)/pages/school-info" as never)
               }
@@ -335,7 +335,7 @@ const Line = ({
   text: string;
 }) => (
   <View style={styles.line}>
-    <MaterialIcons name={icon} size={16} color="#64748B" />
+    <MaterialIcons name={icon} size={16} color="#607A98" />
     <Text style={styles.muted} numberOfLines={1}>
       {text}
     </Text>
@@ -445,10 +445,10 @@ const Empty = ({ text }: { text: string }) => (
 
 export default School;
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+  safe: { flex: 1, backgroundColor: "#F4F9FF" },
   header: {
     height: 64,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -460,16 +460,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 21, fontWeight: "800", color: "#0F172A" },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#17365E",
+    letterSpacing: -0.4,
+  },
   content: { padding: 16, paddingBottom: 40 },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     borderRadius: 18,
     padding: 14,
     marginBottom: 12,
-    shadowColor: "#0F172A",
+    shadowColor: "#17365E",
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
@@ -478,10 +483,10 @@ const styles = StyleSheet.create({
   logo: { width: 80, height: 80, borderRadius: 40 },
   schoolCopy: { flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  schoolName: { flex: 1, fontSize: 17, fontWeight: "800", color: "#0F172A" },
+  schoolName: { flex: 1, fontSize: 17, fontWeight: "800", color: "#17365E" },
   active: {
-    backgroundColor: "#DCFCE7",
-    color: "#16A34A",
+    backgroundColor: "#E9F8EE",
+    color: "#087C2B",
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
@@ -489,18 +494,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   line: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6 },
-  muted: { color: "#64748B", fontSize: 12, flexShrink: 1 },
+  muted: { color: "#607A98", fontSize: 12, flexShrink: 1 },
   contact: {
     width: 62,
     height: 72,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#DCEAF8",
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   contactText: {
-    color: "#2563EB",
+    color: "#087C2B",
     fontSize: 10,
     fontWeight: "700",
     textAlign: "center",
@@ -509,15 +514,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#DCEAF8",
     marginTop: 14,
     paddingTop: 12,
     gap: 10,
   },
   stat: { width: "47%", flexDirection: "row", alignItems: "center", gap: 7 },
-  statLabel: { color: "#64748B", fontSize: 10 },
+  statLabel: { color: "#607A98", fontSize: 10 },
   statValue: {
-    color: "#334155",
+    color: "#17365E",
     fontSize: 11,
     fontWeight: "700",
     marginTop: 2,
@@ -530,15 +535,15 @@ const styles = StyleSheet.create({
     marginTop: 22,
     marginBottom: 10,
   },
-  sectionTitle: { color: "#0F172A", fontSize: 18, fontWeight: "800" },
-  link: { color: "#2563EB", fontSize: 12, fontWeight: "700" },
+  sectionTitle: { color: "#17365E", fontSize: 18, fontWeight: "800" },
+  link: { color: "#087C2B", fontSize: 12, fontWeight: "700" },
   childCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
@@ -548,17 +553,17 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#2563EB", fontSize: 23, fontWeight: "800" },
+  avatarText: { color: "#087C2B", fontSize: 23, fontWeight: "800" },
   childCopy: { flex: 1 },
-  childName: { color: "#0F172A", fontSize: 14, fontWeight: "800" },
+  childName: { color: "#17365E", fontSize: 14, fontWeight: "800" },
   enrolled: {
     alignSelf: "flex-start",
-    color: "#16A34A",
-    backgroundColor: "#DCFCE7",
+    color: "#087C2B",
+    backgroundColor: "#E9F8EE",
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: 6,
@@ -568,9 +573,9 @@ const styles = StyleSheet.create({
   },
   transport: { width: 108, gap: 3 },
   transportHeader: { flexDirection: "row", justifyContent: "space-between" },
-  vehicle: { color: "#0F172A", fontSize: 17, fontWeight: "800" },
+  vehicle: { color: "#17365E", fontSize: 17, fontWeight: "800" },
   driver: {
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 12,
     textAlign: "right",
     lineHeight: 18,
@@ -585,14 +590,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pointLabel: {
-    color: "#334155",
+    color: "#17365E",
     fontSize: 10,
     fontWeight: "700",
     marginTop: 6,
   },
-  pointValue: { color: "#64748B", fontSize: 10, marginTop: 3 },
+  pointValue: { color: "#607A98", fontSize: 10, marginTop: 3 },
   pointDetail: {
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 9,
     textAlign: "center",
     marginTop: 3,
@@ -600,35 +605,35 @@ const styles = StyleSheet.create({
   connector: {
     width: 12,
     height: 2,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#DCEAF8",
     marginTop: 16,
   },
-  status: { color: "#059669", fontSize: 12, fontWeight: "700" },
+  status: { color: "#087C2B", fontSize: 12, fontWeight: "700" },
   columns: { flexDirection: "row", gap: 10, marginTop: 2 },
   panel: {
     flex: 1,
     minHeight: 105,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     borderRadius: 16,
     padding: 12,
   },
   panelHead: { flexDirection: "row", alignItems: "center", gap: 5 },
-  panelTitle: { flex: 1, color: "#0F172A", fontWeight: "800", fontSize: 12 },
+  panelTitle: { flex: 1, color: "#17365E", fontWeight: "800", fontSize: 12 },
   quick: { flexDirection: "row", gap: 8, marginTop: 12 },
   quickItem: {
     flex: 1,
     height: 78,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     borderRadius: 14,
   },
   quickLabel: {
-    color: "#475569",
+    color: "#607A98",
     fontSize: 9,
     textAlign: "center",
     marginTop: 6,
@@ -638,11 +643,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FFFFFF",
     padding: 18,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });

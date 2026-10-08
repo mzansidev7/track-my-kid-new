@@ -71,7 +71,7 @@ const Notifications = () => {
         <MaterialIcons
           name={item.is_read === true ? "notifications-none" : "notifications"}
           size={22}
-          color={item.is_read === true ? "#7890A8" : "#2563EB"}
+          color={item.is_read === true ? "#607A98" : "#159B3A"}
         />
       </View>
       <View style={styles.cardBody}>
@@ -90,7 +90,7 @@ const Notifications = () => {
             : "Just now"}
         </Text>
       </View>
-      <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
+      <MaterialIcons name="chevron-right" size={21} color="#607A98" />
     </TouchableOpacity>
   );
 
@@ -115,7 +115,7 @@ const Notifications = () => {
             onPress={handleMarkAllAsRead}
             style={styles.readAllButton}
           >
-            <MaterialIcons name="done-all" size={17} color="#1D4ED8" />
+            <MaterialIcons name="done-all" size={17} color="#087C2B" />
             <Text style={styles.readAllText}>
               {markingAll ? "Reading..." : "Read all"}
             </Text>
@@ -124,7 +124,7 @@ const Notifications = () => {
       )}
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator color="#2563EB" />
+          <ActivityIndicator color="#159B3A" />
           <Text style={styles.stateText}>Loading notifications...</Text>
         </View>
       ) : error ? (
@@ -155,7 +155,7 @@ const Notifications = () => {
               <MaterialIcons
                 name="notifications-none"
                 size={42}
-                color="#94A3B8"
+                color="#607A98"
               />
               <Text style={styles.emptyTitle}>No notifications yet</Text>
               <Text style={styles.stateText}>
@@ -179,7 +179,7 @@ const Notifications = () => {
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <View style={styles.modalTopRow}>
               <View style={styles.modalIconWrap}>
-                <MaterialIcons name="notifications" size={24} color="#2563EB" />
+                <MaterialIcons name="notifications" size={24} color="#159B3A" />
               </View>
               <Pressable
                 style={styles.closeButton}
@@ -240,12 +240,13 @@ const Notifications = () => {
 export default Notifications;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F8FC" },
+  container: { flex: 1, backgroundColor: "#F4F9FF" },
   header: {
-    backgroundColor: "#173F70",
+    backgroundColor: "#159B3A",
     marginBottom: 0,
-    borderBottomWidth: 0,
-    shadowOpacity: 0.1,
+    borderBottomWidth: 1,
+    borderBottomColor: "#087C2B",
+    shadowOpacity: 0.06,
   },
   summaryBar: {
     flexDirection: "row",
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 8,
   },
-  readAllText: { color: "#1D4ED8", fontSize: 12, fontWeight: "800" },
+  readAllText: { color: "#087C2B", fontSize: 12, fontWeight: "800" },
   list: { padding: 14, paddingTop: 10, paddingBottom: 32, flexGrow: 1 },
   card: {
     flexDirection: "row",
@@ -285,38 +286,38 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    shadowColor: "#17385F",
+    borderColor: "#DCEAF8",
+    shadowColor: "#17365E",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.045,
     shadowRadius: 5,
     elevation: 1,
   },
   readCard: {
-    borderColor: "#E6ECF2",
+    borderColor: "#DCEAF8",
     backgroundColor: "#FCFDFE",
   },
   iconWrap: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
   },
   cardBody: { flex: 1 },
   titleRow: { flexDirection: "row", alignItems: "center" },
-  cardTitle: { flex: 1, color: "#17385F", fontSize: 14, fontWeight: "700" },
+  cardTitle: { flex: 1, color: "#17365E", fontSize: 14, fontWeight: "800" },
   unreadDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     margin: 5,
   },
-  cardMessage: { color: "#526981", fontSize: 12, lineHeight: 18, marginTop: 4 },
-  cardTime: { color: "#8799AB", fontSize: 10, marginTop: 7 },
+  cardMessage: { color: "#607A98", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  cardTime: { color: "#607A98", fontSize: 10, marginTop: 7 },
   centerState: {
     flex: 1,
     alignItems: "center",
@@ -324,20 +325,20 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   stateText: {
-    color: "#647A90",
+    color: "#607A98",
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
     fontSize: 13,
   },
   emptyTitle: {
-    color: "#17385F",
+    color: "#17365E",
     fontSize: 17,
     fontWeight: "800",
     marginTop: 12,
   },
   retryButton: {
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#087C2B",
     borderRadius: 11,
     paddingHorizontal: 18,
     paddingVertical: 11,
@@ -355,8 +356,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#E3EBF4",
-    shadowColor: "#17385F",
+    borderColor: "#DCEAF8",
+    shadowColor: "#17365E",
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 10,
@@ -370,7 +371,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -378,38 +379,38 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
   },
   closeText: {
-    color: "#475569",
+    color: "#607A98",
     fontSize: 26,
     lineHeight: 28,
     fontWeight: "300",
   },
   modalType: {
-    color: "#1D4ED8",
+    color: "#087C2B",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     marginTop: 20,
   },
   modalTitle: {
-    color: "#17385F",
+    color: "#17365E",
     fontSize: 20,
     lineHeight: 26,
     fontWeight: "800",
     marginTop: 7,
   },
   modalMessage: {
-    color: "#526981",
+    color: "#607A98",
     fontSize: 15,
     lineHeight: 23,
     marginTop: 12,
   },
-  divider: { height: 1, backgroundColor: "#E4EBF2", marginVertical: 16 },
-  modalMeta: { color: "#71869C", fontSize: 12, marginTop: 5 },
+  divider: { height: 1, backgroundColor: "#DCEAF8", marginVertical: 16 },
+  modalMeta: { color: "#607A98", fontSize: 12, marginTop: 5 },
   tripNotificationAction: {
     flexDirection: "row",
     alignItems: "center",
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#087C2B",
   },
   tripNotificationActionText: {
     color: "#FFFFFF",

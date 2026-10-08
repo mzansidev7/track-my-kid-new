@@ -8,7 +8,7 @@ import {
 } from "../../../../store/asyncStorage/schoolCache";
 import { unsubscribeFromRealtime } from "../../../../store/subscriptions/realtimeUtils";
 import { subscribeToSchoolDashboardUpdates } from "../../../../store/subscriptions/schoolRealtime";
-import { RecentTrip } from "../interface/client.interfaces";
+import { RecentTrip } from "@/types/school/client.interfaces";
 
 export type AssignedSchoolTrip = {
   id: string;

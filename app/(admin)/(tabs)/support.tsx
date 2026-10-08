@@ -28,6 +28,10 @@ type Ticket = {
   created_at: string;
   users?: { name?: string; email?: string; role?: string } | null;
 };
+type CommissionSummary = {
+  owing_cents: number;
+  owing_owner_count: number;
+};
 const statusOrder: Ticket["status"][] = [
   "open",
   "in_progress",
@@ -46,6 +50,7 @@ const formatWhen = (value: string) => {
 export default function AdminSupport() {
   const router = useRouter();
   const { user } = useContext(AuthContext);
+  const userToken = user?.token;
   const { colors } = useTheme();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [search, setSearch] = useState("");
@@ -54,6 +59,34 @@ export default function AdminSupport() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [commissionSummary, setCommissionSummary] =
+    useState<CommissionSummary | null>(null);
+  const [commissionError, setCommissionError] = useState<string | null>(null);
+
+  const loadCommissionSummary = useCallback(async () => {
+    if (!userToken) return;
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/admin/commissions`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to load commission summary.");
+      }
+      setCommissionSummary({
+        owing_cents: Number(data?.summary?.owing_cents || 0),
+        owing_owner_count: Number(data?.summary?.owing_owner_count || 0),
+      });
+      setCommissionError(null);
+    } catch (requestError) {
+      setCommissionError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load commission summary.",
+      );
+    }
+  }, [userToken]);
 
   const loadTickets = useCallback(
     async (isRefresh = false) => {
@@ -93,8 +126,15 @@ export default function AdminSupport() {
   useFocusEffect(
     useCallback(() => {
       const timer = setTimeout(() => void loadTickets(), 0);
-      return () => clearTimeout(timer);
-    }, [loadTickets]),
+      const commissionTimer = setTimeout(
+        () => void loadCommissionSummary(),
+        0,
+      );
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(commissionTimer);
+      };
+    }, [loadCommissionSummary, loadTickets]),
   );
 
   const counts = useMemo(
@@ -196,6 +236,41 @@ export default function AdminSupport() {
             <MaterialIcons name="refresh" size={22} color="#2563EB" />
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          activeOpacity={0.82}
+          style={styles.commissionCard}
+          onPress={() => router.push("/(admin)/(tabs)/commissions")}
+        >
+          <View style={styles.commissionIcon}>
+            <MaterialIcons
+              name="account-balance-wallet"
+              size={20}
+              color="#B45309"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.commissionTitle}>Cash commissions</Text>
+            {commissionError ? (
+              <Text style={styles.commissionError}>
+                {commissionError} Tap to open the full report.
+              </Text>
+            ) : commissionSummary ? (
+              <Text style={styles.commissionSubtitle}>
+                {new Intl.NumberFormat("en-ZA", {
+                  style: "currency",
+                  currency: "ZAR",
+                }).format(commissionSummary.owing_cents / 100)}{" "}
+                owed by {commissionSummary.owing_owner_count} fleet owner
+                {commissionSummary.owing_owner_count === 1 ? "" : "s"}
+              </Text>
+            ) : (
+              <Text style={styles.commissionSubtitle}>
+                View amounts due from fleet owners
+              </Text>
+            )}
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color="#92400E" />
+        </TouchableOpacity>
         {error ? (
           <View style={styles.error}>
             <Text style={styles.errorText}>{error}</Text>
@@ -400,6 +475,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#EFF6FF",
   },
+  commissionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+  },
+  commissionIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    backgroundColor: "#FEF3C7",
+  },
+  commissionTitle: { color: "#78350F", fontSize: 11, fontWeight: "800" },
+  commissionSubtitle: { color: "#92400E", fontSize: 10, marginTop: 3 },
+  commissionError: { color: "#B91C1C", fontSize: 9, marginTop: 3 },
   statsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   statCard: {
     flex: 1,

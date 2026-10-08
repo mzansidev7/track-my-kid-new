@@ -20,6 +20,7 @@ export interface ConversationData {
   };
   last_message: any | null;
   unread_count?: number;
+  message_count?: number;
   created_at: string;
   last_message_at: string;
 }
@@ -38,6 +39,54 @@ export interface MessageData {
     | any;
 }
 
+const getConversationActivityTime = (conversation: any) => {
+  const timestamp =
+    conversation?.last_message?.sent_at ||
+    conversation?.last_message_at ||
+    conversation?.created_at;
+  const time = timestamp ? new Date(timestamp).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+};
+
+export const sortConversationsByLastMessage = <T extends object>(
+  conversations: T[],
+): T[] =>
+  [...conversations].sort(
+    (first: any, second: any) =>
+      getConversationActivityTime(second) - getConversationActivityTime(first),
+  );
+
+const supportTeamMessage = (message: any, supportUserId?: string): any => {
+  if (!message?.users) return message;
+  const normalizeUser = (user: any) =>
+    user?.role === "admin" || message.sender_id === supportUserId
+      ? { ...user, name: "Support team" }
+      : user;
+  return {
+    ...message,
+    users: Array.isArray(message.users)
+      ? message.users.map(normalizeUser)
+      : normalizeUser(message.users),
+  };
+};
+
+const supportTeamConversation = (conversation: any): any => ({
+  ...conversation,
+  other_participant:
+    conversation?.conversation_type === "admin_driver" ||
+    conversation?.conversation_type === "admin_user" ||
+    conversation?.other_participant?.role === "admin"
+      ? { ...conversation.other_participant, name: "Support team" }
+      : conversation?.other_participant,
+  last_message: supportTeamMessage(
+    conversation?.last_message,
+    conversation?.conversation_type === "admin_driver" ||
+    conversation?.conversation_type === "admin_user"
+      ? conversation?.other_participant?.id
+      : undefined,
+  ),
+});
+
 /* -------------------------------------------------------------------------- */
 /*                    FETCH CONVERSATIONS WITH CACHE                          */
 /* -------------------------------------------------------------------------- */
@@ -53,7 +102,10 @@ export const fetchConversationsWithCache = async (
   try {
     // Get cached conversations first
     const cachedConversations = await getCachedConversations(userId);
-    if (cachedConversations.length > 0) onCached?.(cachedConversations);
+    const normalizedCached = sortConversationsByLastMessage(
+      cachedConversations.map(supportTeamConversation),
+    );
+    if (normalizedCached.length > 0) onCached?.(normalizedCached);
 
     // Fetch fresh conversations
     const { data, error } = await client
@@ -84,7 +136,7 @@ export const fetchConversationsWithCache = async (
     if (error) {
       console.error("❌ Error fetching conversations:", error);
 
-      return cachedConversations;
+      return normalizedCached;
     }
 
     const conversationsWithDetails = await Promise.all(
@@ -135,6 +187,11 @@ export const fetchConversationsWithCache = async (
             (a: any, b: any) =>
               new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime(),
           )[0] || null;
+        const messages = Array.isArray(conv.messages) ? conv.messages : [];
+        const unreadCount = messages.filter(
+          (message: any) =>
+            message.sender_id !== userId && message.is_read === false,
+        ).length;
 
         return {
           id: conv.id,
@@ -143,30 +200,35 @@ export const fetchConversationsWithCache = async (
 
           other_participant: {
             id: userData?.id,
-            name: userData?.name,
+            name: userData?.role === "admin" ? "Support team" : userData?.name,
             email: userData?.email,
             phone: userData?.phone,
             role: userData?.role,
             profile: profileData,
           },
 
-          last_message: latestMessage,
+          last_message: supportTeamMessage(latestMessage),
+          unread_count: unreadCount,
+          message_count: messages.length,
 
           created_at: conv.created_at,
 
-          last_message_at: conv.last_message_at,
+          last_message_at: latestMessage?.sent_at || conv.last_message_at,
         };
       }),
     );
 
     // Cache fresh conversations
-    await cacheConversations(conversationsWithDetails, userId);
+    const normalizedConversations = sortConversationsByLastMessage(
+      conversationsWithDetails.map(supportTeamConversation),
+    );
+    await cacheConversations(normalizedConversations, userId);
 
-    return conversationsWithDetails;
+    return normalizedConversations;
   } catch (err) {
     console.error("❌ Error in fetchConversationsWithCache:", err);
 
-    return await getCachedConversations(userId);
+    return (await getCachedConversations(userId)).map(supportTeamConversation);
   }
 };
 
@@ -239,7 +301,10 @@ export const fetchMessagesWithCache = async (
   try {
     // Get cached messages first
     const cachedMessages = await getCachedMessages(conversationId);
-    if (cachedMessages.length > 0) onCached?.(cachedMessages);
+    const normalizedCached = cachedMessages.map((message) =>
+      supportTeamMessage(message),
+    );
+    if (normalizedCached.length > 0) onCached?.(normalizedCached);
 
     // Fetch fresh messages
     const { data, error } = await client
@@ -262,17 +327,22 @@ export const fetchMessagesWithCache = async (
     if (error) {
       console.error("❌ Error fetching messages:", error);
 
-      return cachedMessages;
+      return normalizedCached;
     }
 
     // Cache fresh messages
-    await cacheMessages(conversationId, data || []);
+    const normalizedMessages = (data || []).map((message) =>
+      supportTeamMessage(message),
+    );
+    await cacheMessages(conversationId, normalizedMessages);
 
-    return data || [];
+    return normalizedMessages;
   } catch (err) {
     console.error("❌ Error in fetchMessagesWithCache:", err);
 
-    return await getCachedMessages(conversationId);
+    return (await getCachedMessages(conversationId)).map((message) =>
+      supportTeamMessage(message),
+    );
   }
 };
 

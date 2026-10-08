@@ -288,7 +288,7 @@ const PersonalInformation = () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#2563EB" />
+          <ActivityIndicator size="small" color="#159B3A" />
           <Text style={styles.loadingText}>Loading your information...</Text>
         </View>
       </SafeAreaView>
@@ -307,7 +307,7 @@ const PersonalInformation = () => {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <MaterialIcons name="arrow-back" size={23} color="#0F172A" />
+            <MaterialIcons name="arrow-back" size={23} color="#17365E" />
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.title}>Personal Information</Text>
@@ -360,7 +360,7 @@ const PersonalInformation = () => {
               <MaterialIcons
                 name="keyboard-arrow-down"
                 size={24}
-                color="#64748B"
+                color="#607A98"
               />
             </TouchableOpacity>
             {form.relationship === "other" && (
@@ -483,7 +483,7 @@ const PersonalInformation = () => {
                       {option.label}
                     </Text>
                     {isSelected && (
-                      <MaterialIcons name="check" size={22} color="#2563EB" />
+                      <MaterialIcons name="check" size={22} color="#159B3A" />
                     )}
                   </TouchableOpacity>
                 );
@@ -534,7 +534,7 @@ const Field = ({
       keyboardType={keyboardType}
       placeholder={placeholder}
       style={[styles.input, error && styles.inputError]}
-      placeholderTextColor="#94A3B8"
+      placeholderTextColor="#607A98"
     />
   </View>
 );
@@ -542,7 +542,7 @@ const Field = ({
 export default PersonalInformation;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F8FAFC" },
+  safeArea: { flex: 1, backgroundColor: "#F4F9FF" },
   container: { flex: 1 },
   loadingContainer: {
     flex: 1,
@@ -550,14 +550,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-  loadingText: { color: "#64748B", fontSize: 14 },
+  loadingText: { color: "#607A98", fontSize: 14 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#DCEAF8",
   },
   backButton: {
     width: 40,
@@ -567,11 +567,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerText: { flex: 1 },
-  title: { color: "#0F172A", fontSize: 22, fontWeight: "800" },
-  subtitle: { color: "#64748B", fontSize: 12, marginTop: 3 },
+  title: { color: "#17365E", fontSize: 22, fontWeight: "800" },
+  subtitle: { color: "#607A98", fontSize: 12, marginTop: 3 },
   content: { padding: 20, paddingBottom: 40 },
   sectionTitle: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 17,
     fontWeight: "800",
     marginBottom: 10,
@@ -581,21 +581,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     padding: 14,
     marginBottom: 22,
   },
   field: { marginBottom: 13 },
-  label: { color: "#475569", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  label: { color: "#607A98", fontSize: 12, fontWeight: "700", marginBottom: 6 },
   requiredMarker: { color: "#DC2626" },
   addressInput: { borderRadius: 9 },
   inputError: { borderColor: "#DC2626" },
   input: {
     height: 46,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DCEAF8",
     borderRadius: 9,
-    color: "#0F172A",
+    color: "#17365E",
     paddingHorizontal: 12,
     fontSize: 14,
     backgroundColor: "#FFFFFF",
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   relationshipTrigger: {
     minHeight: 50,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#DCEAF8",
     borderRadius: 9,
     paddingHorizontal: 14,
     flexDirection: "row",
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
   },
-  relationshipValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
+  relationshipValue: { color: "#17365E", fontSize: 14, fontWeight: "600" },
   otherRelationshipField: { marginTop: 14, marginBottom: -2 },
   modalOverlay: {
     flex: 1,
@@ -637,11 +637,11 @@ const styles = StyleSheet.create({
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#DCEAF8",
     marginBottom: 18,
   },
   sheetTitle: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 10,
@@ -654,15 +654,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  relationshipOptionSelected: { backgroundColor: "#EFF6FF" },
-  relationshipOptionText: { color: "#334155", fontSize: 15 },
-  relationshipOptionTextSelected: { color: "#2563EB", fontWeight: "700" },
+  relationshipOptionSelected: { backgroundColor: "#EDF7FF" },
+  relationshipOptionText: { color: "#607A98", fontSize: 15 },
+  relationshipOptionTextSelected: { color: "#159B3A", fontWeight: "700" },
   saveButton: {
     height: 52,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     marginTop: 2,
   },
   saveButtonDisabled: { opacity: 0.65 },

@@ -402,6 +402,8 @@ const Trips = () => {
           title="My Trips"
           subtitle="Track and manage your trips"
           showBackButton={true}
+          style={styles.header}
+          accentColor="#087C2B"
         />
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -421,7 +423,7 @@ const Trips = () => {
                 <Ionicons
                   name="calendar-outline"
                   size={19}
-                  color={tab === "upcoming" ? "#2563EB" : "#64748B"}
+                  color={tab === "upcoming" ? "#159B3A" : "#607A98"}
                 />
 
                 <Text
@@ -445,7 +447,7 @@ const Trips = () => {
                 <Ionicons
                   name="time-outline"
                   size={19}
-                  color={tab === "history" ? "#2563EB" : "#64748B"}
+                  color={tab === "history" ? "#159B3A" : "#607A98"}
                 />
 
                 <Text
@@ -471,7 +473,7 @@ const Trips = () => {
                   <Text style={styles.tripCount}>Loading school trips…</Text>
                 ) : schoolTrips.length === 0 ? (
                   <View style={styles.schoolTripEmpty}>
-                    <MaterialIcons name="school" size={22} color="#2563EB" />
+                    <MaterialIcons name="school" size={22} color="#159B3A" />
                     <Text style={styles.schoolTripEmptyText}>
                       No upcoming school trips for your children.
                     </Text>
@@ -512,7 +514,7 @@ const Trips = () => {
                             <MaterialIcons
                               name="school"
                               size={20}
-                              color="#2563EB"
+                              color="#159B3A"
                             />
                           </View>
                           <View style={styles.schoolTripHeadingText}>
@@ -579,7 +581,7 @@ const Trips = () => {
                           <MaterialIcons
                             name="chevron-right"
                             size={19}
-                            color="#2563EB"
+                            color="#159B3A"
                           />
                         </TouchableOpacity>
                         {tripVehicles.map((assignment) => (
@@ -590,7 +592,7 @@ const Trips = () => {
                             <MaterialIcons
                               name="directions-bus"
                               size={18}
-                              color="#2563EB"
+                              color="#159B3A"
                             />
                             <Text style={styles.schoolTripVehicleText}>
                               {assignment.vehicle?.name || "School vehicle"} ·{" "}
@@ -684,7 +686,7 @@ const Trips = () => {
                           <MaterialIcons
                             name="check-circle"
                             size={16}
-                            color="#16A34A"
+                            color="#159B3A"
                           />
                           <Text style={styles.onTimeText}>On Time</Text>
                         </View>
@@ -769,7 +771,7 @@ const Trips = () => {
                           <Ionicons
                             name="chatbubble-outline"
                             size={18}
-                            color="#2563EB"
+                            color="#159B3A"
                           />
 
                           <Text style={styles.messageButtonText}>Message</Text>
@@ -855,13 +857,13 @@ const Trips = () => {
                           <View
                             style={[
                               styles.trackingIcon,
-                              { backgroundColor: "#ECFDF5" },
+                              { backgroundColor: "#E9F8EE" },
                             ]}
                           >
                             <MaterialIcons
                               name="schedule"
                               size={18}
-                              color="#16A34A"
+                              color="#159B3A"
                             />
                           </View>
 
@@ -881,13 +883,13 @@ const Trips = () => {
                           <View
                             style={[
                               styles.trackingIcon,
-                              { backgroundColor: "#EFF6FF" },
+                              { backgroundColor: "#E9F8EE" },
                             ]}
                           >
                             <MaterialIcons
                               name="straighten"
                               size={18}
-                              color="#2563EB"
+                              color="#159B3A"
                             />
                           </View>
 
@@ -905,13 +907,13 @@ const Trips = () => {
                           <View
                             style={[
                               styles.trackingIcon,
-                              { backgroundColor: "#F0FDF4" },
+                              { backgroundColor: "#E9F8EE" },
                             ]}
                           >
                             <MaterialIcons
                               name="directions"
                               size={18}
-                              color="#16A34A"
+                              color="#159B3A"
                             />
                           </View>
 
@@ -995,7 +997,7 @@ const Trips = () => {
                         <MaterialIcons
                           name="person-outline"
                           size={15}
-                          color="#64748B"
+                          color="#607A98"
                         />
 
                         <Text style={styles.tripListMeta}>
@@ -1007,7 +1009,7 @@ const Trips = () => {
                     <MaterialIcons
                       name="chevron-right"
                       size={25}
-                      color="#94A3B8"
+                      color="#607A98"
                     />
                   </TouchableOpacity>
                 ))
@@ -1027,12 +1029,16 @@ export default Trips;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F9FF",
   },
 
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F4F9FF",
+  },
+  header: {
+    backgroundColor: "#159B3A",
+    borderBottomColor: "#087C2B",
   },
   contentView: {
     paddingHorizontal: 20,
@@ -1046,20 +1052,20 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 15,
     borderWidth: 1,
-    borderColor: "#DBEAFE",
+    borderColor: "#DCEAF8",
     borderRadius: 14,
-    backgroundColor: "#F8FAFF",
+    backgroundColor: "#E9F8EE",
   },
   schoolTripEmptyText: {
     flex: 1,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 12,
   },
   schoolTripCard: {
     marginBottom: 12,
     padding: 15,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     borderRadius: 17,
     backgroundColor: "#FFFFFF",
     shadowColor: "#0F172A",
@@ -1079,19 +1085,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E9F8EE",
   },
   schoolTripHeadingText: {
     flex: 1,
   },
   schoolTripName: {
-    color: "#0F172A",
+    color: "#17365E",
     fontSize: 14,
     fontWeight: "800",
   },
   schoolTripDestination: {
     marginTop: 3,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 11,
   },
   schoolTripStatus: {
@@ -1099,25 +1105,25 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    backgroundColor: "#EFF6FF",
-    color: "#2563EB",
+    backgroundColor: "#E9F8EE",
+    color: "#159B3A",
     fontSize: 9,
     fontWeight: "800",
     textTransform: "capitalize",
   },
   schoolTripStatusLive: {
-    backgroundColor: "#DCFCE7",
-    color: "#15803D",
+    backgroundColor: "#E9F8EE",
+    color: "#087C2B",
   },
   schoolTripFacts: {
     gap: 5,
     marginTop: 12,
     paddingTop: 11,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#DCEAF8",
   },
   schoolTripFact: {
-    color: "#475569",
+    color: "#607A98",
     fontSize: 10,
   },
   schoolTripDetailsButton: {
@@ -1127,10 +1133,10 @@ const styles = StyleSheet.create({
     marginTop: 11,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
+    borderTopColor: "#DCEAF8",
   },
   schoolTripDetailsButtonText: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -1141,11 +1147,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 9,
     borderRadius: 10,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F4F9FF",
   },
   schoolTripVehicleText: {
     flex: 1,
-    color: "#334155",
+    color: "#17365E",
     fontSize: 10,
     lineHeight: 15,
   },
@@ -1172,7 +1178,7 @@ const styles = StyleSheet.create({
   },
   schoolTripLastSeen: {
     marginTop: 6,
-    color: "#64748B",
+    color: "#607A98",
     fontSize: 9,
   },
   schoolTripEmergency: {
@@ -1190,12 +1196,12 @@ const styles = StyleSheet.create({
 
   segmentedControl: {
     flexDirection: "row",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#E9F8EE",
     borderRadius: 16,
     padding: 4,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
   },
 
   segmentButton: {
@@ -1224,11 +1230,11 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#607A98",
   },
 
   segmentTextActive: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontWeight: "700",
   },
 
@@ -1245,19 +1251,19 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: "#17365E",
     letterSpacing: -0.2,
   },
 
   viewMapText: {
-    color: "#2563EB",
+    color: "#159B3A",
     fontSize: 11,
     fontWeight: "700",
   },
 
   tripCount: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
   },
 
@@ -1265,7 +1271,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#E9F8EE",
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 999,
@@ -1275,11 +1281,11 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#159B3A",
   },
 
   liveText: {
-    color: "#16A34A",
+    color: "#087C2B",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -1290,7 +1296,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
 
     padding: 18,
     marginBottom: 24,
@@ -1314,14 +1320,14 @@ const styles = StyleSheet.create({
 
   todayLabel: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
     marginBottom: 3,
   },
 
   tripTime: {
     fontSize: 22,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
     letterSpacing: -0.5,
   },
@@ -1330,14 +1336,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#E9F8EE",
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
 
   onTimeText: {
-    color: "#16A34A",
+    color: "#087C2B",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -1359,9 +1365,9 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#E9F8EE",
     borderWidth: 3,
-    borderColor: "#2563EB",
+    borderColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1370,13 +1376,13 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
 
   timelineLine: {
     width: 2,
     height: 70,
-    backgroundColor: "#BFDBFE",
+    backgroundColor: "#C8EFD3",
     marginVertical: 5,
   },
 
@@ -1384,7 +1390,7 @@ const styles = StyleSheet.create({
     width: 25,
     height: 25,
     borderRadius: 13,
-    backgroundColor: "#16A34A",
+    backgroundColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 1,
@@ -1402,21 +1408,21 @@ const styles = StyleSheet.create({
   locationTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#17365E",
     marginBottom: 2,
   },
 
   locationAddress: {
     fontSize: 11,
     lineHeight: 15,
-    color: "#64748B",
+    color: "#607A98",
   },
 
   /* Driver */
 
   driverSection: {
     borderTopWidth: 1,
-    borderTopColor: "#EDF0F4",
+    borderTopColor: "#DCEAF8",
     paddingTop: 15,
 
     flexDirection: "row",
@@ -1434,7 +1440,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#E9F8EE",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -1443,12 +1449,12 @@ const styles = StyleSheet.create({
   driverAvatarText: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   driverName: {
     fontSize: 13,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "700",
     marginBottom: 2,
   },
@@ -1461,13 +1467,13 @@ const styles = StyleSheet.create({
 
   ratingText: {
     fontSize: 12,
-    color: "#475569",
+    color: "#607A98",
     fontWeight: "700",
   },
 
   ratingLabel: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: "#607A98",
     marginLeft: 2,
   },
 
@@ -1476,7 +1482,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
 
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E9F8EE",
     borderRadius: 12,
 
     paddingHorizontal: 11,
@@ -1485,7 +1491,7 @@ const styles = StyleSheet.create({
 
   messageButtonText: {
     fontSize: 12,
-    color: "#2563EB",
+    color: "#159B3A",
     fontWeight: "700",
   },
 
@@ -1495,7 +1501,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
     overflow: "hidden",
     marginBottom: 24,
 
@@ -1511,7 +1517,7 @@ const styles = StyleSheet.create({
 
   mapPlaceholder: {
     height: 190,
-    backgroundColor: "#EAF3E9",
+    backgroundColor: "#E9F8EE",
     position: "relative",
     overflow: "hidden",
   },
@@ -1560,7 +1566,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 170,
     height: 5,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     borderRadius: 5,
     transform: [{ rotate: "-22deg" }],
     left: 75,
@@ -1576,9 +1582,9 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
 
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#E9F8EE",
     borderWidth: 4,
-    borderColor: "#2563EB",
+    borderColor: "#159B3A",
 
     alignItems: "center",
     justifyContent: "center",
@@ -1588,7 +1594,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
   },
 
   busMarker: {
@@ -1600,7 +1606,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
 
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
 
     alignItems: "center",
     justifyContent: "center",
@@ -1608,7 +1614,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#FFFFFF",
 
-    shadowColor: "#2563EB",
+    shadowColor: "#159B3A",
     shadowOffset: {
       width: 0,
       height: 3,
@@ -1627,7 +1633,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
 
-    backgroundColor: "#16A34A",
+    backgroundColor: "#159B3A",
 
     alignItems: "center",
     justifyContent: "center",
@@ -1661,21 +1667,21 @@ const styles = StyleSheet.create({
 
   trackingLabel: {
     fontSize: 9,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
     marginBottom: 2,
   },
 
   trackingValue: {
     fontSize: 11,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
   },
 
   trackingDivider: {
     width: 1,
     height: 32,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DCEAF8",
   },
 
   /* Trip list */
@@ -1692,7 +1698,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5EAF2",
+    borderColor: "#DCEAF8",
 
     paddingVertical: 13,
     paddingHorizontal: 12,
@@ -1714,28 +1720,28 @@ const styles = StyleSheet.create({
 
   dateMonth: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "700",
     textTransform: "uppercase",
   },
 
   dateNumber: {
     fontSize: 25,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
     lineHeight: 28,
   },
 
   dateLabel: {
     fontSize: 9,
-    color: "#94A3B8",
+    color: "#607A98",
     fontWeight: "600",
   },
 
   listDivider: {
     width: 1,
     height: 50,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#DCEAF8",
     marginHorizontal: 11,
   },
 
@@ -1751,7 +1757,7 @@ const styles = StyleSheet.create({
 
   tripListTime: {
     fontSize: 14,
-    color: "#0F172A",
+    color: "#17365E",
     fontWeight: "800",
     marginRight: 7,
   },
@@ -1763,11 +1769,11 @@ const styles = StyleSheet.create({
   },
 
   scheduledStatus: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E9F8EE",
   },
 
   completedStatus: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#E9F8EE",
   },
 
   smallStatusText: {
@@ -1776,16 +1782,16 @@ const styles = StyleSheet.create({
   },
 
   scheduledText: {
-    color: "#2563EB",
+    color: "#159B3A",
   },
 
   completedText: {
-    color: "#16A34A",
+    color: "#087C2B",
   },
 
   tripListRoute: {
     fontSize: 12,
-    color: "#334155",
+    color: "#17365E",
     fontWeight: "600",
     marginBottom: 5,
   },
@@ -1798,7 +1804,7 @@ const styles = StyleSheet.create({
 
   tripListMeta: {
     fontSize: 11,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "500",
   },
 

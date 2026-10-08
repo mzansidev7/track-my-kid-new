@@ -24,6 +24,7 @@ import {
   MessageAttachment,
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
+import MessageComposer from "../../../components/messages/MessageComposer";
 import { useTheme } from "@/styles/theme";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import {
@@ -40,7 +41,7 @@ import {
   subscribeToMessages,
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/messagesRealtime";
-import { resolveWorkingBaseUrl } from "../../../url";
+import { BASE_URL, resolveWorkingBaseUrl } from "../../../url";
 
 const getInitials = (name = "") =>
   name
@@ -335,9 +336,9 @@ const Messages = () => {
     });
   }, [activeTab, conversations, linkedContacts, searchText]);
 
-  const sendMessage = async () => {
-    if (!draft.trim() || !selectedConversation || sending || !user?.token) {
-      return;
+  const sendMessage = async (content = draft.trim()) => {
+    if (!content || !selectedConversation || sending || !user?.token) {
+      return false;
     }
 
     setSending(true);
@@ -352,7 +353,7 @@ const Messages = () => {
         },
         body: JSON.stringify({
           conversationId: selectedConversation.id,
-          content: draft.trim(),
+          content,
         }),
       });
 
@@ -362,9 +363,12 @@ const Messages = () => {
           selectedConversation.id,
         );
         setMessages(nextMessages);
+        return true;
       }
+      return false;
     } catch (error) {
       console.error("Error sending message:", error);
+      return false;
     } finally {
       setSending(false);
     }
@@ -524,28 +528,17 @@ const Messages = () => {
               },
             ]}
           >
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a message..."
-              placeholderTextColor="#9AA7B8"
-              multiline
-              style={localStyles.input}
+            <MessageComposer
+              apiBaseUrl={BASE_URL}
+              role="driver"
+              conversationId={selectedConversation.id}
+              token={user?.token || ""}
+              accentColor="#0F9D58"
+              onSendText={sendMessage}
+              onSent={async () =>
+                setMessages(await fetchMessagesWithCache(selectedConversation.id))
+              }
             />
-            <TouchableOpacity
-              style={[
-                localStyles.sendButton,
-                !draft.trim() && localStyles.sendButtonDisabled,
-              ]}
-              onPress={sendMessage}
-              disabled={!draft.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <MaterialIcons name="send" size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>

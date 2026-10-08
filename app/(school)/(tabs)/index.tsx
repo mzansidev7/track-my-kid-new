@@ -19,7 +19,7 @@ import {
   useRecentTrips,
   useSchoolDashboard,
 } from "../schoolHelpers/hooks/useSchoolDashboard";
-import { RecentTrip } from "../schoolHelpers/interface/client.interfaces";
+import { RecentTrip } from "@/types/school/client.interfaces";
 import {
   getUserName,
   schoolQuickActions,

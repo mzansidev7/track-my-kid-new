@@ -46,7 +46,7 @@ const deriveChildStatus = (child: Child) => {
   if (!route) {
     return {
       label: "Upcoming",
-      accent: "#8B5CF6",
+      accent: "#607A98",
       note: "Awaiting vehicle assignment",
     };
   }
@@ -54,7 +54,7 @@ const deriveChildStatus = (child: Child) => {
   if (child.status) {
     return {
       label: child.status,
-      accent: child.accent || "#2563EB",
+      accent: child.accent || "#159B3A",
       note:
         child.eta && child.eta !== "None"
           ? `ETA to school: ${child.eta}`
@@ -65,7 +65,7 @@ const deriveChildStatus = (child: Child) => {
   if (pickupTime || dropoffTime) {
     return {
       label: pickupTime ? "On a Trip" : "At School",
-      accent: pickupTime ? "#22C55E" : "#F59E0B",
+      accent: pickupTime ? "#159B3A" : "#087C2B",
       note: pickupTime
         ? `ETA to school: ${formatTime(pickupTime)}`
         : "Checked in safely at school",
@@ -74,7 +74,7 @@ const deriveChildStatus = (child: Child) => {
 
   return {
     label: "Upcoming",
-    accent: "#8B5CF6",
+    accent: "#607A98",
     note: "Awaiting vehicle assignment",
   };
 };
@@ -160,8 +160,8 @@ const ChildrenScreen = () => {
       label: "On a Trip",
       sub: "View live location",
       icon: "directions-bus" as const,
-      color: "#DCFCE7",
-      iconColor: "#16A34A",
+      color: "#E9F8EE",
+      iconColor: "#159B3A",
     },
     {
       count: existingChildren.filter(
@@ -170,16 +170,16 @@ const ChildrenScreen = () => {
       label: "At School",
       sub: "Checked in",
       icon: "school" as const,
-      color: "#FEF3C7",
-      iconColor: "#F59E0B",
+      color: "#EDF7FF",
+      iconColor: "#087C2B",
     },
     {
       count: existingChildren.filter((child) => !child.route).length,
       label: "Upcoming",
       sub: "Later today",
       icon: "schedule" as const,
-      color: "#E9D5FF",
-      iconColor: "#8B5CF6",
+      color: "#EDF7FF",
+      iconColor: "#607A98",
     },
   ];
 
@@ -194,7 +194,7 @@ const ChildrenScreen = () => {
         <View style={styles.summaryCard}>
           <View style={styles.summaryLeft}>
             <View style={styles.summaryIconContainer}>
-              <Ionicons name="people" size={26} color="#2563EB" />
+              <Ionicons name="people" size={26} color="#159B3A" />
             </View>
             <View style={styles.summaryMeta}>
               <Text style={styles.summaryCount}>
@@ -207,7 +207,7 @@ const ChildrenScreen = () => {
             </View>
           </View>
           <TouchableOpacity style={styles.addButton} onPress={openAddChild}>
-            <MaterialIcons name="add" size={22} color="#2563EB" />
+            <MaterialIcons name="add" size={22} color="#159B3A" />
             <Text style={styles.addText}>Add Child</Text>
           </TouchableOpacity>
         </View>
@@ -222,8 +222,8 @@ const ChildrenScreen = () => {
                 styles.overviewCard,
                 {
                   backgroundColor: card.color,
-                  borderColor: `${card.iconColor}`,
-                  shadowColor: "#000",
+                  borderColor: "#DCEAF8",
+                  shadowColor: "#17365E",
                 },
               ]}
             >
@@ -242,7 +242,7 @@ const ChildrenScreen = () => {
               </View>
               <Text style={styles.overviewLabel}>{card.label}</Text>
               <Text style={styles.overviewSub}>{card.sub}</Text>
-              <MaterialIcons name="chevron-right" size={20} color="#4B5563" />
+              <MaterialIcons name="chevron-right" size={20} color="#607A98" />
             </TouchableOpacity>
           ))}
         </View>
@@ -252,7 +252,7 @@ const ChildrenScreen = () => {
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {childrenLoading && existingChildren.length === 0 ? (
             <View style={styles.loadingState}>
-              <ActivityIndicator size="small" color="#2563EB" />
+              <ActivityIndicator size="small" color="#159B3A" />
               <Text style={styles.loadingText}>Loading children...</Text>
             </View>
           ) : existingChildren.length === 0 ? (
@@ -261,7 +261,7 @@ const ChildrenScreen = () => {
                 <MaterialIcons
                   name="people-outline"
                   size={28}
-                  color="#2563EB"
+                  color="#159B3A"
                 />
               </View>
               <Text style={styles.emptyTitle}>No children yet</Text>
@@ -329,7 +329,7 @@ const ChildrenScreen = () => {
                         <Text
                           style={{
                             fontSize: 10,
-                            color: "#475569",
+                            color: "#607A98",
                             fontWeight: "600",
                           }}
                         >
@@ -354,7 +354,7 @@ const ChildrenScreen = () => {
                             : "create-outline"
                         }
                         size={22}
-                        color="#1D4ED8"
+                        color="#159B3A"
                       />
                       <Text style={[styles.trackText]}>
                         {vehicleAssigned ? "Track" : "Update"}
@@ -362,7 +362,7 @@ const ChildrenScreen = () => {
                       <MaterialIcons
                         name="chevron-right"
                         size={20}
-                        color="#64748B"
+                        color="#607A98"
                       />
                     </TouchableOpacity>
                   </View>
@@ -402,7 +402,7 @@ const ChildrenScreen = () => {
                 We&apos;ll notify you if your child is picked up, dropped off or
                 if there are any changes.
               </Text>
-              <MaterialIcons name="chevron-right" size={26} color="#111827" />
+              <MaterialIcons name="chevron-right" size={26} color="#17365E" />
             </View>
           )}
         </ScrollView>
@@ -427,12 +427,12 @@ export default ChildrenScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
   },
 
   container: {
     flex: 1,
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
     paddingHorizontal: 14,
   },
 
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
+    color: "#17365E",
   },
 
   statusIcons: {
@@ -466,17 +466,17 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 30,
+    lineHeight: 36,
     fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.5,
+    color: "#17365E",
+    letterSpacing: -0.8,
   },
 
   subtitle: {
     marginTop: 1,
     fontSize: 12,
-    color: "#64748B",
+    color: "#607A98",
   },
 
   bellButton: {
@@ -484,9 +484,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#DDE7F1",
+    borderColor: "#DCEAF8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -501,12 +501,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#D9EAFD",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#BFD5F2",
+    borderColor: "#DCEAF8",
   },
 
   clientAvatar: {
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   clientAvatarText: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#1E3A8A",
+    color: "#17365E",
   },
 
   badge: {
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#111827",
+    backgroundColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -543,12 +543,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#EAF2FF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 13,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#CFE0FF",
+    borderColor: "#DCEAF8",
     marginBottom: 12,
   },
 
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: "#DDEBFF",
+    backgroundColor: "#E9F8EE",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 8,
@@ -575,12 +575,12 @@ const styles = StyleSheet.create({
   summaryCount: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
   },
 
   summaryInfo: {
     fontSize: 10,
-    color: "#475569",
+    color: "#607A98",
     marginTop: 1,
   },
 
@@ -591,30 +591,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 7,
     borderWidth: 1.2,
-    borderColor: "#2E5BFF",
-    backgroundColor: "#F4F8FF",
+    borderColor: "#159B3A",
+    backgroundColor: "#FFFFFF",
   },
 
   addText: {
     marginLeft: 3,
-    color: "#2563EB",
+    color: "#087C2B",
     fontWeight: "700",
     fontSize: 12,
   },
 
   /* SECTION TITLES */
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#17365E",
     marginTop: 3,
     marginBottom: 7,
   },
 
   sectionTitleLarge: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
     marginTop: 8,
     marginBottom: 7,
   },
@@ -656,20 +656,20 @@ const styles = StyleSheet.create({
   overviewCount: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
     lineHeight: 20,
   },
 
   overviewLabel: {
     fontSize: 11,
-    color: "#111827",
+    color: "#17365E",
     fontWeight: "700",
     marginTop: 1,
   },
 
   overviewSub: {
     fontSize: 9,
-    color: "#475569",
+    color: "#607A98",
     marginTop: 0,
     marginBottom: 1,
   },
@@ -690,16 +690,16 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 13,
-    color: "#475569",
+    color: "#607A98",
     fontWeight: "700",
   },
 
   emptyState: {
     minHeight: 220,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCEAF8",
     padding: 24,
     marginTop: 6,
     alignItems: "center",
@@ -710,7 +710,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: "#EAF2FF",
+    backgroundColor: "#EDF7FF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
   },
 
   emptyText: {
@@ -727,13 +727,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     lineHeight: 18,
-    color: "#475569",
+    color: "#607A98",
     maxWidth: 260,
   },
 
   emptyButton: {
     marginTop: 18,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#159B3A",
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -747,12 +747,12 @@ const styles = StyleSheet.create({
 
   /* CHILD CARD */
   childCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 9,
     marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#DCEAF8",
   },
 
   childHeader: {
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 23,
-    backgroundColor: "#D9EAFD",
+    backgroundColor: "#E9F8EE",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 8,
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1E3A8A",
+    color: "#087C2B",
   },
 
   childInfo: {
@@ -783,12 +783,12 @@ const styles = StyleSheet.create({
   childName: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#111827",
+    color: "#17365E",
   },
 
   childMeta: {
     fontSize: 10,
-    color: "#475569",
+    color: "#607A98",
     marginTop: 2,
   },
 
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
 
   extraMeta: {
     fontSize: 9,
-    color: "#475569",
+    color: "#607A98",
     fontWeight: "600",
   },
 
@@ -823,34 +823,34 @@ const styles = StyleSheet.create({
   trackButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EAF2FF",
+    backgroundColor: "#EDF7FF",
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: "#D0DAF3",
+    borderColor: "#DCEAF8",
   },
 
   trackButtonDisabled: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#E2E8F0",
+    backgroundColor: "#EDF7FF",
+    borderColor: "#DCEAF8",
   },
 
   trackText: {
     marginLeft: 3,
     fontSize: 10,
-    color: "#1D4ED8",
+    color: "#087C2B",
     fontWeight: "700",
   },
 
   trackTextDisabled: {
-    color: "#64748B",
+    color: "#607A98",
   },
 
   /* INLINE STATUS */
   inlineStatusCard: {
     marginTop: 8,
-    backgroundColor: "#EDF6FF",
+    backgroundColor: "#E9F8EE",
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -862,13 +862,13 @@ const styles = StyleSheet.create({
 
   inlineStatusText: {
     fontSize: 10,
-    color: "#111827",
+    color: "#17365E",
     fontWeight: "700",
   },
 
   inlineTimeText: {
     fontSize: 9,
-    color: "#475569",
+    color: "#607A98",
     marginLeft: 1,
   },
 
@@ -876,20 +876,20 @@ const styles = StyleSheet.create({
   safetyBanner: {
     marginTop: 4,
     marginBottom: 12,
-    backgroundColor: "#EAF4FF",
+    backgroundColor: "#EDF7FF",
     borderRadius: 12,
     padding: 9,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#D4E5FF",
+    borderColor: "#DCEAF8",
   },
 
   safetyIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 9,
-    backgroundColor: "#0F5BEF",
+    backgroundColor: "#159B3A",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 8,
@@ -899,7 +899,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 10,
     lineHeight: 14,
-    color: "#111827",
+    color: "#17365E",
     fontWeight: "600",
   },
 
@@ -908,11 +908,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F3F5F7",
+    backgroundColor: "#F4F9FF",
     paddingTop: 7,
     paddingBottom: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#DCEAF8",
   },
 
   navItem: {
@@ -924,12 +924,12 @@ const styles = StyleSheet.create({
   navText: {
     marginTop: 4,
     fontSize: 10,
-    color: "#64748B",
+    color: "#607A98",
     fontWeight: "600",
   },
 
   navTextActive: {
-    color: "#1D4ED8",
+    color: "#087C2B",
     fontWeight: "800",
   },
 });

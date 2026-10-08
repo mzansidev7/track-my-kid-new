@@ -44,7 +44,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: colors.background,
+          backgroundColor: "#17385F",
         },
       ]}
     >
@@ -52,7 +52,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
         style={[
           styles.tabBar,
           {
-            backgroundColor: colors.brands.owner.primaryDark,
+            backgroundColor: "#17385F",
           },
         ]}
       >
@@ -70,18 +70,14 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
                 style={[
                   styles.iconWrapper,
                   focused && {
-                    backgroundColor: colors.brands.owner.surface,
+                    backgroundColor: "white",
                   },
                 ]}
               >
                 <MaterialIcons
                   name={getIcon(route.name) as any}
                   size={focused ? 23 : 22}
-                  color={
-                    focused
-                      ? colors.brands.owner.primary
-                      : colors.brands.owner.surface
-                  }
+                  color={focused ? "#17385F" : "white"}
                 />
               </View>
 
@@ -90,7 +86,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
                   style={[
                     styles.activeIndicator,
                     {
-                      backgroundColor: colors.brands.owner.primary,
+                      backgroundColor: "white",
                     },
                   ]}
                 />

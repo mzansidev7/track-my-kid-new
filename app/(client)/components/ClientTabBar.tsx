@@ -1,20 +1,25 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "../../../styles/theme";
 
 const tabs = [
   {
     key: "home",
-    icon: "dashboard",
+    icon: "home",
     label: "Home",
     route: "/(client)/(tabs)",
   },
   {
     key: "trips",
-    icon: "navigation",
+    icon: "alt-route",
     label: "Trips",
     route: "/(client)/(tabs)/trips",
   },
@@ -43,7 +48,6 @@ export default function ClientTabBar(props: any) {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
 
   const activeSegment = String(segments[segments.length - 1] || "client");
 
@@ -73,7 +77,7 @@ export default function ClientTabBar(props: any) {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: colors.background,
+          backgroundColor: "#FFFFFF",
         },
       ]}
     >
@@ -81,7 +85,7 @@ export default function ClientTabBar(props: any) {
         style={[
           styles.tabBar,
           {
-            backgroundColor: "#061A3A",
+            backgroundColor: "#FFFFFF",
           },
         ]}
       >
@@ -99,29 +103,27 @@ export default function ClientTabBar(props: any) {
                 style={[
                   styles.iconWrapper,
                   isActive && {
-                    backgroundColor: colors.primary + "18",
+                    backgroundColor: "#E9F8EE",
                   },
                 ]}
               >
                 <MaterialIcons
                   name={tab.icon as any}
                   size={isActive ? 23 : 22}
-                  color={
-                    isActive ? colors.primary : colors.secondary || "#8A8A8A"
-                  }
+                  color={isActive ? "#159B3A" : "#496481"}
                 />
               </View>
 
-              {isActive && (
-                <View
-                  style={[
-                    styles.activeIndicator,
-                    {
-                      backgroundColor: colors.primary,
-                    },
-                  ]}
-                />
-              )}
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isActive ? "#159B3A" : "#496481" },
+                  isActive && styles.activeTabLabel,
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {isActive && <View style={styles.activeIndicator} />}
             </TouchableOpacity>
           );
         })}
@@ -133,7 +135,7 @@ export default function ClientTabBar(props: any) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
 
     ...Platform.select({
       ios: {
@@ -142,8 +144,8 @@ const styles = StyleSheet.create({
           width: 0,
           height: 4,
         },
-        shadowOpacity: 0.18,
-        shadowRadius: 12,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
 
       android: {
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
   },
 
   tabBar: {
-    height: 64,
+    height: 66,
 
     flexDirection: "row",
     alignItems: "center",
@@ -161,14 +163,13 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 6,
 
-    borderRadius: 22,
-
-    overflow: "hidden",
+    borderTopWidth: 1,
+    borderTopColor: "#E4EDF6",
   },
 
   tabItem: {
     flex: 1,
-    height: 64,
+    height: 66,
 
     alignItems: "center",
     justifyContent: "center",
@@ -177,23 +178,31 @@ const styles = StyleSheet.create({
   },
 
   iconWrapper: {
-    width: 44,
-    height: 38,
+    width: 42,
+    height: 34,
 
     alignItems: "center",
     justifyContent: "center",
 
-    borderRadius: 13,
+    borderRadius: 12,
+  },
+
+  tabLabel: {
+    fontSize: 9,
+    marginTop: 1,
+  },
+
+  activeTabLabel: {
+    fontWeight: "700",
   },
 
   activeIndicator: {
     position: "absolute",
 
-    bottom: 5,
-
-    width: 20,
-    height: 3,
-
-    borderRadius: 10,
+    bottom: 0,
+    width: 30,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: "#159B3A",
   },
 });
