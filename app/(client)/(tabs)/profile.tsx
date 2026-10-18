@@ -19,8 +19,8 @@ import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useChildren } from "../clientHelpers/hooks/useChildren";
-import { useClientProfile } from "../clientHelpers/hooks/useClientProfile";
+import { useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
+import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
 import ClientHeader from "../components/ClientHeader";
 
 const ClientProfile = () => {

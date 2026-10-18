@@ -13,13 +13,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import MapView, { Marker, Region } from "react-native-maps";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
-import { useNotifications } from "../ownerHelpers/hooks/useNotifications";
-import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
-import { useOwnerVehicles } from "../ownerHelpers/hooks/useOwnerVehicles";
-import { useActiveRoutes, useRoutes } from "../ownerHelpers/hooks/useRoutes";
-import { getRouteStatus } from "../ownerHelpers/actionHelpers/actions";
-import { ForceProfileUpdate } from "../ownerHelpers/components/Modals";
+import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
+import { useNotifications } from "@/app-support/owner/ownerHelpers/hooks/useNotifications";
+import { useOwnerProfile } from "@/app-support/owner/ownerHelpers/hooks/useOwnerProfile";
+import { useOwnerVehicles } from "@/app-support/owner/ownerHelpers/hooks/useOwnerVehicles";
+import { useActiveRoutes, useRoutes } from "@/app-support/owner/ownerHelpers/hooks/useRoutes";
+import { getRouteStatus } from "@/app-support/owner/ownerHelpers/actionHelpers/actions";
+import { ForceProfileUpdate } from "@/app-support/owner/ownerHelpers/components/Modals";
 import {
   subscribeToPaymentUpdates,
   unsubscribeFromRealtime,

@@ -1,5 +1,4 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import AntDesign from "@expo/vector-icons/AntDesign";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
@@ -198,7 +197,8 @@ export default function Login({
             style={[
               loginStyles.card,
               {
-                backgroundColor: colors.background,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
                 shadowColor: shadows.md.shadowColor,
               },
             ]}
@@ -207,7 +207,7 @@ export default function Login({
               label="Email address"
               value={email}
               onChangeText={setEmail}
-              leftIcon={<MaterialIcons name="email" size={20} color="#999" />}
+              leftIcon={<MaterialIcons name="email" size={18} color="#64809C" />}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -216,15 +216,17 @@ export default function Login({
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
-              leftIcon={<MaterialIcons name="lock" size={20} color="#999" />}
+              autoCapitalize="none"
+              autoCorrect={false}
+              leftIcon={<MaterialIcons name="lock" size={18} color="#64809C" />}
               rightIcon={
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                 >
                   <MaterialIcons
                     name={showPassword ? "visibility" : "visibility-off"}
-                    size={20}
-                    color="#999"
+                    size={18}
+                    color="#64809C"
                   />
                 </TouchableOpacity>
               }
@@ -244,7 +246,7 @@ export default function Login({
               style={loginStyles.primaryButton}
             >
               <LinearGradient
-                colors={["#4E54FF", "#3247FF"]}
+                colors={["#173F70", "#1683F8"]}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={loginStyles.primaryButtonGradient}
@@ -257,41 +259,6 @@ export default function Login({
               </LinearGradient>
             </TouchableOpacity>
 
-            <View style={loginStyles.dividerRow}>
-              <View style={loginStyles.dividerLine} />
-              <Text
-                style={[
-                  loginStyles.dividerText,
-                  { color: colors.text.secondary },
-                ]}
-              >
-                or continue with
-              </Text>
-              <View style={loginStyles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={loginStyles.socialButton}
-              activeOpacity={0.85}
-            >
-              <View style={loginStyles.socialInner}>
-                <AntDesign name="google" size={20} color="#111" />
-                <Text style={loginStyles.socialBtnText}>
-                  Continue with Google
-                </Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={loginStyles.socialButton}
-              activeOpacity={0.85}
-            >
-              <View style={loginStyles.socialInner}>
-                <AntDesign name="apple" size={20} color="#111" />
-                <Text style={loginStyles.socialBtnText}>
-                  Continue with Apple
-                </Text>
-              </View>
-            </TouchableOpacity>
           </View>
 
           <View style={loginStyles.bottomRow}>
@@ -376,166 +343,115 @@ export default function Login({
 const loginStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: "#F5FAFF",
   },
   keyboardAvoiding: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
     alignItems: "center",
   },
   topSection: {
     width: "100%",
     alignItems: "center",
-    marginBottom: 16,
-  },
-  logo: {
-    width: 250,
-    height: 250,
-    resizeMode: "contain",
     marginBottom: 12,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#102A43",
-    textAlign: "center",
+  logo: {
+    width: 104,
+    height: 104,
+    resizeMode: "contain",
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: "#64748B",
+    fontSize: 11,
+    color: "#64809C",
     textAlign: "center",
-    marginTop: 8,
-    lineHeight: 22,
-    maxWidth: 320,
+    marginTop: 2,
+    lineHeight: 16,
+    maxWidth: 300,
   },
   card: {
     width: "100%",
-    borderRadius: 28,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    maxWidth: 460,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#D8EAF9",
+    shadowColor: "#174574",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   forgotRow: {
     alignSelf: "flex-end",
-    marginTop: -10,
-    marginBottom: 18,
+    marginTop: -4,
+    marginBottom: 12,
   },
   forgotText: {
-    color: "#2563EB",
-    fontWeight: "600",
-    fontSize: 13,
+    color: "#1769D2",
+    fontWeight: "700",
+    fontSize: 10,
   },
   primaryButton: {
     width: "100%",
-    borderRadius: 22,
+    borderRadius: 12,
     overflow: "hidden",
-    marginTop: 6,
+    marginTop: 2,
   },
   primaryButtonGradient: {
-    paddingVertical: 16,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
   },
   primaryButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E2E8F0",
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    color: "#64748B",
-    fontSize: 12,
-  },
-  socialButton: {
-    width: "100%",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    marginBottom: 12,
-  },
-  socialInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  socialIcon: {
-    marginRight: 10,
-  },
-  socialBtnText: {
-    color: "#111827",
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "800",
   },
   bottomRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 18,
-    marginBottom: 20,
+    marginTop: 14,
+    marginBottom: 12,
   },
   bottomText: {
-    color: "#64748B",
-    fontSize: 13,
+    color: "#64809C",
+    fontSize: 10,
   },
   linkText: {
-    color: "#2563EB",
-    fontSize: 13,
+    color: "#1769D2",
+    fontSize: 10,
     fontWeight: "700",
-  },
-  heroImage: {
-    width: "100%",
-    maxWidth: 520,
-    height: 240,
-    marginTop: 10,
-    borderRadius: 24,
   },
   headerRow: {
     width: "100%",
-    height: 50,
+    minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
-    marginBottom: 16,
+    marginBottom: 4,
   },
-
   backButton: {
     position: "absolute",
     left: 0,
-
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     borderWidth: 1,
-
     justifyContent: "center",
     alignItems: "center",
   },
-
   roleTitle: {
-    fontSize: 28,
+    fontSize: 19,
     fontWeight: "800",
     textAlign: "center",
+    color: "#174574",
   },
 });
 
@@ -546,52 +462,53 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 18,
     maxHeight: "70%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#174574",
   },
   modalSubtitle: {
-    color: "#6B7280",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
+    color: "#64809C",
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 14,
   },
   modalForm: {
-    gap: 16,
+    gap: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: "#D8E4EF",
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    padding: 14,
+    fontSize: 14,
     color: "#111827",
   },
   resetButton: {
-    backgroundColor: "#0A84FF",
+    backgroundColor: "#173F70",
     borderRadius: 12,
-    paddingVertical: 16,
+    minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
   },
   resetButtonDisabled: {
     backgroundColor: "#9CA3AF",
   },
   resetButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
   },
 });

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Props = {
   title: string;
@@ -158,8 +159,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     position: "relative",
-    backgroundColor: "#0F9D58",
-    marginBottom: 20,
+    backgroundColor: DRIVER_COLORS.primaryDark,
+    marginBottom: 14,
   },
 
   leftSection: {
@@ -195,11 +196,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.18)",
+    borderColor: "rgba(255,255,255,0.2)",
   },
 
   rightSection: {
@@ -214,11 +215,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.18)",
+    borderColor: "rgba(255,255,255,0.2)",
     position: "relative",
   },
 
@@ -234,7 +235,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#0F9D58",
+    borderColor: DRIVER_COLORS.primaryDark,
   },
 
   notificationText: {

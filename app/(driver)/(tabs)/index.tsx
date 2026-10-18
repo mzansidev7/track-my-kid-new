@@ -1,10 +1,13 @@
 import React from "react";
 import {
+  Alert,
   ActivityIndicator,
   Animated,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 
@@ -14,11 +17,13 @@ import DriverQuickActions from "../components/DriverQuickActions";
 import DriverRouteCard from "../components/DriverRouteCard";
 import DriverStudentsCard from "../components/DriverStudentsCard";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useDriverNotifications } from "@/app/(driver)/driverHelpers/hooks/useDriverNotifications";
-import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
-import useDriverRoutes from "@/app/(driver)/driverHelpers/hooks/useDriverRoutes";
-import { useDriverTracking } from "../driverHelpers/hooks/useDriverTracking";
-import { useTheme } from "@/styles/theme";
+import { useDriverNotifications } from "@/app-support/driver/driverHelpers/hooks/useDriverNotifications";
+import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
+import useDriverRoutesQuery, {
+  deriveDriverStudentStatus,
+} from "@/app-support/driver/driverHelpers/hooks/useDriverRoutes";
+import { useDriverTracking } from "@/app-support/driver/driverHelpers/hooks/useDriverTracking";
+import { DRIVER_COLORS, useTheme } from "@/styles/theme";
 
 const timeToMinutes = (value?: string | null) => {
   if (!value) return null;
@@ -31,16 +36,22 @@ type DashboardStudent = {
   id: string;
   name: string;
   school: string;
+  routeName: string;
   status: "picked_up" | "waiting" | "dropped_off";
 };
 
 const DriverHome = () => {
   const { colors } = useTheme();
 
-  const { driver, loading, error } = useDriverProfile();
-  const { routes, routesLoading, routesError } = useDriverRoutes();
+  const { driver, loading, error, refreshDriver } = useDriverProfile();
+  const {
+    routes,
+    routesLoading,
+    routesError,
+    refreshRoutes,
+  } = useDriverRoutesQuery();
   const router = useRouter();
-  const { notifications } = useDriverNotifications();
+  const { unreadCount } = useDriverNotifications();
   const [currentTime, setCurrentTime] = React.useState(() => Date.now());
   const blinkAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -91,7 +102,6 @@ const DriverHome = () => {
     online,
     busy: trackingBusy,
     error: trackingError,
-    goOnline,
     sendEmergencyAlert,
   } = useDriverTracking(route?.id, routeType);
 
@@ -122,36 +132,57 @@ const DriverHome = () => {
       blinkAnim.setValue(0);
     }
   }, [shouldBlink, blinkAnim]);
-  const students: DashboardStudent[] = (route?.route_children || []).map(
-    (routeChild: any) => {
-      const child = routeChild.children || routeChild.child || {};
-      const stop = (route?.route_stops || []).find(
-        (routeStop: any) => routeStop.child_id === routeChild.child_id,
+  const studentRoutes = route
+    ? [route, ...routes.filter((assignedRoute) => assignedRoute.id !== route.id)]
+    : routes;
+  const studentsById = new Map<string, DashboardStudent>();
+  for (const assignedRoute of studentRoutes) {
+    for (const routeChild of assignedRoute.route_children || []) {
+      const child = routeChild.children || {};
+      const childId = routeChild.child_id || child.id;
+      if (!childId) continue;
+      const childStops = (assignedRoute.route_stops || []).filter(
+        (routeStop: any) => routeStop.child_id === childId,
       );
-      const isDropoff = stop?.stop_type === "dropoff";
+      const childStatus = deriveDriverStudentStatus(childStops);
+      const school = Array.isArray(child.schools)
+        ? child.schools[0]
+        : child.schools;
 
-      return {
-        id: String(routeChild.child_id || child.id),
+      const existingStudent = studentsById.get(String(childId));
+      if (existingStudent) {
+        const routeNames = new Set([
+          ...existingStudent.routeName.split(", "),
+          assignedRoute.route_name || "Assigned route",
+        ]);
+        studentsById.set(String(childId), {
+          ...existingStudent,
+          routeName: [...routeNames].join(", "),
+        });
+        continue;
+      }
+
+      studentsById.set(String(childId), {
+        id: String(childId),
         name: [child.name, child.lastname].filter(Boolean).join(" ") || "Child",
-        school:
-          child.school_name || child.schools?.name || "School not specified",
+        school: child.school_name || school?.name || "School not specified",
+        routeName: assignedRoute.route_name || "Assigned route",
         status:
-          stop?.status === "completed"
-            ? isDropoff
-              ? "dropped_off"
-              : "picked_up"
-            : "waiting",
-      };
-    },
-  );
+          childStatus.status === "DROPPED OFF"
+            ? "dropped_off"
+            : childStatus.onboard
+              ? "picked_up"
+              : "waiting",
+      });
+    }
+  }
+  const students = [...studentsById.values()];
 
   const handleSubtitle = () => {
-    // Check if there are students waiting for pickup
     if (students.some((student) => student.status === "waiting")) {
       return "You have students waiting for pickup.";
     }
 
-    // Check if all students have been dropped off
     if (
       students.length > 0 &&
       students.every((student) => student.status === "dropped_off")
@@ -159,12 +190,10 @@ const DriverHome = () => {
       return "All students have been dropped off.";
     }
 
-    // Check if currently on a trip
     if (students.some((student) => student.status === "picked_up")) {
       return "You are currently on a trip.";
     }
 
-    // Default message
     return "Ready for today's trips?";
   };
 
@@ -174,40 +203,75 @@ const DriverHome = () => {
       return;
     }
 
+    if (!route) {
+      router.push("/(driver)/(tabs)/trips");
+      return;
+    }
+
     if (!canStartTrip) {
       router.push("/(driver)/(tabs)/trips");
       return;
     }
 
-    goOnline();
+    router.push({
+      pathname: "/(driver)/pre-trip",
+      params: { routeId: route.id, routeType },
+    } as never);
   };
 
   const handleEmergencyPress = async () => {
     try {
-      await sendEmergencyAlert(
+      const result = await sendEmergencyAlert(
         "Driver activated emergency assistance from the mobile app.",
       );
-      router.push("/(driver)/(tabs)/messages");
+      const warnings = Array.isArray(result.delivery_warnings)
+        ? result.delivery_warnings
+        : [];
+      Alert.alert(
+        result.support_notification_sent
+          ? "SOS sent to support"
+          : "SOS recorded",
+        warnings.length
+          ? `The emergency was recorded. Delivery needs attention: ${warnings.join(", ")}`
+          : "The support team has been notified.",
+      );
     } catch (alertError) {
       console.error("Unable to send emergency alert", alertError);
+      Alert.alert(
+        "SOS could not be sent",
+        "The emergency alert could not be submitted. Please call your emergency contact or local emergency services.",
+      );
     }
   };
 
   if (error || routesError) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
       >
-        <Text style={{ color: colors.primary }}>
-          Error loading driver data. Please try again later.
-        </Text>
+        <View style={styles.loadingContent}>
+          <Text style={{ color: colors.error, textAlign: "center" }}>
+            {error || routesError}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              void refreshDriver();
+              void refreshRoutes(true);
+            }}
+            style={{ padding: 14 }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "700" }}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
   if (loading || routesLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: colors.background }]}
+        style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
       >
         <ScrollView
           contentContainerStyle={styles.loadingContent}
@@ -235,7 +299,7 @@ const DriverHome = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
     >
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -247,9 +311,7 @@ const DriverHome = () => {
             router.push("/(driver)/pages/notifications")
           }
           notificationCount={
-            (notifications &&
-              notifications.filter((n: any) => !n.is_read).length) ||
-            0
+            unreadCount
           }
           onProfilePress={() => router.push("/(driver)/(tabs)/profile")}
           subtitle={handleSubtitle()}
@@ -257,8 +319,10 @@ const DriverHome = () => {
 
         <DriverStatusCard
           isOnline={online}
-          vehicleName={driver?.vehicle?.name}
-          licensePlate={driver?.vehicle?.license_plate}
+          vehicleName={route?.vehicle?.name || driver?.vehicle?.name}
+          licensePlate={
+            route?.vehicle?.license_plate || driver?.vehicle?.license_plate
+          }
         />
 
         <DriverQuickActions
@@ -293,21 +357,49 @@ const DriverHome = () => {
           ]}
         />
 
-        <DriverRouteCard
-          routeName={route?.route_name || "No route assigned"}
-          startLocation={route?.start_location || "Route start not set"}
-          endLocation={route?.end_location || "Route end not set"}
-          students={students.length}
-          time={
-            route
-              ? `${route.pickup_start_time || "--:--"} - ${route.pickup_end_time || "--:--"} | ${route.dropoff_start_time || "--:--"} - ${route.dropoff_end_time || "--:--"}`
-              : undefined
-          }
-          onPress={() => router.push("/(driver)/(tabs)/trips")}
-        />
+        <View style={styles.routesHeading}>
+          <View>
+            <Text style={styles.routesTitle}>Your routes</Text>
+            <Text style={styles.routesSubtitle}>
+              {routes.length} assigned route{routes.length === 1 ? "" : "s"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/(driver)/(tabs)/trips")}
+          >
+            <Text style={styles.routesAction}>View all</Text>
+          </TouchableOpacity>
+        </View>
+        {routes.length ? (
+          routes.map((assignedRoute) => (
+            <DriverRouteCard
+              key={assignedRoute.id}
+              routeName={assignedRoute.route_name || "Assigned route"}
+              startLocation={assignedRoute.start_location || "Route start not set"}
+              endLocation={assignedRoute.end_location || "Route end not set"}
+              students={assignedRoute.route_children?.length || 0}
+              time={`${assignedRoute.pickup_start_time || "--:--"} - ${assignedRoute.pickup_end_time || "--:--"} | ${assignedRoute.dropoff_start_time || "--:--"} - ${assignedRoute.dropoff_end_time || "--:--"}`}
+              onPress={() =>
+                router.push({
+                  pathname: "/(driver)/(tabs)/trips",
+                  params: { routeId: assignedRoute.id },
+                })
+              }
+            />
+          ))
+        ) : (
+          <DriverRouteCard
+            routeName="No route assigned"
+            startLocation="Route start not set"
+            endLocation="Route end not set"
+            students={0}
+            onPress={() => router.push("/(driver)/(tabs)/trips")}
+          />
+        )}
 
         <DriverStudentsCard
-          students={students.slice(0, 3)}
+          students={students}
+          totalStudents={students.length}
           onViewAll={() => router.push("/(driver)/(tabs)/students")}
         />
         {trackingError ? (
@@ -329,13 +421,13 @@ const DriverHome = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: DRIVER_COLORS.background,
   },
 
   content: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 30,
+    paddingBottom: 112,
   },
 
   trackingError: {
@@ -348,6 +440,32 @@ const styles = StyleSheet.create({
     color: "#065F46",
     paddingHorizontal: 4,
     marginBottom: 12,
+  },
+
+  routesHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+
+  routesTitle: {
+    color: DRIVER_COLORS.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  routesSubtitle: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  routesAction: {
+    color: DRIVER_COLORS.primary,
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   loadingContent: {

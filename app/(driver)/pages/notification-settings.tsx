@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -11,111 +11,27 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/styles/theme";
-import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
+import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
-import { useContext } from "react";
 import { resolveWorkingBaseUrl } from "@/url";
 
 const defaultNotificationSettings = {
   notifications: {
-    push: true,
-    sound: true,
-    vibration: true,
-    newMessages: true,
-    routeUpdates: true,
+    inAppNotifications: true,
     emergencyAlerts: true,
-    childDropoffAlerts: true,
-    childBoardingAlerts: true,
-    maintenanceReminders: true,
   },
-  safety: {
-    speedAlerts: true,
-    fatigueReminders: true,
-    seatbeltReminder: true,
-    emergencyContactsEnabled: true,
-  },
-  offline: {
-    cacheRoutes: true,
-    offlineMaps: false,
-  },
-  privacy: {
-    showPhoneNumber: false,
-    showProfilePhoto: true,
-    shareLiveLocation: true,
-  },
-  vehicle: {
-    fuelReminders: true,
-    serviceReminders: true,
-    showFuelEstimate: true,
-    tyreCheckReminders: true,
-  },
-  weather: {
-    weatherAlerts: true,
-    showWeatherOnDashboard: true,
-  },
-  security: {
-    biometricLogin: false,
-    requirePinForLogout: false,
-  },
-  tracking: {
-    highAccuracy: true,
-    autoStartLocation: true,
-    backgroundTracking: true,
-  },
-  dashboard: {
-    showWeather: true,
-    showVehicleCard: true,
-    showTodaysRoutes: true,
-    showAssignedChildren: true,
-  },
-  appearance: {
-    theme: "system",
-    language: "en",
-    largeText: false,
-  },
-  navigation: {
-    mapType: "standard",
-    avoidTolls: false,
-    trafficLayer: true,
-    avoidHighways: false,
-    voiceGuidance: true,
-    autoRecalculateRoute: true,
-  },
-  availability: {
-    status: "online",
-    acceptRoutes: true,
-    autoOfflineAfterRoute: false,
-  },
-};
-
-const deepMerge = (base: any, incoming: any): any => {
-  if (!incoming || typeof incoming !== "object") return base;
-  if (!base || typeof base !== "object") return incoming;
-
-  const merged = Array.isArray(base) ? [...base] : { ...base };
-
-  Object.keys(incoming).forEach((key) => {
-    if (
-      incoming[key] &&
-      typeof incoming[key] === "object" &&
-      !Array.isArray(incoming[key]) &&
-      merged[key] &&
-      typeof merged[key] === "object" &&
-      !Array.isArray(merged[key])
-    ) {
-      merged[key] = deepMerge(merged[key], incoming[key]);
-    } else {
-      merged[key] = incoming[key];
-    }
-  });
-
-  return merged;
 };
 
 const normalizeSettings = (value: any) => {
-  const fallback = deepMerge(defaultNotificationSettings, {});
-  return deepMerge(fallback, value || {});
+  const savedNotifications = value?.notifications || {};
+  return {
+    notifications: {
+      inAppNotifications:
+        savedNotifications.inAppNotifications !== false,
+      emergencyAlerts: savedNotifications.emergencyAlerts !== false,
+    },
+  };
 };
 
 const getSectionTitle = (key: string) =>
@@ -131,11 +47,18 @@ const NotificationSettingsPage = () => {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (driver?.notification_settings) {
-      setSettings(normalizeSettings(driver.notification_settings));
-    } else if (driver?.notificationSettings) {
-      setSettings(normalizeSettings(driver.notificationSettings));
+    if (!driver) {
+      return;
     }
+
+    const nextSettings = driver?.notification_settings
+      ? normalizeSettings(driver.notification_settings)
+      : driver?.notificationSettings
+        ? normalizeSettings(driver.notificationSettings)
+        : defaultNotificationSettings;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSettings(nextSettings);
   }, [driver]);
 
   const sections = useMemo(
@@ -258,6 +181,10 @@ const NotificationSettingsPage = () => {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={[styles.message, { color: colors.text.secondary }]}>
+          These settings control alerts shown in the driver app. Route tracking
+          and safety-critical actions are not disabled by these preferences.
+        </Text>
         {sections.map(([category, values]) => {
           const entries = Object.entries(values as Record<string, unknown>);
           const booleanEntries = entries.filter(

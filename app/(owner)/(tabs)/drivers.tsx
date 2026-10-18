@@ -15,14 +15,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "../../../styles/theme";
-import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
-import { driversPageStyles as baseDriversPageStyles } from "../ownerHelpers/styles/ownerStyles";
+import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
+import { driversPageStyles as baseDriversPageStyles } from "@/app-support/owner/ownerHelpers/styles/ownerStyles";
 import {
   formatLicense,
   getInitials,
-} from "../ownerHelpers/actionHelpers/actions";
-import Loading from "../ownerHelpers/components/Loading";
-import Error from "../ownerHelpers/components/Error";
+} from "@/app-support/owner/ownerHelpers/actionHelpers/actions";
+import Loading from "@/app-support/owner/ownerHelpers/components/Loading";
+import Error from "@/app-support/owner/ownerHelpers/components/Error";
 
 const getDriverStatus = (driver: any) => {
   const vehicleCount =

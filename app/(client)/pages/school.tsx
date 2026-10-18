@@ -12,7 +12,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Child, useChildren } from "../clientHelpers/hooks/useChildren";
+import { Child, useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
 
 const minutes = (value?: string) => {
   if (!value) return null;

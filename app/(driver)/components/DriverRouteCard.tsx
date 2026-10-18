@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Props = {
   routeName: string;
@@ -20,55 +20,74 @@ const DriverRouteCard = ({
   time,
   onPress,
 }: Props) => {
-  const { colors } = useTheme();
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: DRIVER_COLORS.card,
+          borderColor: DRIVER_COLORS.cardBorder,
+        },
       ]}
     >
       <View style={styles.header}>
         <View>
-          <Text style={[styles.label, { color: colors.primary }]}>
+          <Text style={[styles.label, { color: DRIVER_COLORS.primary }]}>
             Today&apos;s Route
           </Text>
-          <Text style={[styles.routeName, { color: colors.primary }]}>
+          <Text style={[styles.routeName, { color: DRIVER_COLORS.text }]}>
             {routeName}
           </Text>
         </View>
 
         <View
-          style={[styles.routeIcon, { backgroundColor: colors.background }]}
+          style={[styles.routeIcon, { backgroundColor: "#EAF2ED" }]}
         >
-          <MaterialIcons name="alt-route" size={23} color={colors.primary} />
+          <MaterialIcons
+            name="alt-route"
+            size={23}
+            color={DRIVER_COLORS.primary}
+          />
         </View>
       </View>
 
       <View style={styles.route}>
         <View style={styles.timeline}>
           <View
-            style={[styles.startDot, { backgroundColor: colors.primary }]}
+            style={[
+              styles.startDot,
+              { backgroundColor: DRIVER_COLORS.success },
+            ]}
           />
-          <View style={[styles.line, { backgroundColor: colors.border }]} />
-          <View style={[styles.endDot, { backgroundColor: colors.primary }]} />
+          <View
+            style={[
+              styles.line,
+              { backgroundColor: DRIVER_COLORS.cardBorder },
+            ]}
+          />
+          <View
+            style={[
+              styles.endDot,
+              { backgroundColor: DRIVER_COLORS.warning },
+            ]}
+          />
         </View>
 
         <View style={styles.locations}>
           <View style={styles.location}>
-            <Text style={[styles.locationLabel, { color: colors.primary }]}>
+            <Text style={[styles.locationLabel, { color: DRIVER_COLORS.muted }]}>
               START
             </Text>
-            <Text style={[styles.locationText, { color: colors.primary }]}>
+            <Text style={[styles.locationText, { color: DRIVER_COLORS.text }]}>
               {startLocation}
             </Text>
           </View>
 
           <View style={styles.location}>
-            <Text style={[styles.locationLabel, { color: colors.primary }]}>
+            <Text style={[styles.locationLabel, { color: DRIVER_COLORS.muted }]}>
               DESTINATION
             </Text>
-            <Text style={[styles.locationText, { color: colors.primary }]}>
+            <Text style={[styles.locationText, { color: DRIVER_COLORS.text }]}>
               {endLocation}
             </Text>
           </View>
@@ -77,32 +96,44 @@ const DriverRouteCard = ({
 
       <View style={styles.infoRow}>
         <View style={styles.info}>
-          <MaterialIcons name="schedule" size={17} color={colors.primary} />
+          <MaterialIcons
+            name="schedule"
+            size={17}
+            color={DRIVER_COLORS.primary}
+          />
 
-          <Text style={[styles.infoText, { color: colors.primary }]}>
+          <Text style={[styles.infoText, { color: DRIVER_COLORS.muted }]}>
             {time || "Not scheduled"}
           </Text>
         </View>
 
         <View style={styles.info}>
-          <MaterialIcons name="groups" size={17} color={colors.primary} />
+          <MaterialIcons
+            name="groups"
+            size={17}
+            color={DRIVER_COLORS.primary}
+          />
 
-          <Text style={[styles.infoText, { color: colors.primary }]}>
+          <Text style={[styles.infoText, { color: DRIVER_COLORS.muted }]}>
             {students} students
           </Text>
         </View>
       </View>
 
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.primary }]}
+        style={[styles.button, { backgroundColor: DRIVER_COLORS.primary }]}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Text style={[styles.buttonText, { color: colors.surface }]}>
+        <Text style={[styles.buttonText, { color: DRIVER_COLORS.white }]}>
           View Route
         </Text>
 
-        <MaterialIcons name="arrow-forward" size={19} color={colors.surface} />
+        <MaterialIcons
+          name="arrow-forward"
+          size={19}
+          color={DRIVER_COLORS.white}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -110,11 +141,11 @@ const DriverRouteCard = ({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 22,
+    padding: 20,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.16)",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
 
   header: {
@@ -129,8 +160,8 @@ const styles = StyleSheet.create({
   },
 
   routeName: {
-    color: "#0F172A",
-    fontSize: 19,
+    color: DRIVER_COLORS.text,
+    fontSize: 20,
     fontWeight: "700",
     marginTop: 4,
   },
@@ -139,7 +170,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
-    backgroundColor: "#0F9D58",
+    backgroundColor: "#EAF2ED",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -164,7 +195,7 @@ const styles = StyleSheet.create({
   line: {
     width: 2,
     height: 45,
-    backgroundColor: "#BBF7D0",
+    backgroundColor: DRIVER_COLORS.cardBorder,
   },
 
   endDot: {
@@ -185,14 +216,14 @@ const styles = StyleSheet.create({
   },
 
   locationLabel: {
-    color: "#64748B",
+    color: DRIVER_COLORS.muted,
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 1,
   },
 
   locationText: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.text,
     fontSize: 14,
     fontWeight: "600",
     marginTop: 3,
@@ -210,13 +241,13 @@ const styles = StyleSheet.create({
   },
 
   infoText: {
-    color: "#334155",
+    color: DRIVER_COLORS.muted,
     fontSize: 12,
     marginLeft: 6,
   },
 
   button: {
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     height: 46,
     borderRadius: 13,
     marginTop: 18,

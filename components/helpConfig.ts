@@ -162,12 +162,11 @@ export const helpTopicsBySection: Record<SupportAppSection, HelpTopicItem[]> = {
   ],
 };
 
-/** Placeholder dial URLs; replace with production numbers. */
 export const supportTelBySection: Record<SupportAppSection, string> = {
-  fleet_owner: "tel:1-800-FLEET",
-  parent: "tel:1-800-PARENT",
-  driver: "tel:1-800-DRIVER",
-  school: "tel:1-800-SCHOOL",
+  fleet_owner: "tel:+27600123456",
+  parent: "tel:+27600123457",
+  driver: "tel:+27600123458",
+  school: "tel:+27600123459",
 };
 
 export const helpSubtitleBySection: Record<SupportAppSection, string> = {

@@ -39,6 +39,9 @@ export function HelpSupportContent({
   const border = brandColors.border || colors.border;
   const divider = brandColors.divider || colors.divider;
 
+  const supportEmail = "support@trackmykid.co.za";
+  const supportChatUrl = "https://trackmykid.co.za/support";
+
   const contactMethods = useMemo(
     () => [
       {
@@ -46,31 +49,41 @@ export function HelpSupportContent({
         description: "Speak directly with our support team",
         icon: "📞",
         action: () =>
-          onSupportAction ? onSupportAction("call") : Linking.openURL(supportTelUrl),
+          onSupportAction
+            ? onSupportAction("call")
+            : Linking.openURL(supportTelUrl),
       },
       {
         title: "Email Support",
         description: "Send us an email for detailed assistance",
         icon: "📧",
         action: () =>
-          onSupportAction ? onSupportAction("email") : Linking.openURL("mailto:support@trackmykid.com"),
+          onSupportAction
+            ? onSupportAction("email")
+            : Linking.openURL(`mailto:${supportEmail}`),
       },
       {
         title: "Live Chat",
         description: "Chat with support agents online",
         icon: "💬",
         action: () =>
-          onSupportAction ? onSupportAction("chat") : Linking.openURL("https://trackmykid.com/chat"),
+          onSupportAction
+            ? onSupportAction("chat")
+            : Linking.openURL(supportChatUrl),
       },
       {
         title: "Lodge a Ticket",
         description: "Help us improve our app",
         icon: "📝",
         action: () =>
-          onSupportAction ? onSupportAction("ticket") : Linking.openURL("mailto:support@trackmykid.com?subject=Lodge%20a%20Ticket"),
+          onSupportAction
+            ? onSupportAction("ticket")
+            : Linking.openURL(
+                `mailto:${supportEmail}?subject=Lodge%20a%20Ticket`,
+              ),
       },
     ],
-    [onSupportAction, supportTelUrl],
+    [onSupportAction, supportChatUrl, supportEmail, supportTelUrl],
   );
 
   const handleTopic = (action: string) => {
@@ -104,12 +117,33 @@ export function HelpSupportContent({
               ]}
               onPress={() => handleTopic(topic.action)}
             >
-              <Text style={styles.topicIcon}>{topic.icon}</Text>
-              <Text style={[styles.topicTitle, { color: colors.text.primary }]}>
-                {topic.title}
-              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 8,
+                  gap: 8,
+                }}
+              >
+                <Text style={styles.topicIcon}>{topic.icon}</Text>
+                <Text
+                  style={[styles.topicTitle, { color: colors.text.primary }]}
+                >
+                  {topic.title}
+                </Text>
+              </View>
+              <View
+                style={{
+                  height: 1,
+                  backgroundColor: divider,
+                  marginBottom: 8,
+                }}
+              />
               <Text
-                style={[styles.topicDescription, { color: colors.text.secondary }]}
+                style={[
+                  styles.topicDescription,
+                  { color: colors.text.secondary },
+                ]}
               >
                 {topic.description}
               </Text>

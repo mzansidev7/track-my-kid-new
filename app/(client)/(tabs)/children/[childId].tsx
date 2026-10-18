@@ -102,7 +102,10 @@ const parseVehicleQrData = (rawData: unknown) => {
 
 const ChildDetailScreen = () => {
   const router = useRouter();
-  const params = useLocalSearchParams<{ childId: string }>();
+  const params = useLocalSearchParams<{
+    childId: string;
+    openLiveTrip?: string;
+  }>();
   const childId = params.childId;
   const { colors: themeColors } = useTheme();
   const colors = {
@@ -124,6 +127,8 @@ const ChildDetailScreen = () => {
   const { user } = useContext(AuthContext);
   const detailScrollRef = useRef<ScrollView>(null);
   const tripCardOffset = useRef(0);
+  const liveMapRef = useRef<MapView | null>(null);
+  const autoOpenedLiveTripForChild = useRef<string | null>(null);
 
   const [child, setChild] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -150,6 +155,9 @@ const ChildDetailScreen = () => {
   const [mapModalTitle, setMapModalTitle] = useState("");
   const [mapMarkers, setMapMarkers] = useState<any[]>([]);
   const [mapRegion, setMapRegion] = useState<any>(null);
+  const [liveLocationStatus, setLiveLocationStatus] = useState<
+    "loading" | "live" | "offline" | "unavailable"
+  >("loading");
   const [editForm, setEditForm] = useState({
     name: "",
     lastname: "",
@@ -288,9 +296,10 @@ const ChildDetailScreen = () => {
   }, [childId, fetchChild]);
 
   useEffect(() => {
-    const driverId = child?.vehicle?.driver?.id;
-    if (!isMapModalVisible || !driverId || !user?.token) return;
+    if (!isMapModalVisible || mapModalTitle !== "Live Trip") return;
 
+    const driverId = child?.vehicle?.driver?.id;
+    if (!driverId || !user?.token) return;
     let active = true;
     const fetchLiveLocation = async () => {
       try {
@@ -301,28 +310,46 @@ const ChildDetailScreen = () => {
             headers: { Authorization: `Bearer ${user.token}` },
           },
         );
-        if (!response.ok || !active) return;
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "LIVE_LOCATION_UNAVAILABLE");
+        }
+        if (!active) return;
         const location = await response.json();
-        if (location?.is_online !== true) {
+        const latitude = Number(location?.latitude);
+        const longitude = Number(location?.longitude);
+        if (
+          location?.is_online !== true ||
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude)
+        ) {
+          setLiveLocationStatus("offline");
           setMapMarkers((current) =>
             current.filter((marker) => marker.id !== "live-driver"),
           );
           return;
         }
-        const latitude = Number(location?.latitude);
-        const longitude = Number(location?.longitude);
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
 
+        const coordinate = { latitude, longitude };
+        setLiveLocationStatus("live");
         setMapMarkers((current) => [
           ...current.filter((marker) => marker.id !== "live-driver"),
           {
             id: "live-driver",
             title: "Driver live location",
-            description: "Updated just now",
-            coordinate: { latitude, longitude },
+            description: `Updated ${new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}`,
+            coordinate,
           },
         ]);
+        liveMapRef.current?.animateToRegion(
+          { ...coordinate, latitudeDelta: 0.008, longitudeDelta: 0.008 },
+          600,
+        );
       } catch (error) {
+        if (active) setLiveLocationStatus("unavailable");
         console.error("Fetch live driver location error:", error);
       }
     };
@@ -333,7 +360,13 @@ const ChildDetailScreen = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [child?.vehicle?.driver?.id, isMapModalVisible, user?.token]);
+  }, [
+    child?.vehicle?.driver?.id,
+    childId,
+    isMapModalVisible,
+    mapModalTitle,
+    user?.token,
+  ]);
 
   const requestCameraPermission = async () => {
     const { status } = await Camera.requestCameraPermissionsAsync();
@@ -620,7 +653,7 @@ const ChildDetailScreen = () => {
     setIsMapModalVisible(true);
   };
 
-  const openLiveTrip = async () => {
+  const openLiveTrip = useCallback(async () => {
     const BASE_URL = await resolveWorkingBaseUrl();
 
     if (!childId) return;
@@ -712,6 +745,7 @@ const ChildDetailScreen = () => {
       };
       setMapMarkers(markers);
       setMapRegion(region);
+      setLiveLocationStatus("loading");
       setMapModalTitle("Live Trip");
       setIsMapModalVisible(true);
     } catch (err: any) {
@@ -723,7 +757,7 @@ const ChildDetailScreen = () => {
     } finally {
       setTripLoading(false);
     }
-  };
+  }, [child, childId, user]);
 
   const scheduleWeekendTrip = async () => {
     if (!childId || !user?.token) return;
@@ -1235,6 +1269,10 @@ const ChildDetailScreen = () => {
             0.02,
         }
       : null;
+  const visibleLiveLocationStatus =
+    child?.vehicle?.driver?.id && user?.token
+      ? liveLocationStatus
+      : "unavailable";
 
   const handleDetailTabPress = (tab: string) => {
     setSelectedDetailTab(tab);
@@ -1258,6 +1296,22 @@ const ChildDetailScreen = () => {
         break;
     }
   };
+
+  useEffect(() => {
+    if (
+      params.openLiveTrip !== "true" ||
+      !child ||
+      loading ||
+      tripLoading ||
+      autoOpenedLiveTripForChild.current === childId
+    ) {
+      return;
+    }
+
+    autoOpenedLiveTripForChild.current = childId;
+    setSelectedDetailTab("live");
+    void openLiveTrip();
+  }, [child, childId, loading, openLiveTrip, params.openLiveTrip, tripLoading]);
 
   return (
     <SafeAreaView
@@ -1458,20 +1512,15 @@ const ChildDetailScreen = () => {
                     </View>
                   </View>
                   <View style={styles.childIdRow}>
-                    <Text
-                      style={[
-                        styles.childIdLabel,
-                        { color: colors.text.secondary },
-                      ]}
-                    >
-                      Child ID
+                    <MaterialIcons
+                      name="fingerprint"
+                      size={16}
+                      color="#087C2B"
+                    />
+                    <Text style={[styles.childIdLabel, { color: "#527064" }]}>
+                      CHILD ID
                     </Text>
-                    <Text
-                      style={[
-                        styles.childIdValue,
-                        { color: colors.text.primary },
-                      ]}
-                    >
+                    <Text style={[styles.childIdValue, { color: "#17365E" }]}>
                       {child.id?.slice(0, 8)}
                     </Text>
                   </View>
@@ -1915,137 +1964,6 @@ const ChildDetailScreen = () => {
               <Text
                 style={[styles.sectionHeader, { color: colors.text.primary }]}
               >
-                Child Information
-              </Text>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[styles.infoLabel, { color: colors.text.secondary }]}
-                >
-                  Full Name
-                </Text>
-                <Text
-                  style={[styles.infoValue, { color: colors.text.primary }]}
-                >
-                  {child.name} {child.lastname || ""}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[styles.infoLabel, { color: colors.text.secondary }]}
-                >
-                  Grade
-                </Text>
-                <Text
-                  style={[styles.infoValue, { color: colors.text.primary }]}
-                >
-                  {child.grade || "Grade not set"}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[styles.infoLabel, { color: colors.text.secondary }]}
-                >
-                  School
-                </Text>
-                <Text
-                  style={[styles.infoValue, { color: colors.text.primary }]}
-                >
-                  {child.school_name || "School not set"}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text
-                  style={[styles.infoLabel, { color: colors.text.secondary }]}
-                >
-                  School ID
-                </Text>
-                <Text
-                  style={[styles.infoValue, { color: colors.text.primary }]}
-                >
-                  {child.school_id?.slice(0, 8) || "--"}
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={[styles.sectionCard, { backgroundColor: colors.surface }]}
-            >
-              <Text
-                style={[styles.sectionHeader, { color: colors.text.primary }]}
-              >
-                Locations
-              </Text>
-              <View style={styles.locationCard}>
-                <View style={[styles.locationRow, { paddingBottom: 10 }]}>
-                  <View style={styles.locationIconWrap}>
-                    <MaterialIcons
-                      name="location-on"
-                      size={18}
-                      color="#159B3A"
-                    />
-                  </View>
-                  <View style={styles.locationTextWrap}>
-                    <Text
-                      style={[
-                        styles.locationTitle,
-                        { color: colors.text.primary },
-                      ]}
-                    >
-                      Pickup Location (Home)
-                    </Text>
-                    <Text
-                      style={[
-                        styles.locationSubtitle,
-                        { color: colors.text.secondary },
-                      ]}
-                    >
-                      {pickupAddress}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.locationRow, { paddingBottom: 10 }]}>
-                  <View style={styles.locationIconWrap}>
-                    <MaterialIcons
-                      name="location-on"
-                      size={18}
-                      color="#087C2B"
-                    />
-                  </View>
-                  <View style={styles.locationTextWrap}>
-                    <Text
-                      style={[
-                        styles.locationTitle,
-                        { color: colors.text.primary },
-                      ]}
-                    >
-                      Drop-off Location (School)
-                    </Text>
-                    <Text
-                      style={[
-                        styles.locationSubtitle,
-                        { color: colors.text.secondary },
-                      ]}
-                    >
-                      {dropoffAddress}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={[styles.locationAction, { paddingTop: 10 }]}
-                  onPress={openRouteMap}
-                >
-                  <Text style={styles.locationActionText}>
-                    View Route on Map
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View
-              style={[styles.sectionCard, { backgroundColor: colors.surface }]}
-            >
-              <Text
-                style={[styles.sectionHeader, { color: colors.text.primary }]}
-              >
                 Assigned Vehicle & Driver
               </Text>
               {linkedVehicle?.name && (
@@ -2386,6 +2304,7 @@ const ChildDetailScreen = () => {
         <SafeAreaView style={styles.fullScreenMapScreen}>
           {mapRegion ? (
             <MapView
+              ref={liveMapRef}
               key={mapModalTitle}
               style={StyleSheet.absoluteFill}
               initialRegion={mapRegion}
@@ -2439,6 +2358,44 @@ const ChildDetailScreen = () => {
           <View style={styles.mapBottomPanel}>
             <View style={styles.mapPanelHandle} />
             <Text style={styles.mapPanelTitle}>Pickup and drop-off</Text>
+            {mapModalTitle === "Live Trip" && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 10,
+                  paddingVertical: 8,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  backgroundColor:
+                    visibleLiveLocationStatus === "live"
+                      ? "#E9F8EE"
+                      : "#F3F4F6",
+                }}
+              >
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor:
+                      visibleLiveLocationStatus === "live"
+                        ? "#159B3A"
+                        : "#94A3B8",
+                  }}
+                />
+                <Text style={styles.mapLocationAddress}>
+                  {visibleLiveLocationStatus === "live"
+                    ? "LIVE · Driver location updates automatically"
+                    : visibleLiveLocationStatus === "loading"
+                      ? "Connecting to driver location…"
+                      : visibleLiveLocationStatus === "offline"
+                        ? "Driver is offline or has not shared a recent location"
+                        : "Live driver location is currently unavailable"}
+                </Text>
+              </View>
+            )}
             {mapMarkers.map((marker) => (
               <View key={marker.id} style={styles.mapLocationRow}>
                 <View
@@ -3599,18 +3556,29 @@ const styles = StyleSheet.create({
   },
 
   childIdRow: {
-    marginTop: 9,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D8EFE0",
+    backgroundColor: "#F1FAF4",
   },
 
   childIdLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    marginBottom: 2,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.7,
   },
 
   childIdValue: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
 
   /* =========================

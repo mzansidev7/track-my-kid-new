@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -25,7 +26,8 @@ import {
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
-import { useTheme } from "@/styles/theme";
+import MessageReactions from "../../../components/messages/MessageReactions";
+import { DRIVER_COLORS, useTheme } from "@/styles/theme";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import {
   SafeAreaView,
@@ -42,6 +44,7 @@ import {
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/messagesRealtime";
 import { BASE_URL, resolveWorkingBaseUrl } from "../../../url";
+import { useDriverNotifications } from "@/app-support/driver/driverHelpers/hooks/useDriverNotifications";
 
 const getInitials = (name = "") =>
   name
@@ -61,6 +64,8 @@ const formatMessageTime = (value?: string) => {
 
 const getConversationRoleLabel = (role?: string) => {
   switch (role) {
+    case "group":
+      return "Group chat";
     case "client":
       return "Parent";
     case "school":
@@ -85,7 +90,7 @@ const Messages = () => {
   const { colors } = useTheme();
   const { user } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
-  const userId = user?.userData?.id || user?.userData?.user_id || "";
+  const userId = user?.userData?.id || user?.userData?.user_id || user?.id || "";
   const [activeTab, setActiveTab] = useState<
     "all" | "parents" | "school" | "owner"
   >("all");
@@ -99,6 +104,10 @@ const Messages = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [linkedContactsError, setLinkedContactsError] = useState<string | null>(
+    null,
+  );
+  const { unreadCount } = useDriverNotifications();
 
   const tabs: Array<{
     id: "all" | "parents" | "school" | "owner";
@@ -135,6 +144,7 @@ const Messages = () => {
     }
 
     try {
+      setLinkedContactsError(null);
       const baseUrl = await resolveWorkingBaseUrl();
       const [clientsRes, ownersRes, schoolsRes] = await Promise.all([
         fetch(`${baseUrl}/driver/linked-clients`, {
@@ -148,17 +158,22 @@ const Messages = () => {
         }),
       ]);
 
-      const [clientsData, ownersData, schoolsData] = await Promise.all([
-        clientsRes.ok ? clientsRes.json() : [],
-        ownersRes.ok ? ownersRes.json() : [],
-        schoolsRes.ok ? schoolsRes.json() : [],
-      ]);
+      const responses = [clientsRes, ownersRes, schoolsRes];
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) {
+        const error = await failedResponse.json().catch(() => ({}));
+        throw new Error(error.error || "Unable to load linked contacts.");
+      }
+      const [clientsData, ownersData, schoolsData] = await Promise.all(
+        responses.map((response) => response.json()),
+      );
 
       const merged = [
-        ...(Array.isArray(clientsData) ? clientsData : []).map((contact) => ({
-          id: contact?.clients?.user_id || contact?.users?.id || contact?.id,
-          userId:
-            contact?.clients?.user_id || contact?.users?.id || contact?.id,
+        ...(Array.isArray(clientsData) ? clientsData : [])
+          .filter((contact) => contact?.clients?.user_id || contact?.clients?.users?.id)
+          .map((contact) => ({
+          id: contact?.clients?.user_id || contact?.clients?.users?.id,
+          userId: contact?.clients?.user_id || contact?.clients?.users?.id,
           name: contact?.clients?.users?.name || "Parent",
           role: "client",
           type: "client_driver",
@@ -166,10 +181,12 @@ const Messages = () => {
           avatar:
             contact?.clients?.users?.name ||
             `https://ui-avatars.com/api/?name=${encodeURIComponent("Parent")}&background=0A84FF&color=fff`,
-        })),
-        ...(Array.isArray(ownersData) ? ownersData : []).map((contact) => ({
-          id: contact?.users?.id || contact?.id,
-          userId: contact?.users?.id || contact?.id,
+          })),
+        ...(Array.isArray(ownersData) ? ownersData : [])
+          .filter((contact) => contact?.users?.id)
+          .map((contact) => ({
+          id: contact.users.id,
+          userId: contact.users.id,
           name: contact?.company_name || contact?.users?.name || "Fleet owner",
           role: "owner",
           type: "driver_owner",
@@ -207,6 +224,9 @@ const Messages = () => {
       setLinkedContacts(deduped);
     } catch (error) {
       console.error("Error loading linked contacts:", error);
+      setLinkedContactsError(
+        error instanceof Error ? error.message : "Unable to load linked contacts.",
+      );
       setLinkedContacts([]);
     }
   }, [user?.token]);
@@ -253,6 +273,10 @@ const Messages = () => {
         setSelectedConversation(null);
       } catch (error) {
         console.error("Error starting conversation:", error);
+        Alert.alert(
+          "Unable to start conversation",
+          error instanceof Error ? error.message : "Please try again.",
+        );
       }
     },
     [loadConversations, user?.token],
@@ -341,6 +365,17 @@ const Messages = () => {
       return false;
     }
 
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage: MessageData = {
+      id: optimisticId,
+      content,
+      sent_at: new Date().toISOString(),
+      is_read: false,
+      sender_id: user?.userData?.id || user?.userData?.user_id || "",
+      users: user?.userData,
+    };
+    setMessages((current) => [...current, optimisticMessage]);
+    setDraft("");
     setSending(true);
 
     try {
@@ -358,16 +393,29 @@ const Messages = () => {
       });
 
       if (response.ok) {
-        setDraft("");
         const nextMessages = await fetchMessagesWithCache(
           selectedConversation.id,
         );
         setMessages(nextMessages);
         return true;
       }
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       return false;
     } catch (error) {
       console.error("Error sending message:", error);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       return false;
     } finally {
       setSending(false);
@@ -391,12 +439,19 @@ const Messages = () => {
   if (selectedConversation) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: colors.background }]}
+        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
       >
+        {linkedContactsError ? (
+          <Text
+            style={{ color: colors.error, marginHorizontal: 16, marginTop: 8 }}
+          >
+            {linkedContactsError}
+          </Text>
+        ) : null}
         <View
           style={[
             localStyles.chatHeader,
-            { backgroundColor: colors.background },
+            { backgroundColor: DRIVER_COLORS.background },
           ]}
         >
           <TouchableOpacity
@@ -414,9 +469,17 @@ const Messages = () => {
             <View
               style={[localStyles.avatarBubble, { backgroundColor: "#E9F2FF" }]}
             >
-              <Text style={localStyles.avatarText}>
-                {getInitials(conversationHeaderName)}
-              </Text>
+              {selectedConversation?.other_participant?.role === "admin" ? (
+                <Image
+                  source={require("@/assets/images/logo.png")}
+                  style={localStyles.avatarImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={localStyles.avatarText}>
+                  {getInitials(conversationHeaderName)}
+                </Text>
+              )}
             </View>
 
             <View>
@@ -502,12 +565,38 @@ const Messages = () => {
                         {item.content}
                       </Text>
                     )}
-                    <Text
-                      style={isOwn ? localStyles.timeOwn : localStyles.time}
+                    <View
+                      style={[
+                        localStyles.messageFooter,
+                        isOwn && localStyles.messageFooterOwn,
+                      ]}
                     >
-                      {formatMessageTime(item.sent_at)}
-                      {isOwn ? (item.is_read ? "  ✓✓" : "  ✓") : ""}
-                    </Text>
+                      <Text
+                        style={isOwn ? localStyles.timeOwn : localStyles.time}
+                      >
+                        {formatMessageTime(item.sent_at)}
+                        {isOwn ? (item.is_read ? "  ✓✓" : "  ✓") : ""}
+                      </Text>
+                      {!item.deliveryError &&
+                      (!isOwn || item.reactions?.length) ? (
+                        <MessageReactions
+                          apiBaseUrl={BASE_URL}
+                          role="driver"
+                          conversationId={selectedConversation.id}
+                          messageId={item.id}
+                          token={user?.token || ""}
+                          currentUserId={userId}
+                          accentColor={DRIVER_COLORS.primary}
+                          reactions={item.reactions}
+                          isOwn={isOwn}
+                        />
+                      ) : null}
+                    </View>
+                    {item.deliveryError ? (
+                      <Text style={localStyles.messageDeliveryError}>
+                        Message not sent
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               );
@@ -547,14 +636,14 @@ const Messages = () => {
 
   return (
     <SafeAreaView
-      style={[localStyles.container, { backgroundColor: colors.background }]}
+      style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
     >
       <DriverHeader
         title="Messages"
         subtitle="Stay connected with parents, school and fleet owner"
         showBackButton={true}
         showNotifications={true}
-        notificationCount={7}
+        notificationCount={unreadCount}
       />
 
       <ScrollView
@@ -610,7 +699,7 @@ const Messages = () => {
 
         {loading ? (
           <View style={localStyles.loadingState}>
-            <ActivityIndicator size="large" color="#0F9D58" />
+            <ActivityIndicator size="large" color={DRIVER_COLORS.primary} />
             <Text
               style={[
                 localStyles.loadingText,
@@ -688,6 +777,7 @@ const Messages = () => {
                 const avatarUri =
                   item.other_participant?.profile?.avatar ||
                   `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0A84FF&color=fff`;
+                const isSupport = item.other_participant?.role === "admin";
 
                 return (
                   <TouchableOpacity
@@ -700,10 +790,18 @@ const Messages = () => {
                     onPress={() => openConversation(item)}
                   >
                     <View style={localStyles.avatarContainer}>
-                      <Image
-                        source={{ uri: avatarUri }}
-                        style={localStyles.avatar}
-                      />
+                      {isSupport ? (
+                        <Image
+                          source={require("@/assets/images/logo.png")}
+                          style={localStyles.avatar}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Image
+                          source={{ uri: avatarUri }}
+                          style={localStyles.avatar}
+                        />
+                      )}
                     </View>
 
                     <View style={localStyles.conversationInfo}>
@@ -785,11 +883,11 @@ const localStyles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   heroCard: {
     margin: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -805,7 +903,7 @@ const localStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "rgba(10, 132, 255, 0.1)",
+    backgroundColor: "#EAF2ED",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -829,8 +927,10 @@ const localStyles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 12,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: "#F5F5F7",
+    borderRadius: 15,
+    backgroundColor: DRIVER_COLORS.card,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
   },
   searchIcon: {
     marginRight: 8,
@@ -843,7 +943,7 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: DRIVER_COLORS.cardBorder,
     marginBottom: 8,
   },
   tab: {
@@ -886,7 +986,7 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    backgroundColor: "rgba(10, 132, 255, 0.03)",
+    backgroundColor: "rgba(20, 90, 69, 0.035)",
   },
   avatarContainer: {
     position: "relative",
@@ -897,6 +997,7 @@ const localStyles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
   },
+  avatarImage: { width: "100%", height: "100%" },
   onlineIndicator: {
     position: "absolute",
     bottom: 0,
@@ -931,7 +1032,7 @@ const localStyles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -944,7 +1045,7 @@ const localStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(10, 132, 255, 0.08)",
+    backgroundColor: "#EAF2ED",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 12,
@@ -998,13 +1099,13 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: DRIVER_COLORS.cardBorder,
   },
   backButton: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EAF2ED",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1023,7 +1124,7 @@ const localStyles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: {
-    color: "#0F9D58",
+    color: DRIVER_COLORS.primary,
     fontWeight: "700",
     fontSize: 14,
   },
@@ -1066,10 +1167,10 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   bubbleOwn: {
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
   },
   bubbleOther: {
-    backgroundColor: "#EAF2FF",
+    backgroundColor: "#EAF2ED",
   },
   messageText: {
     color: "#1F2937",
@@ -1084,13 +1185,29 @@ const localStyles = StyleSheet.create({
   time: {
     fontSize: 11,
     color: "#6B7280",
-    marginTop: 6,
-    alignSelf: "flex-start",
   },
   timeOwn: {
     fontSize: 11,
     color: "rgba(255,255,255,0.75)",
+  },
+  messageFooter: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
     marginTop: 6,
+    maxWidth: "100%",
+  },
+  messageFooterOwn: {
+    alignSelf: "flex-end",
+    justifyContent: "flex-end",
+  },
+  messageDeliveryError: {
+    marginTop: 5,
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "600",
     alignSelf: "flex-end",
   },
   composer: {
@@ -1105,7 +1222,7 @@ const localStyles = StyleSheet.create({
     flex: 1,
     maxHeight: 120,
     minHeight: 44,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F3F7F4",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1117,7 +1234,7 @@ const localStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
   },

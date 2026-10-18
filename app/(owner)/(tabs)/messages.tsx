@@ -33,17 +33,19 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
+import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import {
+  cacheConversations,
   clearConversationsCache,
+  getCachedConversations,
   getCachedMessages,
 } from "../../../store/asyncStorage/messages.asyncStore";
 import {
   ConversationData,
-  fetchConversationsWithCache,
   fetchMessagesWithCache,
+  sortConversationsByLastMessage,
   subscribeToConversations,
   subscribeToMessages,
   unsubscribeFromRealtime,
@@ -55,6 +57,8 @@ import {
   MessageAttachment,
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
+import EmojiPicker from "../../../components/messages/EmojiPicker";
+import MessageReactions from "../../../components/messages/MessageReactions";
 
 interface Message {
   id: string;
@@ -62,6 +66,13 @@ interface Message {
   sent_at: string;
   is_read: boolean;
   sender_id: string;
+  deliveryError?: boolean;
+  reactions?: Array<{
+    emoji: string;
+    count: number;
+    userIds: string[];
+    reactedByMe?: boolean;
+  }>;
   users: {
     name: string;
     role: string;
@@ -245,34 +256,79 @@ export default function Messages({ setActiveButton }: any) {
     }, 50);
   }, []);
 
+  const fetchOwnerConversations = useCallback(
+    async (onCached?: (cached: ConversationData[]) => void) => {
+      const userId = user?.userData?.id;
+      if (!userId || !user?.token) {
+        throw new Error("Your owner session has expired. Please sign in again.");
+      }
+
+      const cachedConversations = await getCachedConversations(userId);
+      if (cachedConversations.length) {
+        const sortedCachedConversations: ConversationData[] =
+          sortConversationsByLastMessage(cachedConversations);
+        onCached?.(sortedCachedConversations);
+      }
+
+      const response = await fetch(`${BASE_URL}/owner/conversations`, {
+        headers: { Authorization: "Bearer " + user.token },
+      });
+      const result = await response.json();
+      if (!response.ok || !Array.isArray(result)) {
+        throw new Error(
+          result?.error || "Unable to load your conversations.",
+        );
+      }
+
+      const sortedConversations: ConversationData[] =
+        sortConversationsByLastMessage(result);
+      await cacheConversations(sortedConversations, userId);
+      return sortedConversations;
+    },
+    [user?.token, user?.userData?.id],
+  );
+
   const initializeConversations = useCallback(async () => {
     setLoading(true);
     try {
-      const cachedConversations = await fetchConversationsWithCache(
-        user?.userData?.id,
+      const loadedConversations = await fetchOwnerConversations(
         (cached) => {
           setConversations(cached);
           setLoading(false);
         },
       );
-      setConversations(cachedConversations);
+      setConversations(loadedConversations);
 
       // Subscribe to real-time updates
       conversationsChannelRef.current = subscribeToConversations(
         user?.userData?.id,
-        (updated) => setConversations(updated),
+        () => {
+          void fetchOwnerConversations()
+            .then(setConversations)
+            .catch((error) => {
+              console.error("Error refreshing owner conversations:", error);
+              setNotification({
+                visible: true,
+                message: "Unable to refresh conversations.",
+                type: "error",
+              });
+            });
+        },
       );
     } catch (error) {
       console.error("Error initializing conversations:", error);
       setNotification({
         visible: true,
-        message: "Failed to load conversations",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to load conversations",
         type: "error",
       });
     } finally {
       setLoading(false);
     }
-  }, [user?.userData?.id]);
+  }, [fetchOwnerConversations, user?.userData?.id]);
 
   const markAsRead = async (conversationId: string) => {
     try {
@@ -398,9 +454,7 @@ export default function Messages({ setActiveButton }: any) {
         await clearConversationsCache();
 
         // Fetch fresh conversations
-        const updatedConversations = await fetchConversationsWithCache(
-          user?.userData?.id,
-        );
+        const updatedConversations = await fetchOwnerConversations();
 
         // Update the conversations list
         setConversations(updatedConversations);
@@ -471,9 +525,7 @@ export default function Messages({ setActiveButton }: any) {
         throw new Error(data.error || "Could not start conversation");
       }
       await clearConversationsCache(user?.userData?.id);
-      const updatedConversations = await fetchConversationsWithCache(
-        user?.userData?.id,
-      );
+      const updatedConversations = await fetchOwnerConversations();
       setConversations(updatedConversations);
       const newConversation = updatedConversations.find(
         (conversation) => conversation.id === data.conversation_id,
@@ -517,9 +569,7 @@ export default function Messages({ setActiveButton }: any) {
       }
 
       await clearConversationsCache(user?.userData?.id);
-      const updatedConversations = await fetchConversationsWithCache(
-        user?.userData?.id,
-      );
+      const updatedConversations = await fetchOwnerConversations();
       setConversations(updatedConversations);
 
       const newConversation = updatedConversations.find(
@@ -550,6 +600,17 @@ export default function Messages({ setActiveButton }: any) {
   const sendMessage = async (content = newMessage.trim()) => {
     if (!content || !selectedConversation || sending) return false;
 
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      content,
+      sent_at: new Date().toISOString(),
+      is_read: false,
+      sender_id: user?.userData?.id || user?.userData?.user_id || "",
+      users: user?.userData || { name: "You", role: "owner" },
+    };
+    setMessages((current) => [...current, optimisticMessage]);
+    setNewMessage("");
     setSending(true);
     try {
       const response = await fetch(`${BASE_URL}/owner/messages`, {
@@ -567,8 +628,6 @@ export default function Messages({ setActiveButton }: any) {
       const data = await response.json();
 
       if (response.ok) {
-        setNewMessage("");
-
         // Fallback: If realtime subscription doesn't fire within 2 seconds, manually refresh
         setTimeout(async () => {
           console.warn(
@@ -590,6 +649,13 @@ export default function Messages({ setActiveButton }: any) {
         }, 2000);
         return true;
       } else {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === optimisticId
+              ? { ...message, deliveryError: true }
+              : message,
+          ),
+        );
         console.error(
           "❌ Failed to send message. Status:",
           response.status,
@@ -604,6 +670,13 @@ export default function Messages({ setActiveButton }: any) {
         return false;
       }
     } catch (error) {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       console.error("❌ Error sending message:", error);
       setNotification({
         visible: true,
@@ -899,7 +972,13 @@ export default function Messages({ setActiveButton }: any) {
       }}
     >
       <View style={styles.conversationIcon}>
-        {item.other_participant.profile?.avatar ? (
+        {item.other_participant.role === "admin" ? (
+          <Image
+            source={require("@/assets/images/logo.png")}
+            style={styles.listAvatarImage}
+            resizeMode="contain"
+          />
+        ) : item.other_participant.profile?.avatar ? (
           <Image
             source={{ uri: item.other_participant.profile.avatar }}
             style={styles.listAvatarImage}
@@ -980,6 +1059,10 @@ export default function Messages({ setActiveButton }: any) {
     const displayTime = isToday
       ? formattedTime
       : new Date(item.sent_at).toLocaleDateString();
+    const isSupportSender =
+      !isOwnMessage &&
+      selectedConversation?.other_participant.role === "admin" &&
+      item.sender_id === selectedConversation.other_participant.id;
     const senderAvatar =
       !isOwnMessage &&
       item.sender_id === selectedConversation?.other_participant.id
@@ -1015,7 +1098,13 @@ export default function Messages({ setActiveButton }: any) {
           {!isOwnMessage && (
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
-                {senderAvatar ? (
+                {isSupportSender ? (
+                  <Image
+                    source={require("@/assets/images/logo.png")}
+                    style={styles.avatarImage}
+                    resizeMode="contain"
+                  />
+                ) : senderAvatar ? (
                   <Image
                     source={{ uri: senderAvatar }}
                     style={styles.avatarImage}
@@ -1035,7 +1124,9 @@ export default function Messages({ setActiveButton }: any) {
             <View
               style={[
                 styles.messageBubble,
-                attachment?.mediaType === "image" && styles.imageBubble,
+                attachment?.type === "attachment" &&
+                  attachment.mediaType === "image" &&
+                  styles.imageBubble,
                 isOwnMessage ? styles.ownBubble : styles.otherBubble,
                 isOwnMessage && { backgroundColor: bubbleColors.primary },
               ]}
@@ -1056,20 +1147,54 @@ export default function Messages({ setActiveButton }: any) {
                 </Text>
               )}
             </View>
+            {item.deliveryError ? (
+              <Text style={styles.messageDeliveryError}>Message not sent</Text>
+            ) : null}
             <View
               style={[
                 styles.messageMetadata,
                 isOwnMessage ? styles.ownMetadata : styles.otherMetadata,
               ]}
             >
-              <Text style={styles.messageTime}>{displayTime}</Text>
-              {isOwnMessage && (
-                <MaterialIcons
-                  name={item.is_read ? "done-all" : "done"}
-                  size={14}
-                  color={item.is_read ? "#1683F8" : "#91A3B5"}
-                />
-              )}
+              <View style={styles.messageMetaRight}>
+                <Text style={styles.messageTime}>{displayTime}</Text>
+                {!item.deliveryError && !isOwnMessage ? (
+                  <MessageReactions
+                    apiBaseUrl={BASE_URL}
+                    role="owner"
+                    conversationId={selectedConversation?.id || ""}
+                    messageId={item.id}
+                    token={user?.token || ""}
+                    currentUserId={user?.userData?.id || ""}
+                    accentColor={bubbleColors.primary}
+                    reactions={item.reactions}
+                    isOwn={false}
+                  />
+                ) : null}
+                {isOwnMessage && (
+                  <MaterialIcons
+                    name={item.is_read ? "done-all" : "done"}
+                    size={14}
+                    color={item.is_read ? "#1683F8" : "#91A3B5"}
+                    style={styles.messageReadIcon}
+                  />
+                )}
+                {!item.deliveryError &&
+                isOwnMessage &&
+                item.reactions?.length ? (
+                  <MessageReactions
+                    apiBaseUrl={BASE_URL}
+                    role="owner"
+                    conversationId={selectedConversation?.id || ""}
+                    messageId={item.id}
+                    token={user?.token || ""}
+                    currentUserId={user?.userData?.id || ""}
+                    accentColor={bubbleColors.primary}
+                    reactions={item.reactions}
+                    isOwn
+                  />
+                ) : null}
+              </View>
             </View>
           </View>
         </View>
@@ -1087,6 +1212,9 @@ export default function Messages({ setActiveButton }: any) {
       conversation.conversation_type === "admin_user"
     ) {
       return "Support team";
+    }
+    if (conversation.conversation_type === "admin_group") {
+      return "Group chat";
     }
 
     switch (conversation.other_participant.role) {
@@ -1404,7 +1532,15 @@ export default function Messages({ setActiveButton }: any) {
                     />
                   </TouchableOpacity>
                   <View style={styles.chatHeaderAvatar}>
-                    {selectedConversation.other_participant.profile?.avatar ? (
+                    {selectedConversation.other_participant.role ===
+                    "admin" ? (
+                      <Image
+                        source={require("@/assets/images/logo.png")}
+                        style={styles.chatHeaderAvatarImage}
+                        resizeMode="contain"
+                      />
+                    ) : selectedConversation.other_participant.profile
+                        ?.avatar ? (
                       <Image
                         source={{
                           uri: selectedConversation.other_participant.profile
@@ -1546,24 +1682,14 @@ export default function Messages({ setActiveButton }: any) {
                     </TouchableOpacity>
                   </View>
                 ) : null}
-                {showEmojiPicker ? (
-                  <View style={styles.emojiPicker}>
-                    {["😀", "😊", "👍", "❤️", "🙏", "🎉", "👋", "✅"].map(
-                      (emoji) => (
-                        <TouchableOpacity
-                          key={emoji}
-                          style={styles.emojiButton}
-                          onPress={() =>
-                            setNewMessage((value) => `${value}${emoji}`)
-                          }
-                          accessibilityLabel={`Insert ${emoji}`}
-                        >
-                          <Text style={styles.emojiText}>{emoji}</Text>
-                        </TouchableOpacity>
-                      ),
-                    )}
-                  </View>
-                ) : null}
+                <EmojiPicker
+                  visible={showEmojiPicker}
+                  accentColor={bubbleColors.primary}
+                  onSelect={(emoji) =>
+                    setNewMessage((value) => `${value}${emoji}`)
+                  }
+                  onClose={() => setShowEmojiPicker(false)}
+                />
                 <View style={styles.composerRow}>
                   <TouchableOpacity
                     style={styles.attachToggle}
@@ -1986,7 +2112,19 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 12,
+    lineHeight: 16,
     color: "#8799AB",
+  },
+  messageMetaRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    marginLeft: 4,
+  },
+  messageReadIcon: {
+    marginLeft: 2,
+    marginRight: 2,
   },
   unreadIndicator: {
     minWidth: 20,
@@ -2182,6 +2320,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 2,
   },
+  messageDeliveryError: {
+    marginTop: 5,
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "right",
+  },
   ownMetadata: {
     justifyContent: "flex-end",
   },
@@ -2228,18 +2373,6 @@ const styles = StyleSheet.create({
     color: "#647A90",
     fontSize: 10,
     fontWeight: "600",
-  },
-  emojiPicker: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  emojiButton: {
-    padding: 4,
-  },
-  emojiText: {
-    fontSize: 22,
   },
   composerRow: {
     flexDirection: "row",

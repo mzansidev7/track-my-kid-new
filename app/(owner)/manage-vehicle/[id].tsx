@@ -23,12 +23,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useDrivers } from "../ownerHelpers/hooks/useDrivers";
-import { useOwnerProfile } from "../ownerHelpers/hooks/useOwnerProfile";
+import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
+import { useOwnerProfile } from "@/app-support/owner/ownerHelpers/hooks/useOwnerProfile";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { SelectedVehicle } from "../ownerHelpers/interface/owner.interfece";
+import { SelectedVehicle } from "@/app-support/owner/ownerHelpers/interface/owner.interfece";
 import CustomMap from "../../../components/map";
 
 export default function ManageVehicle() {

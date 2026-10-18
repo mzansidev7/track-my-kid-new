@@ -14,15 +14,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
-import { useTheme } from "@/styles/theme";
+import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
+import { DRIVER_COLORS, useTheme } from "@/styles/theme";
 import { signOut } from "@/functions/auth";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 
 const DriverProfile = () => {
   const router = useRouter();
   const { logout } = useContext(AuthContext);
-  const { driver, loading, error } = useDriverProfile();
+  const { driver, loading, error, refreshDriver } = useDriverProfile();
   const { colors } = useTheme();
 
   const handleLogout = async () => {
@@ -68,6 +68,32 @@ const DriverProfile = () => {
     return undefined;
   }, []);
 
+  const formatExperience = (value: unknown) => {
+    if (value === null || value === undefined || value === "") {
+      return "Not provided";
+    }
+
+    if (typeof value === "number") {
+      return `${value} year${value === 1 ? "" : "s"}`;
+    }
+
+    const text = String(value).trim();
+    return text || "Not provided";
+  };
+
+  const formatDate = (value: unknown) => {
+    if (typeof value !== "string" || !value.trim()) return "Not provided";
+    const dateValue = value.trim();
+    const date = new Date(
+      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+        ? `${dateValue}T00:00:00`
+        : dateValue,
+    );
+    return Number.isNaN(date.getTime())
+      ? dateValue
+      : date.toLocaleDateString();
+  };
+
   const formatAddress = (address: unknown) => {
     if (!address) return "Not provided";
 
@@ -77,12 +103,18 @@ const DriverProfile = () => {
 
     if (typeof address === "object") {
       const addressObject = address as Record<string, unknown>;
+      if (
+        typeof addressObject.full_address === "string" &&
+        addressObject.full_address.trim()
+      ) {
+        return addressObject.full_address.trim();
+      }
       const values = [
         addressObject.street,
         addressObject.suburb,
         addressObject.city,
         addressObject.province,
-        addressObject.postalCode,
+        addressObject.postalCode || addressObject.postal_code,
         addressObject.country,
       ]
         .filter(
@@ -101,7 +133,7 @@ const DriverProfile = () => {
   if (loading) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: colors.background }]}
+        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
         edges={["bottom", "top"]}
       >
         <DriverHeader
@@ -119,7 +151,7 @@ const DriverProfile = () => {
   if (error) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: colors.background }]}
+        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
         edges={["bottom", "top"]}
       >
         <DriverHeader
@@ -129,8 +161,14 @@ const DriverProfile = () => {
         />
         <View style={[localStyles.container, localStyles.loadingContainer]}>
           <Text style={[localStyles.errorText, { color: colors.text.primary }]}>
-            Unable to load profile.
+            {error}
           </Text>
+          <TouchableOpacity
+            style={localStyles.retryButton}
+            onPress={() => void refreshDriver()}
+          >
+            <Text style={localStyles.retryButtonText}>Try again</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -138,7 +176,7 @@ const DriverProfile = () => {
 
   return (
     <SafeAreaView
-      style={[localStyles.container, { backgroundColor: colors.background }]}
+      style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
       edges={["bottom", "top"]}
     >
       <DriverHeader
@@ -147,21 +185,31 @@ const DriverProfile = () => {
         showBackButton={true}
       />
 
-      {/* Devider */}
-      <View style={localStyles.divider} />
       <ScrollView contentContainerStyle={localStyles.profileContent}>
         <LinearGradient
-          colors={["#0F9D58", "#0A7A43", "#0F9D58"]}
+          colors={[
+            DRIVER_COLORS.primaryDark,
+            DRIVER_COLORS.primary,
+            DRIVER_COLORS.primary,
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={localStyles.profileHeroCard}
         >
+          <View style={localStyles.heroGlowTop} />
+          <View style={localStyles.heroGlowBottom} />
           <TouchableOpacity
             style={localStyles.heroEditButton}
             onPress={handleEditProfile}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
           >
-            <MaterialIcons name="edit" size={18} color="#0F9D58" />
+            <MaterialIcons
+              name="edit"
+              size={18}
+              color={DRIVER_COLORS.primary}
+            />
           </TouchableOpacity>
 
           <View style={localStyles.heroTopRow}>
@@ -179,18 +227,20 @@ const DriverProfile = () => {
                   style={localStyles.profileAvatar}
                 />
               )}
-              <View style={localStyles.avatarOnlineSmall} />
             </View>
             <View style={localStyles.heroInfo}>
-              <Text style={localStyles.profileName}>{driver?.user?.name}</Text>
+              <Text style={localStyles.profileName} numberOfLines={1}>
+                {driver?.user?.name || "Driver"}
+              </Text>
               <View style={localStyles.statusRow}>
                 <View
                   style={[
                     localStyles.activeBadge,
                     {
-                      borderColor:
-                        driver?.status === "active" ? "#22C55E" : "#EF4444",
-                      backgroundColor: "white",
+                      backgroundColor:
+                        driver?.status === "active"
+                          ? "rgba(34,197,94,0.18)"
+                          : "rgba(248,113,113,0.18)",
                     },
                   ]}
                 >
@@ -199,24 +249,20 @@ const DriverProfile = () => {
                       localStyles.activeBadgeText,
                       {
                         color:
-                          driver?.status === "active" ? "#22C55E" : "#EF4444",
+                          driver?.status === "active" ? "#BBF7D0" : "#FECACA",
                       },
                     ]}
                   >
                     {driver?.status === "active" ? "Active" : "Inactive"}
                   </Text>
                 </View>
-                <Text style={localStyles.profileId}>
-                  Driver ID: {driver?.id?.slice(0, 10)}
-                </Text>
               </View>
-              <Text style={localStyles.profileMeta}>
+              <Text style={localStyles.profileId}>
+                Driver ID · {driver?.id?.slice(0, 10) || "Not available"}
+              </Text>
+              <Text style={localStyles.profileMeta} numberOfLines={2}>
                 {formatAddress(driver?.address)}
               </Text>
-              <View style={localStyles.ratingRow}>
-                <MaterialIcons name="star" size={14} color="#FBBF24" />
-                <Text style={localStyles.profileRating}>4.8 (128 reviews)</Text>
-              </View>
             </View>
           </View>
 
@@ -224,19 +270,21 @@ const DriverProfile = () => {
             <View style={localStyles.heroStatCard}>
               <MaterialIcons name="schedule" size={20} color="#fff" />
               <Text style={localStyles.heroStatLabel}>Experience</Text>
-              <Text style={localStyles.heroStatValue}>5 years</Text>
+              <Text style={localStyles.heroStatValue} numberOfLines={1}>
+                {formatExperience(driver?.experience)}
+              </Text>
             </View>
             <View style={localStyles.heroStatCard}>
               <MaterialIcons name="phone" size={20} color="#fff" />
               <Text style={localStyles.heroStatLabel}>Phone</Text>
-              <Text style={localStyles.heroStatValue}>
+              <Text style={localStyles.heroStatValue} numberOfLines={1}>
                 {driver?.user?.phone || "Not provided"}
               </Text>
             </View>
             <View style={localStyles.heroStatCard}>
               <MaterialIcons name="email" size={20} color="#fff" />
               <Text style={localStyles.heroStatLabel}>Email</Text>
-              <Text style={localStyles.heroStatValue}>
+              <Text style={localStyles.heroStatValue} numberOfLines={2}>
                 {driver?.user?.email || "Not provided"}
               </Text>
             </View>
@@ -285,7 +333,7 @@ const DriverProfile = () => {
             <Text
               style={[localStyles.rowValue, { color: colors.text.primary }]}
             >
-              {driver?.date_of_birth || "Not provided"}
+              {formatDate(driver?.date_of_birth)}
             </Text>
           </View>
           <View style={localStyles.sectionRow}>
@@ -319,7 +367,7 @@ const DriverProfile = () => {
             <Text
               style={[localStyles.rowValue, { color: colors.text.primary }]}
             >
-              {driver?.license_number || "Not provided"}
+              {driver?.vehicle_plate_number || "Not provided"}
             </Text>
           </View>
           <View style={localStyles.sectionRow}>
@@ -334,7 +382,7 @@ const DriverProfile = () => {
             <Text
               style={[localStyles.rowValue, { color: colors.text.primary }]}
             >
-              {driver?.licence_expiry || "Not provided"}
+              {formatDate(driver?.licence_expiry)}
             </Text>
           </View>
           <View style={localStyles.sectionRowLast}>
@@ -362,11 +410,21 @@ const DriverProfile = () => {
               { backgroundColor: colors.surface },
             ]}
           >
-            <Text
-              style={[localStyles.sectionTitle, { color: colors.text.primary }]}
-            >
-              Vehicle Information
-            </Text>
+            <View style={localStyles.sectionHeader}>
+              <MaterialIcons
+                name="directions-bus"
+                size={19}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  localStyles.sectionTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Vehicle Information
+              </Text>
+            </View>
             <View style={localStyles.sectionRow}>
               <View style={localStyles.rowLabelColumn}>
                 <MaterialIcons
@@ -417,7 +475,9 @@ const DriverProfile = () => {
               <Text
                 style={[localStyles.rowValue, { color: colors.text.primary }]}
               >
-                {driver?.vehicle?.capacity || "No vehicle assigned"} Seats
+                {driver?.vehicle
+                  ? `${driver.vehicle.capacity ?? "Not provided"} Seats`
+                  : "No vehicle assigned"}
               </Text>
             </View>
           </View>
@@ -429,15 +489,31 @@ const DriverProfile = () => {
               { backgroundColor: colors.surface },
             ]}
           >
-            <Text
-              style={[localStyles.sectionTitle, { color: colors.text.primary }]}
-            >
-              Vehicle Photo
-            </Text>
+            <View style={localStyles.sectionHeader}>
+              <MaterialIcons
+                name="photo"
+                size={19}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  localStyles.sectionTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Vehicle Photo
+              </Text>
+            </View>
 
             {driver?.vehicle?.vehicle_images?.[0] ? (
               <Image
-                source={{ uri: driver?.vehicle.vehicle_images[0].url }}
+                source={{
+                  uri:
+                    typeof driver.vehicle.vehicle_images[0] === "string"
+                      ? driver.vehicle.vehicle_images[0]
+                      : driver.vehicle.vehicle_images[0]?.url ||
+                        driver.vehicle.vehicle_images[0]?.uri,
+                }}
                 style={localStyles.vehicleImage}
               />
             ) : (
@@ -456,11 +532,21 @@ const DriverProfile = () => {
               { backgroundColor: colors.surface },
             ]}
           >
-            <Text
-              style={[localStyles.sectionTitle, { color: colors.text.primary }]}
-            >
-              Vehicle QR Code
-            </Text>
+            <View style={localStyles.sectionHeader}>
+              <MaterialIcons
+                name="qr-code-2"
+                size={19}
+                color={colors.primary}
+              />
+              <Text
+                style={[
+                  localStyles.sectionTitle,
+                  { color: colors.text.primary },
+                ]}
+              >
+                Vehicle QR Code
+              </Text>
+            </View>
 
             {driver?.vehicle?.vehicle_qr_code ? (
               <View style={localStyles.qrCodeContainer}>
@@ -487,97 +573,23 @@ const DriverProfile = () => {
         <View
           style={[localStyles.sectionCard, { backgroundColor: colors.surface }]}
         >
-          <Text
-            style={[
-              localStyles.sectionTitle,
-              { color: colors.text.primary, marginBottom: 12 },
-            ]}
-          >
-            Documents
-          </Text>
-          <View
-            style={[
-              localStyles.documentGrid,
-              { backgroundColor: colors.surface },
-            ]}
-          >
-            {/* {documents.map((doc) => (
-              <View
-                key={doc.id}
-                style={[
-                  localStyles.documentCard,
-                  { backgroundColor: colors.surface },
-                ]}
-              >
-                <View
-                  style={[
-                    localStyles.documentIconBox,
-                    { backgroundColor: doc.color + "33" },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={doc.icon as any}
-                    size={22}
-                    color={doc.color}
-                  />
-                </View>
-                <Text
-                  style={[
-                    localStyles.documentTitle,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  {doc.title}
-                </Text>
-                <Text
-                  style={[
-                    localStyles.documentValid,
-                    { color: colors.text.secondary },
-                  ]}
-                >
-                  Valid until
-                </Text>
-                <Text
-                  style={[
-                    localStyles.documentValidDate,
-                    { color: colors.text.primary },
-                  ]}
-                >
-                  {doc.valid}
-                </Text>
-                <View style={localStyles.documentVerifiedRow}>
-                  <View style={localStyles.verifiedDot} />
-                  <Text
-                    style={[
-                      localStyles.documentVerifiedText,
-                      { color: colors.text.primary },
-                    ]}
-                  >
-                    Verified
-                  </Text>
-                </View>
-              </View>
-            ))} */}
-          </View>
-        </View>
-
-        <View
-          style={[localStyles.sectionCard, { backgroundColor: colors.surface }]}
-        >
           {[
             {
               label: "Change Password",
               icon: "lock",
+              color: "#64748B",
               route: "/(driver)/pages/change-password",
             },
             {
               label: "Notification Settings",
               icon: "notifications",
+              color: "#0EA5E9",
               route: "/(driver)/pages/notification-settings",
             },
             {
               label: "Help & Support",
               icon: "help-outline",
+              color: "#8B5CF6",
               route: "/(driver)/pages/help",
             },
           ].map((item) => (
@@ -585,13 +597,21 @@ const DriverProfile = () => {
               key={item.label}
               style={localStyles.menuRow}
               onPress={() => item.route && router.push(item.route as never)}
+              activeOpacity={0.75}
             >
               <View style={localStyles.menuLabelRow}>
-                <MaterialIcons
-                  name={item.icon as any}
-                  size={20}
-                  color={colors.primary}
-                />
+                <View
+                  style={[
+                    localStyles.menuIcon,
+                    { backgroundColor: `${item.color}16` },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={item.icon as any}
+                    size={19}
+                    color={item.color}
+                  />
+                </View>
                 <Text
                   style={[
                     localStyles.menuLabel,
@@ -636,10 +656,10 @@ const localStyles = StyleSheet.create({
     flex: 1,
   },
   profileContent: {
-    paddingBottom: 30,
-    paddingTop: 0,
+    paddingBottom: 128,
+    paddingTop: 4,
     width: "100%",
-    paddingHorizontal: 0,
+    paddingHorizontal: 16,
   },
 
   divider: {
@@ -649,6 +669,17 @@ const localStyles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     fontWeight: "600",
+  },
+  retryButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: DRIVER_COLORS.primary,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
 
   headerAvatar: {
@@ -664,22 +695,40 @@ const localStyles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#22C55E",
     borderWidth: 2,
-    borderColor: "#0F9D58",
+    borderColor: DRIVER_COLORS.primary,
   },
 
   profileHeroCard: {
+    borderRadius: 26,
     marginHorizontal: 0,
-    borderRadius: 0,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 20,
-    marginTop: 0,
+    marginTop: 10,
     overflow: "hidden",
-    shadowColor: "#0F9D58",
+    shadowColor: DRIVER_COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.14,
     shadowRadius: 12,
     elevation: 6,
     position: "relative",
+  },
+  heroGlowTop: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    top: -118,
+    right: -55,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  heroGlowBottom: {
+    position: "absolute",
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    bottom: 54,
+    left: -100,
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   heroTopRow: {
     flexDirection: "row",
@@ -687,9 +736,9 @@ const localStyles = StyleSheet.create({
     position: "relative",
   },
   profileAvatarWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 24,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.24)",
@@ -700,12 +749,14 @@ const localStyles = StyleSheet.create({
   },
   heroInfo: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 14,
+    paddingRight: 36,
   },
   profileName: {
     color: "#fff",
     fontSize: 22,
-    fontWeight: "700",
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
   statusRow: {
     flexDirection: "row",
@@ -725,14 +776,16 @@ const localStyles = StyleSheet.create({
     fontSize: 12,
   },
   profileId: {
-    color: "rgba(255,255,255,0.85)",
-    marginTop: 8,
-    fontSize: 12,
+    color: "rgba(255,255,255,0.74)",
+    marginTop: 7,
+    fontSize: 11,
+    fontWeight: "600",
   },
   profileMeta: {
     color: "rgba(255,255,255,0.9)",
-    marginTop: 4,
+    marginTop: 7,
     fontSize: 13,
+    lineHeight: 18,
   },
   profileRating: {
     color: "rgba(255,255,255,0.9)",
@@ -765,44 +818,50 @@ const localStyles = StyleSheet.create({
   },
   heroStatsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
+    alignItems: "stretch",
     marginTop: 20,
-    gap: 10,
+    gap: 8,
   },
   heroStatCard: {
     flex: 1,
-    minWidth: 140,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderRadius: 16,
-    padding: 14,
+    minWidth: 0,
+    backgroundColor: "rgba(4,25,20,0.18)",
+    borderRadius: 15,
+    padding: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
   },
   heroStatLabel: {
     color: "rgba(255,255,255,0.85)",
-    fontSize: 11,
-    marginTop: 10,
+    fontSize: 10,
+    marginTop: 8,
   },
   heroStatValue: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: "700",
-    marginTop: 6,
+    marginTop: 5,
   },
   sectionCard: {
     marginHorizontal: 0,
-    marginTop: 10,
-    borderRadius: 0,
+    marginTop: 16,
+    borderRadius: 22,
     backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderWidth: 0,
-    borderColor: "rgba(15,157,88,0.08)",
+    paddingHorizontal: 18,
+    paddingVertical: 19,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 16,
@@ -812,15 +871,15 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(15,157,88,0.08)",
+    borderBottomColor: DRIVER_COLORS.cardBorder,
   },
   sectionRowLast: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 14,
+    paddingVertical: 15,
   },
   rowLabelColumn: {
     flexDirection: "row",
@@ -856,7 +915,7 @@ const localStyles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(15,157,88,0.24)",
+    borderColor: DRIVER_COLORS.cardBorder,
     paddingVertical: 12,
     paddingHorizontal: 14,
     flexDirection: "row",
@@ -901,7 +960,7 @@ const localStyles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "rgba(15,157,88,0.08)",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
   documentGrid: {
     flexDirection: "row",
@@ -913,7 +972,7 @@ const localStyles = StyleSheet.create({
     width: "48%",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(15,157,88,0.08)",
+    borderColor: DRIVER_COLORS.cardBorder,
     padding: 14,
     backgroundColor: "#F8FAFC",
     marginBottom: 12,
@@ -971,10 +1030,10 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 18,
+    paddingVertical: 14,
     paddingHorizontal: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(15,157,88,0.08)",
+    borderBottomColor: DRIVER_COLORS.cardBorder,
   },
   logoutRow: {
     borderBottomWidth: 0,
@@ -983,6 +1042,13 @@ const localStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+  },
+  menuIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
   },
   menuLabel: {
     fontSize: 14,

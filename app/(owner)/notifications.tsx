@@ -13,8 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerProfile } from "./ownerHelpers/hooks/useOwnerProfile";
-import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
+import { useOwnerProfile } from "@/app-support/owner/ownerHelpers/hooks/useOwnerProfile";
+import OwnerCompactHeader from "@/app-support/owner/ownerHelpers/components/OwnerCompactHeader";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
 import {

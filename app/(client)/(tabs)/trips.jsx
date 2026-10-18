@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -11,7 +13,7 @@ import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import ClientHeader from "../components/ClientHeader";
-import { useChildren } from "../clientHelpers/hooks/useChildren";
+import { useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 import CustomMap from "../../../components/map";
@@ -41,13 +43,8 @@ const toMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
-const getRouteDate = (value) => {
-  const parsed = value ? new Date(value) : new Date();
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-};
-
-const getWindowDate = (route, time) => {
-  const date = getRouteDate(route.departure_time);
+const getWindowDate = (time, now = new Date()) => {
+  const date = new Date(now);
   const minutes = toMinutes(time);
   if (minutes !== null)
     date.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
@@ -55,8 +52,9 @@ const getWindowDate = (route, time) => {
 };
 
 const isWindowActive = (trip, now) => {
-  if (trip.stop?.status === "in_progress") return true;
+  if (isTripFinished(trip, now)) return false;
   if (trip.windowDate > now) return false;
+  if (trip.stop?.status === "in_progress") return true;
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   return (
     trip.startMinutes !== null &&
@@ -66,7 +64,6 @@ const isWindowActive = (trip, now) => {
 };
 
 const isTripFinished = (trip, now) => {
-  if (trip.stop?.status === "in_progress") return false;
   if (trip.stop?.status === "completed" || trip.stop?.status === "skipped") {
     return true;
   }
@@ -86,6 +83,10 @@ const Trips = () => {
   const [schoolTrips, setSchoolTrips] = useState([]);
   const [schoolTripsLoading, setSchoolTripsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [ratingModal, setRatingModal] = useState({ visible: false, trip: null });
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   const loadSchoolTrips = useCallback(async () => {
     if (!userToken) {
@@ -141,7 +142,12 @@ const Trips = () => {
               `${baseUrl}/client/children/${child.id}/route-stops`,
               { headers: { Authorization: `Bearer ${user.token}` } },
             );
-            const data = response.ok ? await response.json() : [];
+            if (!response.ok) {
+              throw new Error(
+                `Unable to load trip stops for child ${child.id} (${response.status}).`,
+              );
+            }
+            const data = await response.json();
             const stops = (Array.isArray(data) ? data : []).filter(
               (stop) => stop.route_id === child.route.id,
             );
@@ -155,9 +161,11 @@ const Trips = () => {
       }
     };
 
-    loadStops();
+    void loadStops();
+    const interval = setInterval(() => void loadStops(), 10_000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [children, user?.token]);
 
@@ -188,10 +196,10 @@ const Trips = () => {
 
       windows.forEach((window) => {
         if (!window.startTime) return;
-        const windowDate = getWindowDate(route, window.startTime);
+        const windowDate = getWindowDate(window.startTime, new Date(currentTime));
         const endDate = getWindowDate(
-          route,
           window.endTime || window.startTime,
+          new Date(currentTime),
         );
         if (!window.endTime) endDate.setMinutes(endDate.getMinutes() + 30);
         trips.push({
@@ -208,7 +216,7 @@ const Trips = () => {
       });
     });
     return trips.sort((first, second) => first.windowDate - second.windowDate);
-  }, [children, stopsByChild]);
+  }, [children, currentTime, stopsByChild]);
 
   const todayTrips = useMemo(
     () =>
@@ -255,47 +263,65 @@ const Trips = () => {
     };
   }, [activeChild?.id, activeChild?.vehicle?.driver?.id, user?.token]);
 
+  const getCoordinate = (latitude, longitude, title, type) => {
+    const parsedLatitude = Number(latitude);
+    const parsedLongitude = Number(longitude);
+    if (
+      latitude == null ||
+      longitude == null ||
+      !Number.isFinite(parsedLatitude) ||
+      !Number.isFinite(parsedLongitude)
+    ) {
+      return null;
+    }
+    return {
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
+      title,
+      type,
+    };
+  };
+  const plannedOrigin =
+    activeTrip?.direction === "dropoff"
+      ? getCoordinate(
+          activeChild?.school_latitude ?? activeChild?.route?.end_latitude,
+          activeChild?.school_longitude ?? activeChild?.route?.end_longitude,
+          activeChild?.school_name || "School",
+          "pickup",
+        )
+      : getCoordinate(
+          activeChild?.pickup_latitude ?? activeChild?.route?.start_latitude,
+          activeChild?.pickup_longitude ?? activeChild?.route?.start_longitude,
+          "Pickup location",
+          "pickup",
+        );
+  const plannedDestination =
+    activeTrip?.direction === "dropoff"
+      ? getCoordinate(
+          activeChild?.pickup_latitude ?? activeChild?.route?.start_latitude,
+          activeChild?.pickup_longitude ?? activeChild?.route?.start_longitude,
+          "Home",
+          "dropoff",
+        )
+      : getCoordinate(
+          activeChild?.school_latitude ?? activeChild?.route?.end_latitude,
+          activeChild?.school_longitude ?? activeChild?.route?.end_longitude,
+          activeChild?.school_name || "School",
+          "dropoff",
+        );
   const mapMarkers = [
-    activeTrip?.direction === "dropoff" &&
-    activeChild?.school_latitude != null &&
-    activeChild?.school_longitude != null
-      ? {
-          latitude: Number(activeChild.school_latitude),
-          longitude: Number(activeChild.school_longitude),
-          title: activeChild.school_name || "School",
-          type: "pickup",
-        }
-      : activeChild?.pickup_latitude != null &&
-          activeChild?.pickup_longitude != null
-        ? {
-            latitude: Number(activeChild.pickup_latitude),
-            longitude: Number(activeChild.pickup_longitude),
-            title: "Pickup location",
-            type: "pickup",
-          }
-        : null,
-    activeTrip?.direction === "dropoff" &&
-    activeChild?.pickup_latitude != null &&
-    activeChild?.pickup_longitude != null
-      ? {
-          latitude: Number(activeChild.pickup_latitude),
-          longitude: Number(activeChild.pickup_longitude),
-          title: "Home",
-          type: "dropoff",
-        }
-      : activeChild?.school_latitude != null &&
-          activeChild?.school_longitude != null
-        ? {
-            latitude: Number(activeChild.school_latitude),
-            longitude: Number(activeChild.school_longitude),
-            title: activeChild.school_name || "School",
-            type: "dropoff",
-          }
-        : null,
+    plannedOrigin,
+    plannedDestination,
     driverLocation
       ? { ...driverLocation, title: "Driver live location", type: "driver" }
       : null,
   ].filter(Boolean);
+  const distanceOrigin = driverLocation || plannedOrigin;
+  const hasMeasurableRoute =
+    distanceOrigin &&
+    plannedDestination &&
+    (distanceOrigin.latitude !== plannedDestination.latitude ||
+      distanceOrigin.longitude !== plannedDestination.longitude);
 
   const fetchHistory = useCallback(async () => {
     if (!userToken) return;
@@ -313,6 +339,47 @@ const Trips = () => {
       setHistoryLoading(false);
     }
   }, [userToken]);
+
+  const submitRating = useCallback(async () => {
+    if (!ratingModal.trip || !rating || !userToken) {
+      Alert.alert("Error", "Please provide a rating");
+      return;
+    }
+
+    setSubmittingRating(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/client/route-history/${ratingModal.trip.id}/rating`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${userToken}`,
+          },
+          body: JSON.stringify({
+            rating: parseInt(rating, 10),
+            comment: comment || null,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        Alert.alert("Success", "Thank you for rating the driver!");
+        setRatingModal({ visible: false, trip: null });
+        setRating(0);
+        setComment("");
+      } else {
+        const error = await response.json();
+        Alert.alert("Error", error.error || "Failed to submit rating");
+      }
+    } catch (error) {
+      console.error("Failed to submit rating", error);
+      Alert.alert("Error", "Failed to submit rating. Please try again.");
+    } finally {
+      setSubmittingRating(false);
+    }
+  }, [ratingModal, rating, comment, userToken]);
 
   useEffect(() => {
     const timeout = setTimeout(() => void fetchHistory(), 0);
@@ -354,6 +421,7 @@ const Trips = () => {
           ? `Driver ${item.drivers.users.name}`
           : "Driver",
         status: item.status === "completed" ? "Completed" : "In progress",
+        rawData: item,
       })),
     [history],
   );
@@ -797,9 +865,12 @@ const Trips = () => {
                         {mapMarkers.length > 0 ? (
                           <CustomMap
                             markers={mapMarkers}
-                            origin={mapMarkers[0]}
-                            destination={mapMarkers[1] || mapMarkers[0]}
+                            origin={hasMeasurableRoute ? distanceOrigin : null}
+                            destination={
+                              hasMeasurableRoute ? plannedDestination : null
+                            }
                             style={{ flex: 1, width: "100%" }}
+                            requestLocationPermission={false}
                           />
                         ) : null}
                         {/* Roads */}
@@ -947,71 +1018,95 @@ const Trips = () => {
                 <Text style={styles.tripCount}>No trips found</Text>
               ) : (
                 trips.map((trip, index) => (
-                  <TouchableOpacity
+                  <View
                     key={`${trip.time}-${index}`}
-                    activeOpacity={0.8}
                     style={styles.tripListItem}
                   >
-                    {/* Date */}
-                    <View style={styles.dateBlock}>
-                      <Text style={styles.dateMonth}>{trip.day}</Text>
+                    <View style={styles.tripListItemContent}>
+                      {/* Date */}
+                      <View style={styles.dateBlock}>
+                        <Text style={styles.dateMonth}>{trip.day}</Text>
 
-                      <Text style={styles.dateNumber}>{trip.date}</Text>
+                        <Text style={styles.dateNumber}>{trip.date}</Text>
 
-                      <Text style={styles.dateLabel}>{trip.label}</Text>
-                    </View>
+                        <Text style={styles.dateLabel}>{trip.label}</Text>
+                      </View>
 
-                    <View style={styles.listDivider} />
+                      <View style={styles.listDivider} />
 
-                    {/* Trip info */}
-                    <View style={styles.tripListContent}>
-                      <View style={styles.listTimeRow}>
-                        <Text style={styles.tripListTime}>{trip.time}</Text>
+                      {/* Trip info */}
+                      <View style={styles.tripListContent}>
+                        <View style={styles.listTimeRow}>
+                          <Text style={styles.tripListTime}>{trip.time}</Text>
 
-                        <View
-                          style={[
-                            styles.smallStatus,
-                            trip.status === "Completed"
-                              ? styles.completedStatus
-                              : styles.scheduledStatus,
-                          ]}
-                        >
-                          <Text
+                          <View
                             style={[
-                              styles.smallStatusText,
+                              styles.smallStatus,
                               trip.status === "Completed"
-                                ? styles.completedText
-                                : styles.scheduledText,
+                                ? styles.completedStatus
+                                : styles.scheduledStatus,
                             ]}
                           >
-                            {trip.status}
+                            <Text
+                              style={[
+                                styles.smallStatusText,
+                                trip.status === "Completed"
+                                  ? styles.completedText
+                                  : styles.scheduledText,
+                              ]}
+                            >
+                              {trip.status}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.tripListRoute} numberOfLines={1}>
+                          {trip.route}
+                        </Text>
+
+                        <View style={styles.tripMetaRow}>
+                          <MaterialIcons
+                            name="person-outline"
+                            size={15}
+                            color="#607A98"
+                          />
+
+                          <Text style={styles.tripListMeta}>
+                            {trip.driverLabel || trip.driver}
                           </Text>
                         </View>
                       </View>
 
-                      <Text style={styles.tripListRoute} numberOfLines={1}>
-                        {trip.route}
-                      </Text>
-
-                      <View style={styles.tripMetaRow}>
-                        <MaterialIcons
-                          name="person-outline"
-                          size={15}
-                          color="#607A98"
-                        />
-
-                        <Text style={styles.tripListMeta}>
-                          {trip.driverLabel || trip.driver}
-                        </Text>
-                      </View>
+                      <MaterialIcons
+                        name="chevron-right"
+                        size={25}
+                        color="#607A98"
+                      />
                     </View>
 
-                    <MaterialIcons
-                      name="chevron-right"
-                      size={25}
-                      color="#607A98"
-                    />
-                  </TouchableOpacity>
+                    {tab === "history" && trip.status === "Completed" && (
+                      <TouchableOpacity
+                        style={styles.rateDriverButton}
+                        onPress={() => {
+                          setRating(0);
+                          setComment("");
+                          setRatingModal({
+                            visible: true,
+                            trip: trip.rawData,
+                          });
+                        }}
+                      >
+                        <MaterialIcons
+                          name="star-outline"
+                          size={18}
+                          color="#159B3A"
+                        />
+                        <Text style={styles.rateDriverButtonText}>
+                          Rate driver
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 ))
               )}
             </View>
@@ -1019,6 +1114,82 @@ const Trips = () => {
             <View style={styles.bottomSpacer} />
           </View>
         </ScrollView>
+
+        {/* Rating Modal */}
+        <Modal
+          visible={ratingModal.visible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setRatingModal({ visible: false, trip: null });
+            setRating(0);
+            setComment("");
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.ratingModal}>
+              <View style={styles.ratingModalHeader}>
+                <Text style={styles.ratingModalTitle}>Rate the driver</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setRatingModal({ visible: false, trip: null });
+                    setRating(0);
+                    setComment("");
+                  }}
+                >
+                  <MaterialIcons name="close" size={24} color="#607A98" />
+                </TouchableOpacity>
+              </View>
+
+              {ratingModal.trip && (
+                <>
+                  <Text style={styles.ratingModalDriver}>
+                    {ratingModal.trip.driver}
+                  </Text>
+
+                  <View style={styles.starsContainer}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => setRating(star)}
+                      >
+                        <MaterialIcons
+                          name="star"
+                          size={40}
+                          color={star <= rating ? "#FDB022" : "#E5E7EB"}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TextInput
+                    style={styles.ratingComment}
+                    placeholder="Add a comment (optional)"
+                    placeholderTextColor="#A0AEC0"
+                    multiline={true}
+                    numberOfLines={4}
+                    value={comment}
+                    onChangeText={setComment}
+                    editable={!submittingRating}
+                  />
+
+                  <TouchableOpacity
+                    style={[
+                      styles.ratingSubmitButton,
+                      submittingRating && styles.ratingSubmitButtonDisabled,
+                    ]}
+                    onPress={submitRating}
+                    disabled={submittingRating || !rating}
+                  >
+                    <Text style={styles.ratingSubmitButtonText}>
+                      {submittingRating ? "Submitting..." : "Submit Rating"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -1806,6 +1977,100 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#607A98",
     fontWeight: "500",
+  },
+
+  tripListItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  rateDriverButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#E9F8EE",
+    borderWidth: 1,
+    borderColor: "#159B3A",
+  },
+
+  rateDriverButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#159B3A",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+
+  ratingModal: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+
+  ratingModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+
+  ratingModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#17365E",
+  },
+
+  ratingModalDriver: {
+    fontSize: 14,
+    color: "#607A98",
+    marginBottom: 20,
+    fontWeight: "500",
+  },
+
+  starsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 24,
+  },
+
+  ratingComment: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    fontSize: 13,
+    color: "#17365E",
+    textAlignVertical: "top",
+  },
+
+  ratingSubmitButton: {
+    backgroundColor: "#159B3A",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  ratingSubmitButtonDisabled: {
+    backgroundColor: "#CBD5E1",
+  },
+
+  ratingSubmitButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   bottomSpacer: {

@@ -15,7 +15,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { useChildren } from "../clientHelpers/hooks/useChildren";
+import { useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
 import ClientHeader from "../components/ClientHeader";
 
 type Contact = {
@@ -209,7 +209,7 @@ export default function FamilySafetyPage() {
         title="Family & Safety"
         subtitle="People who can help keep your child safe"
         showBackButton
-        onBackPress={() => router.back()}
+        onBackPress={() => router.replace("/(client)/(tabs)/profile")}
       />
       <ScrollView contentContainerStyle={styles.content}>
         <TouchableOpacity

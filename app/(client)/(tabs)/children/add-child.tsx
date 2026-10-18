@@ -22,8 +22,8 @@ import LocationPicker from "../../../../components/LocationPicker.native";
 import GooglePlacesAutoComplete from "../../../../components/GooglePlacesAutoComplete";
 import AppNotification from "../../../../components/Notification";
 import { resolveWorkingBaseUrl } from "@/url";
-import { useChildren, type Child } from "../../clientHelpers/hooks/useChildren";
-import { useClientProfile } from "../../clientHelpers/hooks/useClientProfile";
+import { useChildren, type Child } from "@/app-support/client/clientHelpers/hooks/useChildren";
+import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
 
 type ChildFormValues = {
   name: string;
@@ -41,6 +41,13 @@ type SelectedLocation = {
   address: string;
   latitude: number | null;
   longitude: number | null;
+};
+
+type SchoolChildMatch = {
+  id: string;
+  name: string;
+  lastname: string | null;
+  grade: string | null;
 };
 
 const toCoordinate = (value: unknown, minimum: number, maximum: number) => {
@@ -77,7 +84,6 @@ const AddChildScreen = () => {
     schools,
     children: existingChildren,
     schoolsLoading,
-    childrenLoading,
   } = useChildren();
   const { client } = useClientProfile();
   const assignedVehicleOptions = useMemo(
@@ -114,6 +120,14 @@ const AddChildScreen = () => {
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
   const [childNameQuery, setChildNameQuery] = useState("");
   const [showChildSuggestions, setShowChildSuggestions] = useState(false);
+  const [schoolChildMatches, setSchoolChildMatches] = useState<
+    SchoolChildMatch[]
+  >([]);
+  const [schoolChildrenLoading, setSchoolChildrenLoading] = useState(false);
+  const [schoolChildrenError, setSchoolChildrenError] = useState("");
+  const [matchedSchoolChildId, setMatchedSchoolChildId] = useState<
+    string | null
+  >(null);
   const [locationPickerResetKey, setLocationPickerResetKey] = useState(0);
   const [pickupLocation, setPickupLocation] = useState<SelectedLocation>({
     address: "",
@@ -161,6 +175,57 @@ const AddChildScreen = () => {
         toCoordinate(client.home_longitude, -180, 180),
     }));
   }, [client]);
+
+  useEffect(() => {
+    const firstName = childNameQuery.trim();
+    if (
+      !showChildSuggestions ||
+      !formValues.school_id ||
+      firstName.length < 2 ||
+      !user?.token
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setSchoolChildrenLoading(true);
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/client/schools/${encodeURIComponent(formValues.school_id)}/children?name=${encodeURIComponent(firstName)}`,
+          { headers: { Authorization: ["Bearer", user.token].join(" ") } },
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "School student lookup failed.");
+        }
+        if (!cancelled) {
+          setSchoolChildMatches(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("School student lookup failed:", error);
+          setSchoolChildrenError(
+            "Unable to search this school's student records. Please try again.",
+          );
+          setSchoolChildMatches([]);
+        }
+      } finally {
+        if (!cancelled) setSchoolChildrenLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    childNameQuery,
+    formValues.school_id,
+    showChildSuggestions,
+    user?.token,
+  ]);
 
   const handlePickImage = async () => {
     try {
@@ -246,6 +311,10 @@ const AddChildScreen = () => {
     setShowSchoolSuggestions(false);
     setChildNameQuery("");
     setShowChildSuggestions(false);
+    setSchoolChildMatches([]);
+    setSchoolChildrenError("");
+    setSchoolChildrenLoading(false);
+    setMatchedSchoolChildId(null);
     setPickupLocation({
       address: client?.home_address || "",
       latitude: toCoordinate(client?.home_latitude, -90, 90),
@@ -341,12 +410,17 @@ const AddChildScreen = () => {
           dropoff_longitude: selectedSchoolLongitude,
           vehicle_id: formValues.vehicle_id || null,
           avatar: avatarUrl || null,
+          existing_child_id: matchedSchoolChildId,
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || data.message || "Failed to add child.");
+        const message =
+          data.error === "CHILD_ALREADY_LINKED_OR_NOT_FOUND"
+            ? "This school record is no longer available. Search again and select the student."
+            : data.error || data.message || "Failed to add child.";
+        throw new Error(message);
       }
 
       showNotification("Your child was added successfully.", "success");
@@ -420,25 +494,6 @@ const AddChildScreen = () => {
 
   const matchingExistingChildren =
     existingChildren.length > 0 ? existingChildren : [];
-
-  const filteredChildren =
-    formValues.school_id && (childNameQuery || "").trim()
-      ? existingChildren.filter((child) => {
-          const childSchoolName = (child.school_name || "").toLowerCase();
-          const selectedSchoolName = (
-            formValues.school_name || ""
-          ).toLowerCase();
-          const matchesSchool = childSchoolName === selectedSchoolName;
-          if (!matchesSchool) return false;
-
-          const childName = `${child.name || ""} ${child.lastname || ""}`
-            .trim()
-            .toLowerCase();
-          return childName.includes(
-            (childNameQuery || "").trim().toLowerCase(),
-          );
-        })
-      : [];
 
   const pickupLatitude = toCoordinate(pickupLocation.latitude, -90, 90);
   const pickupLongitude = toCoordinate(pickupLocation.longitude, -180, 180);
@@ -579,6 +634,10 @@ const AddChildScreen = () => {
                         180,
                       );
 
+                      setMatchedSchoolChildId(null);
+                      setSchoolChildMatches([]);
+                      setSchoolChildrenError("");
+                      setSchoolChildrenLoading(false);
                       setFormValues((prev) => ({
                         ...prev,
                         lastname: child.lastname || prev.lastname,
@@ -635,6 +694,7 @@ const AddChildScreen = () => {
                 value={schoolQuery}
                 placeholder="Search or select school"
                 debounce={400}
+                suggestionsEnabled={!Boolean(formValues.school_id)}
                 onChangeText={(value) => {
                   const nextValue = value || "";
 
@@ -648,6 +708,10 @@ const AddChildScreen = () => {
                     school_latitude: null,
                     school_longitude: null,
                   }));
+                  setMatchedSchoolChildId(null);
+                  setSchoolChildMatches([]);
+                  setSchoolChildrenError("");
+                  setSchoolChildrenLoading(false);
 
                   if (!nextValue.trim()) {
                     setDropoffLocation({
@@ -694,6 +758,10 @@ const AddChildScreen = () => {
                   setShowSchoolSuggestions(false);
                   setChildNameQuery("");
                   setShowChildSuggestions(false);
+                  setMatchedSchoolChildId(null);
+                  setSchoolChildMatches([]);
+                  setSchoolChildrenError("");
+                  setSchoolChildrenLoading(false);
                 }}
               />
 
@@ -769,14 +837,20 @@ const AddChildScreen = () => {
                               school_latitude: school.latitude ?? null,
                               school_longitude: school.longitude ?? null,
                             }));
+                            setMatchedSchoolChildId(null);
+                            setSchoolChildMatches([]);
+                            setSchoolChildrenError("");
+                            setSchoolChildrenLoading(false);
                             setDropoffLocation({
                               address: school.name || "",
                               latitude: school.latitude ?? null,
                               longitude: school.longitude ?? null,
                             });
                             setShowSchoolSuggestions(false);
-                            setChildNameQuery("");
-                            setShowChildSuggestions(false);
+                            setChildNameQuery(formValues.name);
+                            setShowChildSuggestions(
+                              formValues.name.trim().length >= 2,
+                            );
                           }}
                         >
                           <Text
@@ -839,15 +913,19 @@ const AddChildScreen = () => {
                       onChangeText={(value) => {
                         setFormValues((prev) => ({ ...prev, name: value }));
                         setChildNameQuery(value);
+                        setMatchedSchoolChildId(null);
+                        setSchoolChildMatches([]);
+                        setSchoolChildrenError("");
+                        setSchoolChildrenLoading(false);
                         setShowChildSuggestions(
-                          Boolean(value.trim()) &&
+                          value.trim().length >= 2 &&
                             Boolean(formValues.school_id),
                         );
                       }}
                       onFocus={() => {
                         if (formValues.school_id) {
                           setShowChildSuggestions(
-                            Boolean(childNameQuery.trim()),
+                            childNameQuery.trim().length >= 2,
                           );
                         }
                       }}
@@ -860,7 +938,7 @@ const AddChildScreen = () => {
                       style={[styles.input, { color: colors.text.primary }]}
                     />
                   </View>
-                  {childrenLoading ? (
+                  {schoolChildrenLoading ? (
                     <View style={styles.schoolLoadingRow}>
                       <ActivityIndicator size="small" color={colors.primary} />
                       <Text
@@ -869,9 +947,20 @@ const AddChildScreen = () => {
                           { color: colors.text.secondary },
                         ]}
                       >
-                        Checking children…
+                        Searching this school…
                       </Text>
                     </View>
+                  ) : null}
+                  {matchedSchoolChildId ? (
+                    <Text
+                      style={[
+                        styles.schoolItemSubtext,
+                        { color: colors.primary, marginTop: 6 },
+                      ]}
+                    >
+                      Existing school record selected. Your updates will be
+                      saved and linked to your account.
+                    </Text>
                   ) : null}
                   {showChildSuggestions && (
                     <View
@@ -883,25 +972,40 @@ const AddChildScreen = () => {
                         },
                       ]}
                     >
-                      {filteredChildren.length > 0 ? (
-                        filteredChildren.map((child) => (
+                      {schoolChildrenError ? (
+                        <Text
+                          style={[
+                            styles.schoolItemText,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          {schoolChildrenError}
+                        </Text>
+                      ) : schoolChildrenLoading ? (
+                        <Text
+                          style={[
+                            styles.schoolItemText,
+                            { color: colors.text.secondary },
+                          ]}
+                        >
+                          Searching this school&apos;s student records…
+                        </Text>
+                      ) : schoolChildMatches.length > 0 ? (
+                        schoolChildMatches.map((child) => (
                           <TouchableOpacity
                             key={child.id}
                             style={styles.schoolItem}
                             onPress={() => {
+                              setMatchedSchoolChildId(child.id);
                               setFormValues((prev) => ({
                                 ...prev,
                                 name: child.name || "",
                                 lastname: child.lastname || "",
                                 grade: child.grade || "",
-                                school_name:
-                                  child.school_name || prev.school_name,
-                                school_id: child.school_id || prev.school_id,
                               }));
-                              setChildNameQuery(
-                                `${child.name || ""} ${child.lastname || ""}`.trim(),
-                              );
+                              setChildNameQuery(child.name || "");
                               setShowChildSuggestions(false);
+                              setSchoolChildrenLoading(false);
                             }}
                           >
                             <Text
@@ -932,7 +1036,9 @@ const AddChildScreen = () => {
                             { color: colors.text.secondary },
                           ]}
                         >
-                          No children found for this school
+                          {childNameQuery.trim().length < 2
+                            ? "Enter at least 2 letters to search school records."
+                            : "No unlinked students found for this name."}
                         </Text>
                       )}
                     </View>

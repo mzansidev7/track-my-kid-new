@@ -13,8 +13,8 @@ import { useRouter } from "expo-router";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import AppNotification from "../../../../components/Notification";
 import ClientHeader from "../../components/ClientHeader";
-import { Child, useChildren } from "../../clientHelpers/hooks/useChildren";
-import { useClientProfile } from "../../clientHelpers/hooks/useClientProfile";
+import { Child, useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
+import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../../url";
 
@@ -38,12 +38,26 @@ const formatTime = (value?: string) => {
 const hasAssignedVehicle = (child: Child) =>
   Boolean(child.vehicle_id || child.vehicle?.id);
 
-const deriveChildStatus = (child: Child) => {
-  const route = child.route;
-  const pickupTime = route?.pickup_start_time || route?.departure_time;
-  const dropoffTime = route?.dropoff_start_time;
+type RouteStop = {
+  route_id?: string;
+  stop_type?: "pickup" | "dropoff";
+  status?: "pending" | "in_progress" | "completed" | "skipped";
+};
 
-  if (!route) {
+const toMinutes = (value?: string) => {
+  if (!value) return null;
+  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+const deriveChildStatus = (
+  child: Child,
+  stops: RouteStop[] = [],
+  timestamp = Date.now(),
+) => {
+  const route = child.route;
+  if (!route || !hasAssignedVehicle(child)) {
     return {
       label: "Upcoming",
       accent: "#607A98",
@@ -51,31 +65,88 @@ const deriveChildStatus = (child: Child) => {
     };
   }
 
-  if (child.status) {
+  const now = new Date(timestamp);
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const pickupStart = route.pickup_start_time || route.departure_time;
+  const pickupStartMinutes = toMinutes(pickupStart);
+  const pickupEndMinutes = toMinutes(route.pickup_end_time);
+  const dropoffStartMinutes = toMinutes(route.dropoff_start_time);
+  const dropoffEndMinutes = toMinutes(route.dropoff_end_time);
+  const pickupStop = stops.find((stop) => stop.stop_type === "pickup");
+  const dropoffStop = stops.find((stop) => stop.stop_type === "dropoff");
+  const isDropoffFinished = ["completed", "skipped"].includes(
+    dropoffStop?.status || "",
+  );
+  const activeStop = stops.find((stop) => stop.status === "in_progress");
+  const inPickupWindow =
+    pickupStartMinutes !== null &&
+    !["completed", "skipped"].includes(pickupStop?.status || "") &&
+    currentMinutes >= pickupStartMinutes &&
+    (pickupEndMinutes === null || currentMinutes <= pickupEndMinutes);
+  const inDropoffWindow =
+    dropoffStartMinutes !== null &&
+    !["completed", "skipped"].includes(dropoffStop?.status || "") &&
+    currentMinutes >= dropoffStartMinutes &&
+    (dropoffEndMinutes === null || currentMinutes <= dropoffEndMinutes);
+
+  if (isDropoffFinished) {
     return {
-      label: child.status,
-      accent: child.accent || "#159B3A",
-      note:
-        child.eta && child.eta !== "None"
-          ? `ETA to school: ${child.eta}`
-          : "Tracking active",
+      label: "Completed",
+      accent: "#607A98",
+      note: "Today's trip is complete",
     };
   }
 
-  if (pickupTime || dropoffTime) {
+  if (activeStop || inPickupWindow || inDropoffWindow) {
     return {
-      label: pickupTime ? "On a Trip" : "At School",
-      accent: pickupTime ? "#159B3A" : "#087C2B",
-      note: pickupTime
-        ? `ETA to school: ${formatTime(pickupTime)}`
-        : "Checked in safely at school",
+      label: "On a Trip",
+      accent: "#159B3A",
+      note:
+        activeStop?.stop_type === "dropoff" || inDropoffWindow
+          ? "On the way home"
+          : "On the way to school",
+    };
+  }
+
+  const pickupCompleted = pickupStop?.status === "completed";
+  const betweenWindows =
+    pickupEndMinutes !== null &&
+    currentMinutes > pickupEndMinutes &&
+    (dropoffStartMinutes === null || currentMinutes < dropoffStartMinutes);
+  if (pickupCompleted || betweenWindows) {
+    return {
+      label: "At School",
+      accent: "#087C2B",
+      note: "Checked in safely at school",
+    };
+  }
+
+  if (
+    pickupStartMinutes !== null &&
+    currentMinutes < pickupStartMinutes
+  ) {
+    return {
+      label: "Upcoming",
+      accent: "#607A98",
+      note: `Pickup at ${formatTime(pickupStart)}`,
+    };
+  }
+
+  if (
+    dropoffEndMinutes !== null &&
+    currentMinutes > dropoffEndMinutes
+  ) {
+    return {
+      label: "Completed",
+      accent: "#607A98",
+      note: "Today's trip is complete",
     };
   }
 
   return {
     label: "Upcoming",
     accent: "#607A98",
-    note: "Awaiting vehicle assignment",
+    note: "Waiting for the trip to start",
   };
 };
 
@@ -87,11 +158,67 @@ const ChildrenScreen = () => {
   const [scheduledTrips, setScheduledTrips] = useState<Record<string, any[]>>(
     {},
   );
+  const [routeStopsByChild, setRouteStopsByChild] = useState<
+    Record<string, RouteStop[]>
+  >({});
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [profileNotification, setProfileNotification] = React.useState({
     visible: false,
     message: "",
     type: "warning" as const,
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.token) return;
+
+    let active = true;
+    const loadRouteStops = async () => {
+      const routedChildren = existingChildren.filter(
+        (child) => child.route?.id && hasAssignedVehicle(child),
+      );
+      if (routedChildren.length === 0) {
+        setRouteStopsByChild({});
+        return;
+      }
+
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const entries = await Promise.all(
+          routedChildren.map(async (child) => {
+            const response = await fetch(
+              `${baseUrl}/client/children/${child.id}/route-stops`,
+              { headers: { Authorization: `Bearer ${user.token}` } },
+            );
+            if (!response.ok) {
+              throw new Error(
+                `Unable to load route stops for child ${child.id} (${response.status}).`,
+              );
+            }
+            const data = await response.json();
+            const stops = (Array.isArray(data) ? data : []).filter(
+              (stop: RouteStop) => stop.route_id === child.route?.id,
+            );
+            return [child.id, stops] as const;
+          }),
+        );
+        if (active) setRouteStopsByChild(Object.fromEntries(entries));
+      } catch (error) {
+        console.error("Failed to refresh child route statuses", error);
+      }
+    };
+
+    void loadRouteStops();
+    const interval = setInterval(() => void loadRouteStops(), 10_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [existingChildren, user?.token]);
 
   useEffect(() => {
     if (!user?.token || existingChildren.length === 0) return;
@@ -155,7 +282,12 @@ const ChildrenScreen = () => {
   const overviewCards = [
     {
       count: existingChildren.filter(
-        (child) => deriveChildStatus(child).label === "On a Trip",
+        (child) =>
+          deriveChildStatus(
+            child,
+            routeStopsByChild[child.id],
+            currentTime,
+          ).label === "On a Trip",
       ).length,
       label: "On a Trip",
       sub: "View live location",
@@ -165,7 +297,12 @@ const ChildrenScreen = () => {
     },
     {
       count: existingChildren.filter(
-        (child) => deriveChildStatus(child).label === "At School",
+        (child) =>
+          deriveChildStatus(
+            child,
+            routeStopsByChild[child.id],
+            currentTime,
+          ).label === "At School",
       ).length,
       label: "At School",
       sub: "Checked in",
@@ -174,7 +311,14 @@ const ChildrenScreen = () => {
       iconColor: "#087C2B",
     },
     {
-      count: existingChildren.filter((child) => !child.route).length,
+      count: existingChildren.filter(
+        (child) =>
+          deriveChildStatus(
+            child,
+            routeStopsByChild[child.id],
+            currentTime,
+          ).label === "Upcoming",
+      ).length,
       label: "Upcoming",
       sub: "Later today",
       icon: "schedule" as const,
@@ -277,7 +421,11 @@ const ChildrenScreen = () => {
             </View>
           ) : (
             existingChildren.map((child: Child) => {
-              const status = deriveChildStatus(child);
+              const status = deriveChildStatus(
+                child,
+                routeStopsByChild[child.id],
+                currentTime,
+              );
               const childTrips = scheduledTrips[child.id] || [];
               const today = getLocalDateKey();
               const weekendTrip =

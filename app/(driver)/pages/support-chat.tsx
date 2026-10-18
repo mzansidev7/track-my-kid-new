@@ -77,7 +77,7 @@ const SupportChatPage = () => {
     return () => {
       if (cleanup) cleanup();
     };
-  }, [currentUserId]);
+  }, [currentUserId, currentUserRole]);
 
   useEffect(() => {
     setTimeout(() => {

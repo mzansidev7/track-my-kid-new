@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
+import { resolveWorkingBaseUrl } from "@/url";
 import {
   fetchSupportTicketsForUser,
   subscribeToSupportTickets,
@@ -59,6 +60,13 @@ const SupportTicketPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [tickets, setTickets] = useState<any[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
+  const [repliesByTicket, setRepliesByTicket] = useState<
+    Record<string, any[]>
+  >({});
+  const [replyDraft, setReplyDraft] = useState("");
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
   const isMountedRef = useRef(true);
 
   const currentUserId = user?.userData?.id || user?.id;
@@ -72,7 +80,7 @@ const SupportTicketPage = () => {
     );
   };
 
-  const fetchUserTickets = async () => {
+  const fetchUserTickets = React.useCallback(async () => {
     if (!currentUserId) {
       safeSetTickets([]);
       return;
@@ -91,6 +99,82 @@ const SupportTicketPage = () => {
         setLoadingTickets(false);
       }
     }
+  }, [currentUserId]);
+
+  const toggleConversation = async (ticketId: string) => {
+    if (expandedTicketId === ticketId) {
+      setExpandedTicketId(null);
+      return;
+    }
+
+    setExpandedTicketId(ticketId);
+    setLoadingReplies(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/support/tickets/${ticketId}/replies`,
+        { headers: { Authorization: `Bearer ${user?.token}` } },
+      );
+      const result = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to load ticket replies.");
+      }
+      setRepliesByTicket((previous) => ({
+        ...previous,
+        [ticketId]: Array.isArray(result) ? result : [],
+      }));
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to load conversation",
+        error?.message || "Please try again.",
+      );
+      setExpandedTicketId(null);
+    } finally {
+      setLoadingReplies(false);
+    }
+  };
+
+  const submitReply = async (ticketId: string) => {
+    const body = replyDraft.trim();
+    if (!body || submittingReply) return;
+
+    setSubmittingReply(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/driver/support-tickets/${ticketId}/replies`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+          body: JSON.stringify({ body }),
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to send your reply.");
+      }
+
+      setRepliesByTicket((previous) => ({
+        ...previous,
+        [ticketId]: [...(previous[ticketId] || []), result],
+      }));
+      setReplyDraft("");
+      if (!result.support_notification_sent)
+        Alert.alert(
+          "Reply saved",
+          "Your reply was saved, but support could not be notified. Please contact support directly if this is urgent.",
+        );
+    } catch (error: any) {
+      Alert.alert(
+        "Unable to send reply",
+        error?.message || "Please try again.",
+      );
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
   useEffect(() => {
@@ -107,7 +191,7 @@ const SupportTicketPage = () => {
       return;
     }
 
-    fetchUserTickets();
+    void fetchUserTickets();
 
     const channel = subscribeToSupportTickets(
       currentUserId,
@@ -121,7 +205,7 @@ const SupportTicketPage = () => {
         client.removeChannel(channel);
       }
     };
-  }, [currentUserId]);
+  }, [currentUserId, fetchUserTickets]);
 
   const handleSubmit = async () => {
     const trimmedTitle = title.trim();
@@ -146,26 +230,36 @@ const SupportTicketPage = () => {
     setSubmitting(true);
 
     try {
-      const { data: insertedTicket, error: ticketError } = await client
-        .from("support_tickets")
-        .insert({
-          user_id: currentUserId,
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/driver/support-tickets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user?.token}`,
+        },
+        body: JSON.stringify({
           subject: trimmedTitle,
           message: trimmedDetails,
           category,
           priority,
-          status: "open",
-        })
-        .select("*")
-        .single();
-
-      if (ticketError) throw ticketError;
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to submit support ticket.");
+      }
+      const insertedTicket = result.ticket;
+      if (!insertedTicket?.id) {
+        throw new Error("Support ticket was created without an ID.");
+      }
 
       setTickets((prevTickets) => [insertedTicket, ...prevTickets]);
 
       Alert.alert(
         "Ticket submitted",
-        "Your support ticket has been created successfully.",
+        result.support_notification_sent
+          ? "Your ticket was sent to the support team."
+          : "Your ticket was created and is in the support inbox. No active support recipients were available for an alert.",
       );
       setTitle("");
       setDetails("");
@@ -344,6 +438,63 @@ const SupportTicketPage = () => {
                     : "Just now"}
                 </Text>
                 <Text style={styles.ticketMessage}>{ticket.message}</Text>
+                <TouchableOpacity
+                  style={styles.conversationButton}
+                  onPress={() => toggleConversation(ticket.id)}
+                >
+                  <Text style={styles.conversationButtonText}>
+                    {expandedTicketId === ticket.id
+                      ? "Hide conversation"
+                      : "View conversation"}
+                  </Text>
+                </TouchableOpacity>
+                {expandedTicketId === ticket.id ? (
+                  <View style={styles.conversation}>
+                    {loadingReplies ? (
+                      <Text style={styles.replyMeta}>Loading replies...</Text>
+                    ) : (repliesByTicket[ticket.id] || []).length ? (
+                      repliesByTicket[ticket.id].map((reply) => (
+                        <View key={reply.id} style={styles.reply}>
+                          <Text style={styles.replyMeta}>
+                            {reply.author_user_id === currentUserId
+                              ? "You"
+                              : Array.isArray(reply.users)
+                                ? reply.users[0]?.name || "Support"
+                                : reply.users?.name || "Support"}
+                            {reply.created_at
+                              ? ` · ${new Date(reply.created_at).toLocaleString()}`
+                              : ""}
+                          </Text>
+                          <Text style={styles.replyBody}>{reply.body}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.replyMeta}>
+                        No replies yet. Add a message below to continue the
+                        conversation.
+                      </Text>
+                    )}
+                    <TextInput
+                      value={replyDraft}
+                      onChangeText={setReplyDraft}
+                      placeholder="Write a reply..."
+                      style={styles.replyInput}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.replyButton,
+                        submittingReply && styles.submitButtonDisabled,
+                      ]}
+                      onPress={() => submitReply(ticket.id)}
+                      disabled={submittingReply || !replyDraft.trim()}
+                    >
+                      <Text style={styles.submitButtonText}>
+                        {submittingReply ? "Sending..." : "Send reply"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
             ))
           )}
@@ -511,6 +662,55 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: "#1F2937",
+  },
+  conversationButton: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    paddingVertical: 6,
+  },
+  conversationButtonText: {
+    color: "#0F9D58",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  conversation: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#D1D5DB",
+  },
+  reply: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
+    marginBottom: 8,
+  },
+  replyMeta: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 5,
+  },
+  replyBody: {
+    fontSize: 14,
+    color: "#111827",
+    lineHeight: 20,
+  },
+  replyInput: {
+    minHeight: 70,
+    textAlignVertical: "top",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  replyButton: {
+    backgroundColor: "#0F9D58",
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: "center",
+    marginTop: 8,
   },
   emptyState: {
     fontSize: 14,

@@ -1,41 +1,49 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Student = {
   id: string;
   name: string;
   school?: string;
+  routeName?: string;
   status?: "picked_up" | "waiting" | "dropped_off";
 };
 
 type Props = {
   students: Student[];
+  totalStudents?: number;
   onViewAll?: () => void;
 };
 
-const DriverStudentsCard = ({ students, onViewAll }: Props) => {
-  const { colors } = useTheme();
+const DriverStudentsCard = ({
+  students,
+  totalStudents = students.length,
+  onViewAll,
+}: Props) => {
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: DRIVER_COLORS.card,
+          borderColor: DRIVER_COLORS.cardBorder,
+        },
       ]}
     >
       <View style={styles.header}>
         <View>
-          <Text style={[styles.title, { color: colors.primary }]}>
+          <Text style={[styles.title, { color: DRIVER_COLORS.text }]}>
             Today&apos;s Students
           </Text>
-          <Text style={[styles.subtitle, { color: colors.primary }]}>
-            {students.length} students assigned
+          <Text style={[styles.subtitle, { color: DRIVER_COLORS.muted }]}>
+            {totalStudents} students assigned
           </Text>
         </View>
 
         <TouchableOpacity onPress={onViewAll}>
-          <Text style={[styles.viewAll, { color: colors.primary }]}>
+          <Text style={[styles.viewAll, { color: DRIVER_COLORS.primary }]}>
             View all
           </Text>
         </TouchableOpacity>
@@ -44,19 +52,27 @@ const DriverStudentsCard = ({ students, onViewAll }: Props) => {
       {students.slice(0, 4).map((student) => (
         <View
           key={student.id}
-          style={[styles.student, { borderTopColor: colors.border }]}
+          style={[
+            styles.student,
+            { borderTopColor: DRIVER_COLORS.cardBorder },
+          ]}
         >
           <View style={styles.avatar}>
-            <MaterialIcons name="person" size={20} color={colors.primary} />
+            <MaterialIcons
+              name="person"
+              size={20}
+              color={DRIVER_COLORS.primary}
+            />
           </View>
 
           <View style={styles.studentInfo}>
-            <Text style={[styles.name, { color: colors.primary }]}>
+            <Text style={[styles.name, { color: DRIVER_COLORS.text }]}>
               {student.name}
             </Text>
 
-            <Text style={[styles.school, { color: colors.primary }]}>
+            <Text style={[styles.school, { color: DRIVER_COLORS.muted }]}>
               {student.school || "School not specified"}
+              {student.routeName ? ` · ${student.routeName}` : ""}
             </Text>
           </View>
 
@@ -67,7 +83,7 @@ const DriverStudentsCard = ({ students, onViewAll }: Props) => {
               student.status === "dropped_off" && styles.statusBlue,
             ]}
           >
-            <Text style={[styles.statusText, { color: colors.primary }]}>
+            <Text style={[styles.statusText, { color: DRIVER_COLORS.text }]}>
               {student.status === "picked_up"
                 ? "Picked up"
                 : student.status === "dropped_off"
@@ -83,12 +99,12 @@ const DriverStudentsCard = ({ students, onViewAll }: Props) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
+    backgroundColor: DRIVER_COLORS.card,
+    borderRadius: 22,
+    padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.16)",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
 
   header: {
@@ -99,19 +115,19 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.text,
     fontSize: 17,
     fontWeight: "700",
   },
 
   subtitle: {
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     fontSize: 11,
     marginTop: 4,
   },
 
   viewAll: {
-    color: "#0F9D58",
+    color: DRIVER_COLORS.primary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -128,7 +144,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#0F9D58",
+    backgroundColor: "#EAF2ED",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -154,19 +170,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: "#463A1E",
+    backgroundColor: "#F2E8D6",
   },
 
   statusGreen: {
-    backgroundColor: "#123E35",
+    backgroundColor: "#E2F2E9",
   },
 
   statusBlue: {
-    backgroundColor: "#123A6A",
+    backgroundColor: "#E7EEF7",
   },
 
   statusText: {
-    color: "#DDE8F5",
+    color: DRIVER_COLORS.text,
     fontSize: 9,
     fontWeight: "600",
   },

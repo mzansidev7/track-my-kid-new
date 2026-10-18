@@ -13,8 +13,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAdminDashboard } from "../../../adminHelpers/hooks/useAdminDashboard";
-import { useAdminProfile } from "../../../adminHelpers/hooks/useAdminProfile";
+import { useAdminDashboard } from "@/app-support/admin/adminHelpers/hooks/useAdminDashboard";
+import { useAdminProfile } from "@/app-support/admin/adminHelpers/hooks/useAdminProfile";
 import AdminPageHeader, {
   AdminHeaderAction,
 } from "../components/AdminPageHeader";
@@ -96,17 +96,33 @@ export default function AdminDashboard() {
           adminName={adminName}
           adminRole={admin?.admin_role}
           action={
-            <AdminHeaderAction
-              onPress={() => void refresh()}
-              loading={refreshing}
-              accessibilityLabel="Refresh dashboard"
-            />
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                onPress={() => router.push("/(admin)/(tabs)/notifications")}
+                style={styles.notificationButton}
+                accessibilityRole="button"
+                accessibilityLabel="Open notifications"
+              >
+                <MaterialIcons
+                  name="notifications-none"
+                  size={20}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+              <AdminHeaderAction
+                onPress={() => void refresh()}
+                loading={refreshing}
+                accessibilityLabel="Refresh dashboard"
+              />
+            </View>
           }
         />
 
         <View style={styles.sectionIntro}>
           <View>
-            <Text style={[styles.overviewTitle, { color: colors.text.primary }]}>
+            <Text
+              style={[styles.overviewTitle, { color: colors.text.primary }]}
+            >
               At a glance
             </Text>
             <Text style={styles.overviewSubtitle}>
@@ -137,7 +153,9 @@ export default function AdminDashboard() {
         {loading && !data.generatedAt ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.overviewSubtitle}>Loading platform metrics…</Text>
+            <Text style={styles.overviewSubtitle}>
+              Loading platform metrics…
+            </Text>
           </View>
         ) : (
           <>
@@ -387,6 +405,8 @@ export default function AdminDashboard() {
 type AdminDashboardStyles = {
   safe: ViewStyle;
   content: ViewStyle;
+  headerActions: ViewStyle;
+  notificationButton: ViewStyle;
   sectionIntro: ViewStyle;
   overviewTitle: TextStyle;
   overviewSubtitle: TextStyle;
@@ -428,6 +448,17 @@ type AdminDashboardStyles = {
 const styles = StyleSheet.create<AdminDashboardStyles>({
   safe: { flex: 1 },
   content: { padding: 16, paddingBottom: 36, gap: 16 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  notificationButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sectionIntro: {
     flexDirection: "row",
     alignItems: "center",
@@ -445,8 +476,18 @@ const styles = StyleSheet.create<AdminDashboardStyles>({
     paddingHorizontal: 9,
     paddingVertical: 6,
   },
-  liveBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10B981" },
-  liveBadgeText: { color: "#047857", fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
+  liveBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  liveBadgeText: {
+    color: "#047857",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
   metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   metricCard: {
     width: "48%",

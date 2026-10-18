@@ -19,7 +19,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
-import { useDriverProfile } from "@/app/(driver)/driverHelpers/hooks/useDriverProfile";
+import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
 import { resolveWorkingBaseUrl } from "@/url";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { validateSouthAfricanId } from "@/utils/saId";
@@ -49,8 +49,11 @@ type DriverFormData = {
 const createAddressValue = (value: unknown): AddressFormData => {
   if (typeof value === "object" && value !== null) {
     const source = value as Record<string, unknown>;
+    const fullAddress =
+      typeof source.full_address === "string" ? source.full_address.trim() : "";
     return {
-      street: typeof source.street === "string" ? source.street : "",
+      street:
+        typeof source.street === "string" ? source.street : fullAddress,
       suburb: typeof source.suburb === "string" ? source.suburb : "",
       city: typeof source.city === "string" ? source.city : "",
       province: typeof source.province === "string" ? source.province : "",
@@ -96,7 +99,7 @@ const EditDriverProfile = () => {
       postalCode: "",
       country: "",
     },
-    experience: "Example: 5 Years",
+    experience: "",
   });
 
   const [saving, setSaving] = useState(false);
@@ -144,17 +147,17 @@ const EditDriverProfile = () => {
       return iso || String(val);
     };
 
-    setFormData((prev) => ({
-      ...prev,
-      name: driver?.user?.name || prev.name,
-      phone: driver?.user?.phone || prev.phone,
-      email: driver?.user?.email || prev.email,
-      dob: normalize(driver?.date_of_birth || prev.dob),
-      idNumber: driver?.id_number || prev.idNumber,
-      licenseNumber: driver?.vehicle_plate_number || prev.licenseNumber,
-      licenseExpiry: normalize(driver?.licence_expiry || prev.licenseExpiry),
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormData(() => ({
+      name: driver?.user?.name || "",
+      phone: driver?.user?.phone || "",
+      email: driver?.user?.email || "",
+      dob: normalize(driver?.date_of_birth),
+      idNumber: driver?.id_number || "",
+      licenseNumber: driver?.vehicle_plate_number || "",
+      licenseExpiry: normalize(driver?.licence_expiry),
       address: resolvedAddress,
-      experience: driver?.experience || prev.experience,
+      experience: driver?.experience || "",
     }));
 
     setAvatarPreviewUri(resolvedAvatar);
@@ -402,9 +405,9 @@ const EditDriverProfile = () => {
         keyboardVerticalOffset={80}
       >
         <DriverHeader
-          title="Profile"
-          subtitle="Manage your profile and account settings"
-          showBackButton={true}
+          title="Edit Profile"
+          subtitle="Keep your driver details up to date"
+          showBackButton
         />
 
         <ScrollView
@@ -414,45 +417,110 @@ const EditDriverProfile = () => {
           nestedScrollEnabled={true}
           showsVerticalScrollIndicator={false}
         >
-          <View style={localStyles.avatarSection}>
-            <View style={localStyles.avatarWrapper}>
-              <Image
-                source={
-                  avatarPreviewUri
-                    ? { uri: avatarPreviewUri }
-                    : require("@/assets/images/driver.png")
-                }
-                style={localStyles.avatarImage}
-              />
-            </View>
-            <TouchableOpacity
-              style={[
-                localStyles.avatarButton,
-                { borderColor: colors.primary },
-              ]}
-              onPress={handlePickAvatar}
-            >
-              <MaterialIcons
-                name="photo-camera"
-                size={18}
-                color={colors.primary}
-              />
-              <Text
+          <View
+            style={[
+              localStyles.avatarSection,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.avatarRow}>
+              <View
                 style={[
-                  localStyles.avatarButtonText,
-                  { color: colors.primary },
+                  localStyles.avatarWrapper,
+                  { borderColor: colors.border },
                 ]}
               >
-                Change Photo
-              </Text>
-            </TouchableOpacity>
+                <Image
+                  source={
+                    avatarPreviewUri
+                      ? { uri: avatarPreviewUri }
+                      : require("@/assets/images/driver.png")
+                  }
+                  style={localStyles.avatarImage}
+                />
+              </View>
+              <View style={localStyles.avatarCopy}>
+                <Text
+                  style={[
+                    localStyles.avatarTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Profile photo
+                </Text>
+                <Text
+                  style={[
+                    localStyles.avatarDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Help families and your team recognize you.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    localStyles.avatarButton,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={handlePickAvatar}
+                  activeOpacity={0.75}
+                >
+                  <MaterialIcons
+                    name="photo-camera"
+                    size={17}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      localStyles.avatarButtonText,
+                      { color: colors.primary },
+                    ]}
+                  >
+                    Change photo
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
 
           {/* Personal Information Section */}
-          <View style={localStyles.section}>
-            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-              Personal Information
-            </Text>
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons
+                  name="person-outline"
+                  size={19}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Personal information
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Your identity and home address
+                </Text>
+              </View>
+            </View>
 
             <View style={localStyles.formGroup}>
               {renderRequiredLabel("Full Name")}
@@ -651,10 +719,44 @@ const EditDriverProfile = () => {
           </View>
 
           {/* Contact Information Section */}
-          <View style={localStyles.section}>
-            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-              Contact Information
-            </Text>
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons
+                  name="contact-phone"
+                  size={19}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Contact information
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  How your school and families can reach you
+                </Text>
+              </View>
+            </View>
 
             <View style={localStyles.formGroup}>
               {renderRequiredLabel("Phone Number")}
@@ -693,14 +795,56 @@ const EditDriverProfile = () => {
                 keyboardType="email-address"
                 editable={false}
               />
+              <Text
+                style={[
+                  localStyles.readOnlyHint,
+                  { color: colors.text.secondary },
+                ]}
+              >
+                Email addresses cannot be changed here.
+              </Text>
             </View>
           </View>
 
           {/* License Information Section */}
-          <View style={localStyles.section}>
-            <Text style={[localStyles.sectionTitle, { color: colors.primary }]}>
-              License Information
-            </Text>
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons
+                  name="badge"
+                  size={19}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Driving credentials
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Keep your licence details current
+                </Text>
+              </View>
+            </View>
 
             <View style={localStyles.formGroup}>
               {renderRequiredLabel("License Expiry Date")}
@@ -898,77 +1042,138 @@ const localStyles = StyleSheet.create({
     fontWeight: "600",
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 44,
   },
   avatarSection: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  avatarRow: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
+    gap: 16,
   },
   avatarWrapper: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+    width: 82,
+    height: 82,
+    borderRadius: 28,
     overflow: "hidden",
-    borderWidth: 3,
-    borderColor: "#E5E7EB",
-    marginBottom: 12,
+    borderWidth: 2,
   },
   avatarImage: {
     width: "100%",
     height: "100%",
   },
+  avatarCopy: {
+    flex: 1,
+    alignItems: "flex-start",
+  },
+  avatarTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  avatarDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+    marginBottom: 10,
+  },
   avatarButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 7,
     borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   avatarButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 15,
+    padding: 17,
+    borderRadius: 22,
+    borderWidth: 1,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.035,
+    shadowRadius: 10,
+    elevation: 1,
+  },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+  },
+  sectionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionHeadingCopy: {
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  sectionDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
   formGroup: {
-    marginBottom: 16,
+    marginBottom: 17,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontWeight: "700",
+    marginBottom: 7,
   },
   requiredAsterisk: {
     color: "#EF4444",
     fontWeight: "700",
   },
   input: {
-    borderWidth: 1.5,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
     fontSize: 14,
     fontWeight: "500",
+    minHeight: 50,
+  },
+  readOnlyHint: {
+    fontSize: 11,
+    marginTop: 7,
   },
   actionsContainer: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 8,
+    marginTop: 2,
+    marginBottom: 12,
   },
   cancelButton: {
     flex: 1,
     borderWidth: 2,
-    borderRadius: 8,
-    paddingVertical: 14,
+    borderRadius: 15,
+    paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -978,12 +1183,12 @@ const localStyles = StyleSheet.create({
   },
   saveButtonGradient: {
     flex: 1,
-    borderRadius: 8,
+    borderRadius: 15,
     overflow: "hidden",
   },
   saveButton: {
     flexDirection: "row",
-    paddingVertical: 14,
+    paddingVertical: 15,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,

@@ -12,8 +12,7 @@ import {
   normalizeRole,
 } from "../../store/asyncStorage/authStore";
 import {
-  clearAuthToken,
-  setAuthToken,
+  clearSupabaseSession,
 } from "../../supabaseConfig/supabaseConfig";
 import { BASE_URL, resolveWorkingBaseUrl } from "../../url";
 import { installAuthExpiryHandler } from "../../utils/authExpiry";
@@ -87,11 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       setDriverMode(storedDriverMode === "true");
 
-      if (storedUser.token) {
-        setAuthToken(storedUser.token);
-      } else {
-        clearAuthToken();
-      }
     } catch (err) {
       setUser(null);
       console.error("Error loading user from AsyncStorage:", err);
@@ -222,7 +216,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     await AsyncStorage.removeItem(OWNER_DRIVER_MODE_KEY);
     setUser(null);
     setDriverMode(false);
-    clearAuthToken();
+    try {
+      await clearSupabaseSession();
+    } catch (error) {
+      console.error("Could not clear Supabase Auth session:", error);
+    }
 
     // Then try to notify backend (non-critical - ignore errors)
     // try {

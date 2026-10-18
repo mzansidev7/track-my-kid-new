@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
+import OwnerCompactHeader from "@/app-support/owner/ownerHelpers/components/OwnerCompactHeader";
 
 const ViewAllStudents = () => {
   const { routeId } = useLocalSearchParams();

@@ -51,12 +51,14 @@ export default function Index() {
       return;
     }
 
+    const testing = true;
+
     const userKey = `${userData?.id ?? "guest"}:${role ?? "unknown"}`;
     let targetRoute = "/";
 
     switch (role) {
       case "owner":
-        targetRoute = "/(owner)/onboarding";
+        targetRoute = testing ? "(owner)/(tabs)/" : "/(owner)/onboarding";
         break;
 
       case "client":

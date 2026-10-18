@@ -1,6 +1,6 @@
 import { ActivityIndicator, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { dashboardStyles } from "../adminHelpers/styles/styles";
+import { dashboardStyles } from "@/app-support/admin/adminHelpers/styles/styles";
 import React from "react";
 import { LinearGradient } from "expo-linear-gradient";
 

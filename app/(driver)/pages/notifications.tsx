@@ -10,10 +10,11 @@ import {
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useDriverNotifications } from "@/app/(driver)/driverHelpers/hooks/useDriverNotifications";
-import { NotificationRow } from "../types/driver-types";
+import { useDriverNotifications } from "@/app-support/driver/driverHelpers/hooks/useDriverNotifications";
+import { NotificationRow } from "@/app-support/driver/types/driver-types";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 const DriverNotifications = () => {
   const {
@@ -49,6 +50,8 @@ const DriverNotifications = () => {
         return "schedule";
       case "dropoff_reminder":
         return "schedule";
+      case "emergency":
+        return "warning";
       default:
         return "notifications";
     }
@@ -97,7 +100,7 @@ const DriverNotifications = () => {
         <MaterialIcons
           name={getNotificationIcon(item.type)}
           size={24}
-          color={!item.is_read ? "#4CAF50" : "#999"}
+          color={!item.is_read ? DRIVER_COLORS.primary : DRIVER_COLORS.muted}
         />
       </View>
       <View style={styles.contentContainer}>
@@ -113,7 +116,11 @@ const DriverNotifications = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <MaterialIcons name="notifications-none" size={48} color="#ccc" />
+      <MaterialIcons
+        name="notifications-none"
+        size={48}
+        color={DRIVER_COLORS.muted}
+      />
       <Text style={styles.emptyText}>No notifications yet</Text>
       <Text style={styles.emptySubtext}>
         You&apos;ll receive notifications about vehicle assignments, routes, and
@@ -130,7 +137,7 @@ const DriverNotifications = () => {
           subtitle="Stay connected with parents, school and fleet owner"
           showBackButton={true}
           showNotifications={true}
-          notificationCount={7}
+          notificationCount={unreadCount}
         />
         <View style={styles.errorContainer}>
           <MaterialIcons name="error-outline" size={48} color="#f44336" />
@@ -166,7 +173,11 @@ const DriverNotifications = () => {
             onPress={handleMarkAllAsRead}
             style={styles.readAllButton}
           >
-            <MaterialIcons name="done-all" size={17} color="#276749" />
+            <MaterialIcons
+              name="done-all"
+              size={17}
+              color={DRIVER_COLORS.primary}
+            />
             <Text style={styles.readAllText}>
               {markingAll ? "Reading..." : "Read all"}
             </Text>
@@ -175,7 +186,7 @@ const DriverNotifications = () => {
       )}
       {loading && !refreshing ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size="large" color={DRIVER_COLORS.primary} />
         </View>
       ) : (
         <FlatList
@@ -198,7 +209,7 @@ export default DriverNotifications;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: DRIVER_COLORS.background,
   },
   listContent: {
     padding: 12,
@@ -213,11 +224,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: "#EAF7EF",
+    backgroundColor: "#EAF2ED",
   },
   readAllCount: {
     flex: 1,
-    color: "#276749",
+    color: DRIVER_COLORS.primary,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -229,14 +240,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   readAllText: {
-    color: "#276749",
+    color: DRIVER_COLORS.primary,
     fontSize: 12,
     fontWeight: "800",
   },
   notificationCard: {
     flexDirection: "row",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: DRIVER_COLORS.card,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     alignItems: "flex-start",
@@ -244,18 +255,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
   unreadNotification: {
-    backgroundColor: "#f0f8ff",
+    backgroundColor: "#F0F6F2",
     borderLeftWidth: 4,
-    borderLeftColor: "#4CAF50",
+    borderLeftColor: DRIVER_COLORS.primary,
   },
   iconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#EAF2ED",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,

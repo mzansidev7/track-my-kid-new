@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Action = {
   label: string;
@@ -22,13 +22,14 @@ type Props = {
 };
 
 const DriverQuickActions = ({ actions }: Props) => {
-  const { colors } = useTheme();
-
   return (
     <View
       style={[
         styles.container,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: DRIVER_COLORS.card,
+          borderColor: DRIVER_COLORS.cardBorder,
+        },
       ]}
     >
       {actions.map((action, index) => {
@@ -57,7 +58,10 @@ const DriverQuickActions = ({ actions }: Props) => {
                 style={[
                   [
                     styles.iconContainer,
-                    { backgroundColor: colors.background },
+                    {
+                      backgroundColor:
+                        action.label === "SOS" ? "#FCE9E7" : "#EAF2ED",
+                    },
                   ],
                   action.blinking && styles.iconContainerBlinking,
                 ]}
@@ -65,12 +69,16 @@ const DriverQuickActions = ({ actions }: Props) => {
                 <MaterialIcons
                   name={action.icon}
                   size={22}
-                  color={colors.primary}
+                  color={
+                    action.label === "SOS"
+                      ? DRIVER_COLORS.danger
+                      : DRIVER_COLORS.primary
+                  }
                 />
               </View>
 
               <Text
-                style={[styles.label, { color: colors.primary }]}
+                style={[styles.label, { color: DRIVER_COLORS.text }]}
                 numberOfLines={1}
               >
                 {action.label}
@@ -86,14 +94,14 @@ const DriverQuickActions = ({ actions }: Props) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    borderRadius: 22,
+    paddingVertical: 17,
+    paddingHorizontal: 6,
     flexDirection: "row",
     justifyContent: "space-around",
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.16)",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
 
   action: {
@@ -106,20 +114,20 @@ const styles = StyleSheet.create({
   },
 
   iconContainer: {
-    width: 45,
-    height: 45,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 7,
   },
 
   iconContainerBlinking: {
-    backgroundColor: "#FF8C42",
+    backgroundColor: DRIVER_COLORS.warning,
   },
 
   label: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.text,
     fontSize: 11,
     fontWeight: "500",
     textAlign: "center",

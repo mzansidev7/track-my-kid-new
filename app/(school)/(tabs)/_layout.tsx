@@ -10,7 +10,7 @@ import {
   isSchoolTrialExpiredWithoutPaidSubscription,
   SchoolBillingAccessContext,
   type SchoolBillingAccess,
-} from "../schoolBillingAccess";
+} from "@/app-support/school/schoolBillingAccess";
 
 export default function SchoolLayout() {
   const router = useRouter();
@@ -93,6 +93,8 @@ export default function SchoolLayout() {
         <Tabs.Screen name="trips" />
         <Tabs.Screen name="messages" />
         <Tabs.Screen name="more" />
+        <Tabs.Screen name="incidents" options={{ href: null }} />
+        <Tabs.Screen name="settings" options={{ href: null }} />
       </Tabs>
     </SchoolBillingAccessContext.Provider>
   );

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
-import { useAdminProfile } from "../../../adminHelpers/hooks/useAdminProfile";
+import { useAdminProfile } from "@/app-support/admin/adminHelpers/hooks/useAdminProfile";
 import { useTheme } from "../../../styles/theme";
 
 export default function AdminMore() {
@@ -68,7 +68,7 @@ export default function AdminMore() {
     {
       id: "payments",
       title: "Payments",
-      subtitle: "Review commissions, balances, and invoices",
+      subtitle: "Review subscriptions, client payments, fees, and balances",
       icon: "payments",
       color: "#B45309",
     },
@@ -113,6 +113,13 @@ export default function AdminMore() {
       subtitle: "Review support controls and platform health",
       icon: "settings",
       color: "#475569",
+    },
+    {
+      id: "incidents",
+      title: "Incidents",
+      subtitle: "Review and update incident reports",
+      icon: "warning",
+      color: "#DC2626",
     },
     {
       id: "profile",

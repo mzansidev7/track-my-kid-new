@@ -19,7 +19,7 @@ import ClientHeader from "../components/ClientHeader";
 import {
   ClientNotification,
   useClientNotifications,
-} from "../clientHelpers/hooks/useClientNotifications";
+} from "@/app-support/client/clientHelpers/hooks/useClientNotifications";
 
 const Notifications = () => {
   const router = useRouter();

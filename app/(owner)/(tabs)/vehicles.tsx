@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import AppNotification from "../../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../../url";
-import { Vehicle } from "../ownerHelpers/interface/owner.interfece";
+import { Vehicle } from "@/app-support/owner/ownerHelpers/interface/owner.interfece";
 
 export default function Vehicles({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);

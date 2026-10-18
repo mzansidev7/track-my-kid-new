@@ -2,12 +2,15 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   Animated,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import MapView, { Marker } from "react-native-maps";
+import MapViewDirections from "react-native-maps-directions";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -15,16 +18,17 @@ import { useFocusEffect, useRouter } from "expo-router";
 
 import { useTheme } from "../../../styles/theme";
 import { AuthContext } from "../../../context/authContext/auth-context";
-import { resolveWorkingBaseUrl } from "../../../url";
-import { Child, useChildren } from "../clientHelpers/hooks/useChildren";
-import { useClientNotifications } from "../clientHelpers/hooks/useClientNotifications";
-import { useClientProfile } from "../clientHelpers/hooks/useClientProfile";
+import { resolveWorkingBaseUrl, GOOGLE_API_KEY } from "../../../url";
+import { Child, useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
+import { useClientNotifications } from "@/app-support/client/clientHelpers/hooks/useClientNotifications";
+import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
 import {
   getClientDate,
   useClientAttendance,
-} from "../clientHelpers/hooks/useClientAttendance";
+} from "@/app-support/client/clientHelpers/hooks/useClientAttendance";
 import {
   subscribeToPaymentUpdates,
+  subscribeToRouteStopUpdates,
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/clientRealtime";
 
@@ -34,6 +38,16 @@ type RouteStop = {
   child_id?: string;
   stop_type?: "pickup" | "dropoff";
   status?: "pending" | "in_progress" | "completed" | "skipped";
+  stop_order?: number;
+  schedule_date?: string | null;
+};
+
+type DashboardTrip = {
+  id: string;
+  child: Child;
+  date: Date;
+  direction: "pickup" | "dropoff";
+  status: "Active" | "Scheduled";
 };
 
 const formatTime = (value?: string) => {
@@ -57,11 +71,59 @@ const formatScheduleTime = (value?: string | null) => {
 const hasAssignedVehicle = (child: Child) =>
   Boolean(child.vehicle_id || child.vehicle?.id);
 
+const getLocalDateKey = (date: Date) =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join("-");
+
 const toMinutes = (value?: string) => {
   if (!value) return null;
   const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
   return hours * 60 + minutes;
+};
+
+const getRouteTimeMinutes = (time?: string) => {
+  const minutes = toMinutes(time);
+  if (minutes !== null) return minutes;
+  if (!time) return null;
+  const date = new Date(time);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.getHours() * 60 + date.getMinutes();
+};
+
+const atLocalTime = (date: Date, minutes: number) => {
+  const result = new Date(date);
+  result.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return result;
+};
+
+const nextSchoolDay = (date: Date) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + 1);
+  while ([0, 6].includes(nextDate.getDay())) {
+    nextDate.setDate(nextDate.getDate() + 1);
+  }
+  return nextDate;
+};
+
+const getTripDateLabel = (date: Date, now: Date) =>
+  date.toDateString() === now.toDateString()
+    ? "TODAY"
+    : date
+        .toLocaleDateString([], { weekday: "short" })
+        .toUpperCase();
+
+const isStopCompleteToday = (
+  stop: RouteStop | undefined,
+  scheduledMinutes: number | null,
+  today: string,
+  currentMinutes: number,
+) => {
+  if (!["completed", "skipped"].includes(stop?.status || "")) return false;
+  if (stop?.schedule_date) return stop.schedule_date.slice(0, 10) === today;
+  return scheduledMinutes === null || currentMinutes >= scheduledMinutes;
 };
 
 const isWithinWindow = (
@@ -88,8 +150,16 @@ const getChildStatus = (
   const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
   const pickupStop = stops.find((stop) => stop.stop_type === "pickup");
   const dropoffStop = stops.find((stop) => stop.stop_type === "dropoff");
+  const dropoffStartMinutes = toMinutes(child.route.dropoff_start_time);
+  const dropoffIsCompleteToday = isStopCompleteToday(
+    dropoffStop,
+    dropoffStartMinutes,
+    getLocalDateKey(currentDate),
+    currentMinutes,
+  );
 
   if (stops.some((stop) => stop.status === "in_progress")) return "on a trip";
+  if (dropoffIsCompleteToday) return "completed";
 
   if (
     pickupStop &&
@@ -121,11 +191,14 @@ const getChildStatus = (
     child.route.pickup_start_time || child.route.departure_time,
   );
   const pickupEnd = toMinutes(child.route.pickup_end_time);
-  const dropoffStart = toMinutes(child.route.dropoff_start_time);
+  const dropoffStart = dropoffStartMinutes;
   const dropoffEnd = toMinutes(child.route.dropoff_end_time);
+
+  if (pickupStop?.status === "completed") return "at school";
 
   if (pickupStart !== null && currentMinutes < pickupStart) return "upcoming";
   if (
+    !["completed", "skipped"].includes(pickupStop?.status || "") &&
     pickupStart !== null &&
     pickupEnd !== null &&
     currentMinutes >= pickupStart &&
@@ -141,6 +214,7 @@ const getChildStatus = (
     return "at school";
   }
   if (
+    !["completed", "skipped"].includes(dropoffStop?.status || "") &&
     dropoffStart !== null &&
     dropoffEnd !== null &&
     currentMinutes >= dropoffStart &&
@@ -151,6 +225,7 @@ const getChildStatus = (
   if (dropoffEnd !== null && currentMinutes > dropoffEnd) return "completed";
 
   if (
+    !["completed", "skipped"].includes(pickupStop?.status || "") &&
     pickupStart !== null &&
     pickupEnd === null &&
     currentMinutes >= pickupStart
@@ -161,7 +236,34 @@ const getChildStatus = (
   return "upcoming";
 };
 
-const getTripDirection = (child: Child) => {
+const getTripDirection = (
+  child: Child,
+  stops: RouteStop[] = [],
+  timestamp = Date.now(),
+) => {
+  const orderedStops = [...stops].sort(
+    (first, second) => (first.stop_order ?? 0) - (second.stop_order ?? 0),
+  );
+  const currentStop = orderedStops.find((stop) => stop.status === "in_progress");
+  if (currentStop?.stop_type === "dropoff") return "On the way home";
+  if (currentStop?.stop_type === "pickup") return "On the way to school";
+
+  if (
+    orderedStops.some(
+      (stop) =>
+        stop.stop_type === "dropoff" &&
+        ["completed", "skipped"].includes(stop.status || ""),
+    )
+  ) {
+    return "Dropped off";
+  }
+
+  const nextPendingStop = orderedStops.find(
+    (stop) => !["completed", "skipped"].includes(stop.status || ""),
+  );
+  if (nextPendingStop?.stop_type === "dropoff") return "On the way home";
+  if (nextPendingStop?.stop_type === "pickup") return "On the way to school";
+
   const route = child.route;
   if (!route) return "On the way to school";
 
@@ -172,16 +274,15 @@ const getTripDirection = (child: Child) => {
     return hours * 60 + minutes;
   };
 
-  const now = new Date();
+  const now = new Date(timestamp);
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const dropoffStart = toMinutes(route.dropoff_start_time);
   const dropoffEnd = toMinutes(route.dropoff_end_time);
 
   if (
     dropoffStart !== null &&
-    dropoffEnd !== null &&
-    currentMinutes >= dropoffStart &&
-    currentMinutes <= dropoffEnd
+    (dropoffEnd === null || currentMinutes <= dropoffEnd) &&
+    currentMinutes >= dropoffStart
   ) {
     return "On the way home";
   }
@@ -283,6 +384,18 @@ const ClientHomeScreen = () => {
   >({});
   const [schoolTrips, setSchoolTrips] = useState<any[]>([]);
   const [schoolTripsLoading, setSchoolTripsLoading] = useState(true);
+  const [isTrackingModalVisible, setIsTrackingModalVisible] = useState(false);
+  const [liveDriverLocation, setLiveDriverLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [trackingMapRegion, setTrackingMapRegion] = useState<any>(null);
+  const [trackingMapMarkers, setTrackingMapMarkers] = useState<any[]>([]);
+  const [liveTrackingStatus, setLiveTrackingStatus] = useState<
+    "loading" | "live" | "offline" | "unavailable"
+  >("loading");
+  const [trackingChild, setTrackingChild] = useState<Child | null>(null);
+  const liveTrackingMapRef = React.useRef<MapView | null>(null);
   const [notificationTicker] = useState(() => new Animated.Value(0));
   const latestUnreadNotification = notifications.find(
     (notification) => notification.is_read !== true,
@@ -418,7 +531,11 @@ const ClientHomeScreen = () => {
               `${baseUrl}/client/children/${child.id}/route-stops`,
               { headers: { Authorization: `Bearer ${user.token}` } },
             );
-            if (!response.ok) return [child.id, []] as const;
+            if (!response.ok) {
+              throw new Error(
+                `Unable to refresh route stops for child ${child.id} (${response.status}).`,
+              );
+            }
             const data = await response.json();
             const stops = (Array.isArray(data) ? data : []).filter(
               (stop: RouteStop) =>
@@ -430,14 +547,19 @@ const ClientHomeScreen = () => {
 
         if (!cancelled) setStopsByChild(Object.fromEntries(stopEntries));
       } catch (error) {
-        if (!cancelled) setStopsByChild({});
         console.error("Failed to load client route stops", error);
       }
     };
 
-    loadRouteStops();
+    void loadRouteStops();
+    const interval = setInterval(() => void loadRouteStops(), 10000);
+    const routeStopsChannel = subscribeToRouteStopUpdates(() => {
+      void loadRouteStops();
+    });
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      void unsubscribeFromRealtime(routeStopsChannel);
     };
   }, [children, user?.token]);
 
@@ -447,6 +569,7 @@ const ClientHomeScreen = () => {
     }, [refreshClient]),
   );
 
+  const scheduledChildren = children.filter(hasAssignedVehicle);
   const clientName =
     [client?.first_name, client?.last_name].filter(Boolean).join(" ") ||
     client?.name ||
@@ -472,7 +595,253 @@ const ClientHomeScreen = () => {
   );
   const activeChild = onTripChildren[0];
   const activeTripDriver = activeChild?.vehicle?.driver;
-  const scheduledChildren = children.filter(hasAssignedVehicle);
+  const dashboardTrips = useMemo(() => {
+    const now = new Date(currentTime);
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const today = new Date(now);
+    const upcoming: DashboardTrip[] = [];
+    const activeTrips: DashboardTrip[] = [];
+
+    for (const child of scheduledChildren) {
+      const route = child.route;
+      if (!route) continue;
+
+      const stops = stopsByChild[child.id] || [];
+      const dropoffStop = stops.find((stop) => stop.stop_type === "dropoff");
+      const activeStop = stops.find((stop) => stop.status === "in_progress");
+      const pickupMinutes = getRouteTimeMinutes(
+        route.pickup_start_time || route.departure_time,
+      );
+      const dropoffMinutes = getRouteTimeMinutes(route.dropoff_start_time);
+      const dropoffFinished = isStopCompleteToday(
+        dropoffStop,
+        dropoffMinutes,
+        getLocalDateKey(now),
+        nowMinutes,
+      );
+      const activeStatus =
+        getChildStatus(child, stops, currentTime) === "on a trip";
+
+      if (activeStatus) {
+        const direction: DashboardTrip["direction"] =
+          activeStop?.stop_type === "dropoff" ||
+          (!activeStop &&
+            isWithinWindow(nowMinutes, route.dropoff_start_time, route.dropoff_end_time))
+            ? "dropoff"
+            : "pickup";
+        activeTrips.push({
+          id: `${child.id}-active`,
+          child,
+          date: today,
+          direction,
+          status: "Active",
+        });
+
+        if (
+          direction === "pickup" &&
+          dropoffMinutes !== null &&
+          dropoffMinutes > nowMinutes &&
+          !dropoffFinished
+        ) {
+          upcoming.push({
+            id: `${child.id}-dropoff-today`,
+            child,
+            date: atLocalTime(today, dropoffMinutes),
+            direction: "dropoff",
+            status: "Scheduled",
+          });
+        } else if (pickupMinutes !== null) {
+          const nextDate = nextSchoolDay(today);
+          upcoming.push({
+            id: `${child.id}-pickup-next`,
+            child,
+            date: atLocalTime(nextDate, pickupMinutes),
+            direction: "pickup",
+            status: "Scheduled",
+          });
+        }
+        continue;
+      }
+
+      if (pickupMinutes !== null && pickupMinutes > nowMinutes) {
+        upcoming.push({
+          id: `${child.id}-pickup-today`,
+          child,
+          date: atLocalTime(today, pickupMinutes),
+          direction: "pickup",
+          status: "Scheduled",
+        });
+        if (
+          dropoffMinutes !== null &&
+          dropoffMinutes > nowMinutes &&
+          dropoffMinutes > pickupMinutes &&
+          !dropoffFinished
+        ) {
+          upcoming.push({
+            id: `${child.id}-dropoff-today`,
+            child,
+            date: atLocalTime(today, dropoffMinutes),
+            direction: "dropoff",
+            status: "Scheduled",
+          });
+        }
+        continue;
+      }
+
+      if (
+        dropoffMinutes !== null &&
+        dropoffMinutes > nowMinutes &&
+        !dropoffFinished
+      ) {
+        upcoming.push({
+          id: `${child.id}-dropoff-today`,
+          child,
+          date: atLocalTime(today, dropoffMinutes),
+          direction: "dropoff",
+          status: "Scheduled",
+        });
+      } else if (pickupMinutes !== null) {
+        const nextDate = nextSchoolDay(today);
+        upcoming.push({
+          id: `${child.id}-pickup-next`,
+          child,
+          date: atLocalTime(nextDate, pickupMinutes),
+          direction: "pickup",
+          status: "Scheduled",
+        });
+      }
+    }
+
+    upcoming.sort((first, second) => first.date.getTime() - second.date.getTime());
+    return [...activeTrips, ...upcoming];
+  }, [currentTime, scheduledChildren, stopsByChild]);
+
+  const trackActiveTrip = () => {
+    if (!activeChild) return;
+    setTrackingChild(activeChild);
+    setLiveDriverLocation(null);
+    setLiveTrackingStatus("loading");
+    setIsTrackingModalVisible(true);
+  };
+  useEffect(() => {
+    if (!isTrackingModalVisible || !trackingChild) return;
+
+    const routeMarkers: any[] = [];
+    const pushMarker = (latitude: unknown, longitude: unknown, config: any) => {
+      const parsedLatitude = Number(latitude);
+      const parsedLongitude = Number(longitude);
+      if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+        return;
+      }
+      routeMarkers.push({
+        ...config,
+        coordinate: {
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
+        },
+      });
+    };
+
+    pushMarker(
+      trackingChild.route?.start_latitude,
+      trackingChild.route?.start_longitude,
+      {
+        id: "pickup-stop",
+        title: trackingChild.route?.start_location || "Pickup",
+        description: "School pickup location",
+        pinColor: "#2563EB",
+      },
+    );
+    pushMarker(
+      trackingChild.route?.end_latitude,
+      trackingChild.route?.end_longitude,
+      {
+        id: "dropoff-stop",
+        title: trackingChild.route?.end_location || "Drop-off",
+        description: "School drop-off location",
+        pinColor: "#F59E0B",
+      },
+    );
+    if (liveDriverLocation) {
+      routeMarkers.push({
+        id: "live-driver",
+        title: "Driver live location",
+        description: "Updated recently",
+        pinColor: "#159B3A",
+        coordinate: liveDriverLocation,
+      });
+    }
+    if (routeMarkers.length > 0) {
+      const latitudes = routeMarkers.map((marker) => marker.coordinate.latitude);
+      const longitudes = routeMarkers.map((marker) => marker.coordinate.longitude);
+      setTrackingMapMarkers(routeMarkers);
+      setTrackingMapRegion({
+        latitude:
+          latitudes.reduce((total, value) => total + value, 0) / latitudes.length,
+        longitude:
+          longitudes.reduce((total, value) => total + value, 0) / longitudes.length,
+        latitudeDelta: Math.max(...latitudes) - Math.min(...latitudes) || 0.08,
+        longitudeDelta: Math.max(...longitudes) - Math.min(...longitudes) || 0.08,
+      });
+    }
+
+    const driverId = trackingChild.vehicle?.driver?.id;
+    if (!driverId || !userToken) {
+      setLiveTrackingStatus("unavailable");
+      return;
+    }
+
+    let active = true;
+    const fetchLiveLocation = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/driver/location/${driverId}?child_id=${trackingChild.id}`,
+          { headers: { Authorization: `Bearer ${userToken}` } },
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load live driver location.");
+        }
+        if (!active) return;
+
+        const latitude = Number(data?.latitude);
+        const longitude = Number(data?.longitude);
+        if (
+          data?.is_online !== true ||
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude)
+        ) {
+          setLiveDriverLocation(null);
+          setLiveTrackingStatus("offline");
+          return;
+        }
+
+        const location = { latitude, longitude };
+        setLiveDriverLocation(location);
+        setLiveTrackingStatus("live");
+        liveTrackingMapRef.current?.animateToRegion(
+          { ...location, latitudeDelta: 0.012, longitudeDelta: 0.012 },
+          600,
+        );
+      } catch (error) {
+        if (active) setLiveTrackingStatus("unavailable");
+        console.error("Client dashboard live tracking failed:", error);
+      }
+    };
+
+    void fetchLiveLocation();
+    const interval = setInterval(() => void fetchLiveLocation(), 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [
+    trackingChild?.id,
+    trackingChild?.vehicle?.driver?.id,
+    isTrackingModalVisible,
+    userToken,
+  ]);
   const todayDate = getClientDate();
 
   const getAttendanceDisplay = (item: (typeof attendanceItems)[number]) => {
@@ -483,7 +852,10 @@ const ClientHomeScreen = () => {
       : "upcoming";
 
     if (isToday && child && childTripStatus === "on a trip") {
-      if (getTripDirection(child) === "On the way to school") {
+      if (
+        getTripDirection(child, stopsByChild[child.id], currentTime) ===
+        "On the way to school"
+      ) {
         return { label: "On route", color: "#2563EB" };
       }
       if (item.status === "present" || item.status === "late") {
@@ -1430,6 +1802,7 @@ const ClientHomeScreen = () => {
                     backgroundColor: `${clientBrand.primary}12`,
                   },
                 ]}
+                onPress={trackActiveTrip}
               >
                 <MaterialIcons
                   name="location-on"
@@ -1613,6 +1986,7 @@ const ClientHomeScreen = () => {
             {/* LIVE LOCATION */}
             <TouchableOpacity
               activeOpacity={0.8}
+              onPress={trackActiveTrip}
               style={[
                 styles.liveTracking,
                 { backgroundColor: `${clientBrand.primary}10` },
@@ -1706,88 +2080,109 @@ const ClientHomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {scheduledChildren.slice(0, 2).map((child) => (
-          <TouchableOpacity
-            key={child.id}
-            activeOpacity={0.8}
-            style={[
-              styles.upcomingCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View
+        {dashboardTrips.slice(0, 2).map((trip) => {
+          const child = trip.child;
+          const isPickup = trip.direction === "pickup";
+          const tripStart = isPickup
+            ? child.route?.start_location ||
+              child.pickup_address ||
+              "Home"
+            : child.route?.end_location ||
+              child.school_name ||
+              "School";
+          const tripEnd = isPickup
+            ? child.route?.end_location ||
+              child.school_name ||
+              "School"
+            : child.route?.start_location ||
+              child.pickup_address ||
+              "Home";
+
+          return (
+            <TouchableOpacity
+              key={trip.id}
+              activeOpacity={0.8}
               style={[
-                styles.dateBox,
-                { backgroundColor: `${clientBrand.primary}10` },
+                styles.upcomingCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
               ]}
             >
-              <Text style={[styles.dateMonth, { color: clientBrand.primary }]}>
-                {child.route?.departure_time
-                  ? new Date(child.route.departure_time)
-                      .toLocaleString([], { month: "short" })
-                      .toUpperCase()
-                  : "—"}
-              </Text>
-
-              <Text style={[styles.dateNumber, { color: colors.text.primary }]}>
-                {child.route?.departure_time
-                  ? new Date(child.route.departure_time).getDate()
-                  : "—"}
-              </Text>
-
-              <Text style={[styles.dateDay, { color: colors.text.secondary }]}>
-                {child.route?.departure_time
-                  ? new Date(child.route.departure_time)
-                      .toLocaleString([], { weekday: "short" })
-                      .toUpperCase()
-                  : "—"}
-              </Text>
-            </View>
-
-            <View style={styles.upcomingContent}>
-              <View style={styles.upcomingTopRow}>
-                <Text
-                  style={[styles.upcomingTime, { color: colors.text.primary }]}
-                >
-                  {formatTime(
-                    child.route?.dropoff_start_time ||
-                      child.route?.departure_time,
-                  )}
-                </Text>
-
-                <View style={styles.scheduledPill}>
-                  <Text style={styles.scheduledText}>Scheduled</Text>
-                </View>
-              </View>
-
-              <Text
-                numberOfLines={1}
-                style={[styles.upcomingRoute, { color: colors.text.secondary }]}
-              >
-                {`${child.route?.end_location || child.school_name || "School"} → ${child.route?.start_location || child.pickup_address || "Home"}`}
-              </Text>
-
-              <Text
+              <View
                 style={[
-                  styles.upcomingDriver,
-                  { color: colors.text.secondary },
+                  styles.dateBox,
+                  { backgroundColor: `${clientBrand.primary}10` },
                 ]}
               >
-                {getDriverName(child)}
-              </Text>
-            </View>
+                <Text style={[styles.dateMonth, { color: clientBrand.primary }]}>
+                  {trip.date
+                    .toLocaleString([], { month: "short" })
+                    .toUpperCase()}
+                </Text>
 
-            <MaterialIcons
-              name="chevron-right"
-              size={20}
-              color={colors.text.secondary}
-            />
-          </TouchableOpacity>
-        ))}
-        {scheduledChildren.length === 0 && (
+                <Text
+                  style={[styles.dateNumber, { color: colors.text.primary }]}
+                >
+                  {trip.date.getDate()}
+                </Text>
+
+                <Text
+                  style={[styles.dateDay, { color: colors.text.secondary }]}
+                >
+                  {getTripDateLabel(trip.date, new Date(currentTime))}
+                </Text>
+              </View>
+
+              <View style={styles.upcomingContent}>
+                <View style={styles.upcomingTopRow}>
+                  <Text
+                    style={[
+                      styles.upcomingTime,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    {trip.date.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+
+                  <View style={styles.scheduledPill}>
+                    <Text style={styles.scheduledText}>{trip.status}</Text>
+                  </View>
+                </View>
+
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.upcomingRoute,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  {`${tripStart} → ${tripEnd}`}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.upcomingDriver,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  {getDriverName(child)}
+                </Text>
+              </View>
+
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={colors.text.secondary}
+              />
+            </TouchableOpacity>
+          );
+        })}
+        {dashboardTrips.length === 0 && (
           <View
             style={[
               styles.emptyCard,
@@ -2071,6 +2466,94 @@ const ClientHomeScreen = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isTrackingModalVisible}
+        animationType="slide"
+        onRequestClose={() => setIsTrackingModalVisible(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: DASHBOARD_COLORS.background }}>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: 10,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setIsTrackingModalVisible(false)}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: "#FFFFFF",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialIcons name="arrow-back" size={21} color={DASHBOARD_COLORS.text} />
+              </TouchableOpacity>
+
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ color: DASHBOARD_COLORS.text, fontSize: 16, fontWeight: "800" }}>
+                  {trackingChild
+                    ? `${trackingChild.name} ${trackingChild.lastname || ""}`.trim()
+                    : "Live trip"}
+                </Text>
+                <Text style={{ color: DASHBOARD_COLORS.muted, fontSize: 11, marginTop: 2 }}>
+                  {liveTrackingStatus === "live"
+                    ? "Driver is online and updating live"
+                    : liveTrackingStatus === "offline"
+                      ? "Driver is currently offline"
+                      : liveTrackingStatus === "loading"
+                        ? "Connecting to driver location…"
+                        : "Live location unavailable"}
+                </Text>
+              </View>
+            </View>
+
+            {trackingMapRegion ? (
+              <MapView
+                ref={liveTrackingMapRef}
+                style={{ flex: 1 }}
+                initialRegion={trackingMapRegion}
+                showsUserLocation={false}
+                showsCompass
+                showsScale
+              >
+                {trackingMapMarkers.map((marker) => (
+                  <Marker
+                    key={marker.id}
+                    coordinate={marker.coordinate}
+                    title={marker.title}
+                    description={marker.description}
+                    pinColor={marker.pinColor}
+                  />
+                ))}
+                {trackingMapMarkers.length > 1 && GOOGLE_API_KEY ? (
+                  <MapViewDirections
+                    origin={trackingMapMarkers[0].coordinate}
+                    destination={trackingMapMarkers[trackingMapMarkers.length - 1].coordinate}
+                    apikey={GOOGLE_API_KEY}
+                    strokeWidth={4}
+                    strokeColor="#159B3A"
+                  />
+                ) : null}
+              </MapView>
+            ) : (
+              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                <MaterialIcons name="map" size={38} color={DASHBOARD_COLORS.muted} />
+                <Text style={{ color: DASHBOARD_COLORS.muted, marginTop: 8 }}>
+                  Waiting for route data…
+                </Text>
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };

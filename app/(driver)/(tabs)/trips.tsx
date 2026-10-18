@@ -5,18 +5,19 @@ import {
   View,
   Text,
   ScrollView,
+  TextInput,
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useTheme } from "../../../styles/theme";
-import useDriverRoutes from "../driverHelpers/hooks/useDriverRoutes";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { DRIVER_COLORS, useTheme } from "../../../styles/theme";
+import useDriverRoutes from "@/app-support/driver/driverHelpers/hooks/useDriverRoutes";
 import {
   useDriverTracking,
   type DriverStopAction,
-} from "../driverHelpers/hooks/useDriverTracking";
+} from "@/app-support/driver/driverHelpers/hooks/useDriverTracking";
 import CustomMap from "../../../components/map";
 import { GOOGLE_API_KEY } from "../../../url";
 import DriverHeader from "../components/DriverHeader";
@@ -69,6 +70,7 @@ type DriverMapMarker = {
 
 const Trips = () => {
   const router = useRouter();
+  const params = useLocalSearchParams<{ routeId?: string | string[] }>();
   const { colors } = useTheme();
   const { routes, routesLoading, routesError, refreshRoutes } =
     useDriverRoutes();
@@ -77,6 +79,13 @@ const Trips = () => {
   );
   const [currentTime, setCurrentTime] = React.useState(() => Date.now());
   const [mapFullScreen, setMapFullScreen] = React.useState(false);
+  const [selectedRouteTab, setSelectedRouteTab] = React.useState<
+    "map" | "stops" | "children" | "info"
+  >("map");
+  const [handoffStop, setHandoffStop] = React.useState<any | null>(null);
+  const [recipientName, setRecipientName] = React.useState("");
+  const [safetyPin, setSafetyPin] = React.useState("");
+  const [handoffBusy, setHandoffBusy] = React.useState(false);
   const [selectedStopWindow, setSelectedStopWindow] = React.useState<
     "pickup" | "dropoff"
   >("pickup");
@@ -85,6 +94,18 @@ const Trips = () => {
     durationSeconds: null as number | null,
     instruction: "Follow the route to the next stop.",
   });
+  const requestedRouteId = Array.isArray(params.routeId)
+    ? params.routeId[0]
+    : params.routeId;
+
+  React.useEffect(() => {
+    if (
+      requestedRouteId &&
+      routes.some((candidate) => candidate.id === requestedRouteId)
+    ) {
+      setSelectedRouteId(requestedRouteId);
+    }
+  }, [requestedRouteId, routes]);
   const currentDate = new Date(currentTime);
   const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
   const route = React.useMemo(() => {
@@ -181,7 +202,7 @@ const Trips = () => {
     activeWindowStops.every((stop) =>
       ["completed", "skipped"].includes(stop.status || ""),
     );
-  const { online, busy, error, lastLocation, goOnline, endRoute, updateStop } =
+  const { online, busy, error, lastLocation, endRoute, updateStop } =
     useDriverTracking(route?.id, routeType);
 
   const shouldBlink = canGoOnline && !online;
@@ -483,10 +504,50 @@ const Trips = () => {
     }
 
     try {
+      if (action === "dropped_off") {
+        setHandoffStop(stop);
+        setRecipientName("");
+        setSafetyPin("");
+        return;
+      }
       await updateStop(stop.id, action);
       await refreshRoutes(true);
     } catch (stopError: any) {
       console.error("Unable to update route stop", stopError);
+      Alert.alert(
+        "Unable to update stop",
+        stopError?.message || "Please try again.",
+      );
+    }
+  };
+
+  const confirmDropoff = async () => {
+    if (!handoffStop || handoffBusy) return;
+    if (!recipientName.trim() || !/^\d{4,6}$/.test(safetyPin)) {
+      Alert.alert(
+        "Handoff details required",
+        "Enter the recipient's name and the parent's 4–6 digit safety PIN.",
+      );
+      return;
+    }
+
+    setHandoffBusy(true);
+    try {
+      await updateStop(handoffStop.id, "dropped_off", {
+        recipientName: recipientName.trim(),
+        safetyPin,
+      });
+      setHandoffStop(null);
+      setRecipientName("");
+      setSafetyPin("");
+      await refreshRoutes(true);
+    } catch (handoffError: any) {
+      Alert.alert(
+        "Drop-off not completed",
+        handoffError?.message || "Check the safety PIN and try again.",
+      );
+    } finally {
+      setHandoffBusy(false);
     }
   };
 
@@ -509,27 +570,57 @@ const Trips = () => {
       );
       return;
     }
-    goOnline(freshRoute.id);
+    router.push({
+      pathname: "/(driver)/pre-trip",
+      params: { routeId: freshRoute.id, routeType },
+    } as never);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: DRIVER_COLORS.background }}>
       <DriverHeader title="My Route" />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        {routesError ? (
+          <TouchableOpacity
+            onPress={() => void refreshRoutes(true)}
+            style={{
+              marginHorizontal: 16,
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 10,
+              backgroundColor: DRIVER_COLORS.card,
+            }}
+          >
+            <Text style={{ color: colors.error }}>{routesError}</Text>
+            <Text
+              style={{
+                color: colors.primary,
+                fontWeight: "700",
+                marginTop: 4,
+              }}
+            >
+              Tap to retry
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         {/* Hero card */}
         <LinearGradient
-          colors={["#0F9D58", "#0B8A4A", "#0A6F3E"]}
+          colors={[
+            DRIVER_COLORS.primaryDark,
+            DRIVER_COLORS.primary,
+            "#28775A",
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ margin: 16, borderRadius: 14, padding: 16 }}
+          style={{ margin: 16, borderRadius: 22, padding: 20 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <View
               style={{
                 width: 56,
                 height: 56,
-                borderRadius: 12,
+                borderRadius: 16,
                 backgroundColor: "rgba(255,255,255,0.14)",
                 justifyContent: "center",
                 alignItems: "center",
@@ -559,7 +650,7 @@ const Trips = () => {
                   borderRadius: 999,
                 }}
               >
-                <Text style={{ color: "#0F9D58", fontWeight: "700" }}>
+                <Text style={{ color: DRIVER_COLORS.primary, fontWeight: "800" }}>
                   {online ? "ONLINE" : "OFFLINE"}
                 </Text>
               </View>
@@ -679,7 +770,7 @@ const Trips = () => {
           </View>
         </LinearGradient>
 
-        {routes.length > 1 ? (
+        {routes.length > 0 ? (
           <View
             style={{
               marginHorizontal: 16,
@@ -695,7 +786,7 @@ const Trips = () => {
                 marginBottom: 8,
               }}
             >
-              Assigned routes
+              Assigned routes · {routes.length}
             </Text>
             <ScrollView
               horizontal
@@ -709,26 +800,41 @@ const Trips = () => {
                     key={routeOption.id}
                     onPress={() => setSelectedRouteId(routeOption.id)}
                     style={{
+                      width: 190,
                       paddingHorizontal: 14,
-                      paddingVertical: 10,
-                      borderRadius: 999,
+                      paddingVertical: 12,
+                      borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: isSelected ? colors.primary : colors.border,
+                      borderColor: isSelected
+                        ? DRIVER_COLORS.primary
+                        : DRIVER_COLORS.cardBorder,
                       backgroundColor: isSelected
-                        ? `${colors.primary}22`
-                        : colors.background,
+                        ? "#EAF2ED"
+                        : DRIVER_COLORS.card,
                       marginRight: 8,
                     }}
                   >
                     <Text
                       style={{
                         color: isSelected
-                          ? colors.primary
-                          : colors.text.primary,
+                          ? DRIVER_COLORS.primary
+                          : DRIVER_COLORS.text,
                         fontWeight: "700",
                       }}
+                      numberOfLines={1}
                     >
                       {routeOption.route_name || "Route"}
+                    </Text>
+                    <Text
+                      style={{
+                        color: DRIVER_COLORS.muted,
+                        fontSize: 11,
+                        marginTop: 5,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {routeOption.route_children?.length || 0} students ·{" "}
+                      {routeOption.route_stops?.length || 0} stops
                     </Text>
                   </TouchableOpacity>
                 );
@@ -741,7 +847,7 @@ const Trips = () => {
           style={{
             marginHorizontal: 16,
             marginBottom: 12,
-            borderRadius: 12,
+            borderRadius: 18,
             backgroundColor: colors.surface,
             borderWidth: 1,
             borderColor: colors.border,
@@ -781,45 +887,117 @@ const Trips = () => {
         <View
           style={{
             flexDirection: "row",
-            paddingHorizontal: 18,
-            marginTop: 6,
-            alignItems: "center",
+            marginHorizontal: 16,
+            marginTop: 4,
+            marginBottom: 8,
+            padding: 4,
+            borderRadius: 15,
+            backgroundColor: "#E7EFEA",
           }}
         >
           <TouchableOpacity
+            onPress={() => setSelectedRouteTab("map")}
             style={{
-              paddingVertical: 12,
-              paddingRight: 20,
-              borderBottomWidth: 3,
-              borderBottomColor: colors.primary,
+              flex: 1,
+              paddingVertical: 11,
+              paddingHorizontal: 4,
+              alignItems: "center",
+              borderRadius: 11,
+              backgroundColor:
+                selectedRouteTab === "map" ? DRIVER_COLORS.card : "transparent",
             }}
           >
-            <Text style={{ color: colors.primary, fontWeight: "700" }}>
-              Route Map
+            <Text
+              style={{
+                color:
+                  selectedRouteTab === "map"
+                    ? DRIVER_COLORS.primary
+                    : DRIVER_COLORS.muted,
+                fontWeight: selectedRouteTab === "map" ? "800" : "600",
+                fontSize: 12,
+              }}
+            >
+              Map
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={{ paddingVertical: 12, paddingHorizontal: 16 }}
+            onPress={() => setSelectedRouteTab("stops")}
+            style={{
+              flex: 1,
+              paddingVertical: 11,
+              paddingHorizontal: 4,
+              alignItems: "center",
+              borderRadius: 11,
+              backgroundColor:
+                selectedRouteTab === "stops" ? DRIVER_COLORS.card : "transparent",
+            }}
           >
-            <Text style={{ color: colors.text.secondary }}>
-              Stops ({visibleStops.length})
+            <Text
+              style={{
+                color:
+                  selectedRouteTab === "stops"
+                    ? DRIVER_COLORS.primary
+                    : DRIVER_COLORS.muted,
+                fontWeight: selectedRouteTab === "stops" ? "800" : "600",
+                fontSize: 12,
+              }}
+            >
+              Stops
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={{ paddingVertical: 12, paddingHorizontal: 16 }}
+            onPress={() => setSelectedRouteTab("children")}
+            style={{
+              flex: 1,
+              paddingVertical: 11,
+              paddingHorizontal: 4,
+              alignItems: "center",
+              borderRadius: 11,
+              backgroundColor:
+                selectedRouteTab === "children" ? DRIVER_COLORS.card : "transparent",
+            }}
           >
-            <Text style={{ color: colors.text.secondary }}>
-              Children ({route?.route_children?.length || 0})
+            <Text
+              style={{
+                color:
+                  selectedRouteTab === "children"
+                    ? DRIVER_COLORS.primary
+                    : DRIVER_COLORS.muted,
+                fontWeight: selectedRouteTab === "children" ? "800" : "600",
+                fontSize: 12,
+              }}
+            >
+              Students
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={{ paddingVertical: 12, paddingHorizontal: 16 }}
+            onPress={() => setSelectedRouteTab("info")}
+            style={{
+              flex: 1,
+              paddingVertical: 11,
+              paddingHorizontal: 4,
+              alignItems: "center",
+              borderRadius: 11,
+              backgroundColor:
+                selectedRouteTab === "info" ? DRIVER_COLORS.card : "transparent",
+            }}
           >
-            <Text style={{ color: colors.text.secondary }}>Route Info</Text>
+            <Text
+              style={{
+                color:
+                  selectedRouteTab === "info"
+                    ? DRIVER_COLORS.primary
+                    : DRIVER_COLORS.muted,
+                fontWeight: selectedRouteTab === "info" ? "800" : "600",
+                fontSize: 12,
+              }}
+            >
+              Details
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View
+        {selectedRouteTab === "map" ? <View
           style={{
             margin: 16,
             borderRadius: 12,
@@ -884,7 +1062,7 @@ const Trips = () => {
               <MaterialIcons name="fullscreen" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           ) : null}
-        </View>
+        </View> : null}
 
         <Modal
           visible={mapFullScreen}
@@ -962,7 +1140,124 @@ const Trips = () => {
           </View>
         </Modal>
 
-        {/* Route Stops */}
+        {selectedRouteTab === "children" ? (
+          <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: colors.text.primary,
+                marginBottom: 8,
+              }}
+            >
+              Children on this route
+            </Text>
+            {(route?.route_children || []).length ? (
+              route?.route_children?.map((routeChild) => {
+                const child = routeChild.children;
+                const childStops = stops.filter(
+                  (stop) => stop.child_id === routeChild.child_id,
+                );
+                const completedStops = childStops.filter(
+                  (stop) => stop.status === "completed",
+                ).length;
+                return (
+                  <View
+                    key={routeChild.child_id}
+                    style={{
+                      padding: 12,
+                      marginBottom: 8,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.text.primary,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {[child?.name, child?.lastname]
+                        .filter(Boolean)
+                        .join(" ") || "Child"}
+                    </Text>
+                    <Text style={{ color: colors.text.secondary, marginTop: 3 }}>
+                      {child?.school_name || child?.schools?.name || "School not specified"}
+                    </Text>
+                    <Text style={{ color: colors.text.secondary, marginTop: 3 }}>
+                      {completedStops} of {childStops.length} stops completed
+                    </Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={{ color: colors.text.secondary }}>
+                No children are assigned to this route.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {selectedRouteTab === "info" ? (
+          <View
+            style={{
+              margin: 16,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.text.primary,
+                fontSize: 18,
+                fontWeight: "800",
+                marginBottom: 12,
+              }}
+            >
+              {route?.route_name || "Route information"}
+            </Text>
+            {[
+              ["Start", route?.start_location || "Not set"],
+              ["Destination", route?.end_location || "Not set"],
+              ["Vehicle", route?.vehicle?.name || "Not assigned"],
+              ["Registration", route?.vehicle?.license_plate || "Not available"],
+              ["Pickup window", `${route?.pickup_start_time || "--:--"} – ${route?.pickup_end_time || "--:--"}`],
+              ["Drop-off window", `${route?.dropoff_start_time || "--:--"} – ${route?.dropoff_end_time || "--:--"}`],
+              ["Stops", `${stops.length}`],
+              ["Progress", `${routeSummary.completed} completed · ${routeSummary.pending} remaining · ${routeSummary.skipped} skipped`],
+            ].map(([label, value]) => (
+              <View
+                key={label}
+                style={{
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Text style={{ color: colors.text.secondary, fontSize: 12 }}>
+                  {label}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text.primary,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    marginTop: 3,
+                  }}
+                >
+                  {value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {selectedRouteTab === "stops" ? (
         <View style={{ marginHorizontal: 16, marginTop: 8 }}>
           <Text
             style={{
@@ -1040,8 +1335,6 @@ const Trips = () => {
               <View
                 key={s.id}
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
                   paddingVertical: 12,
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
@@ -1050,65 +1343,108 @@ const Trips = () => {
                     : "transparent",
                 }}
               >
-                <View style={{ width: 44, alignItems: "center" }}>
-                  <View
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 14,
-                      backgroundColor: ["completed", "skipped"].includes(
-                        s.status,
-                      )
-                        ? "#9CA3AF"
-                        : s.status === "in_progress"
-                          ? colors.primary
-                          : "#F59E0B",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "700" }}>
-                      {index + 1}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <View style={{ width: 44, alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: ["completed", "skipped"].includes(
+                          s.status,
+                        )
+                          ? "#9CA3AF"
+                          : s.status === "in_progress"
+                            ? colors.primary
+                            : "#F59E0B",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "700" }}>
+                        {index + 1}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 40,
+                        width: 2,
+                        backgroundColor: colors.border,
+                        marginTop: 6,
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1, paddingLeft: 12 }}>
+                    <Text
+                      style={{
+                        fontWeight: "700",
+                        color: colors.text.primary,
+                        marginBottom: 3,
+                      }}
+                    >
+                      {(() => {
+                        const child = route?.route_children?.find(
+                          (routeChild) => routeChild.child_id === s.child_id,
+                        )?.children;
+                        return (
+                          [child?.name, child?.lastname]
+                            .filter(Boolean)
+                            .join(" ") || "Child"
+                        );
+                      })()}
+                    </Text>
+                    <Text
+                      style={{ fontWeight: "700", color: colors.text.primary }}
+                    >
+                      {s.stop_type === "pickup" ? "Pickup" : "Drop-off"}
+                    </Text>
+                    <Text
+                      style={{ color: colors.text.secondary, marginTop: 4 }}
+                    >
+                      {s.address || "Address unavailable"}
                     </Text>
                   </View>
-                  <View
-                    style={{
-                      height: 40,
-                      width: 2,
-                      backgroundColor: colors.border,
-                      marginTop: 6,
-                    }}
-                  />
                 </View>
-                <View style={{ flex: 1, paddingLeft: 12 }}>
-                  <Text
-                    style={{
-                      fontWeight: "700",
-                      color: colors.text.primary,
-                      marginBottom: 3,
-                    }}
-                  >
-                    {(() => {
-                      const child = route?.route_children?.find(
-                        (routeChild) => routeChild.child_id === s.child_id,
-                      )?.children;
-                      return (
-                        [child?.name, child?.lastname]
-                          .filter(Boolean)
-                          .join(" ") || "Child"
-                      );
-                    })()}
-                  </Text>
-                  <Text
-                    style={{ fontWeight: "700", color: colors.text.primary }}
-                  >
-                    {s.stop_type === "pickup" ? "Pickup" : "Drop-off"}
-                  </Text>
-                  <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
-                    {s.address || "Address unavailable"}
-                  </Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
+                <View
+                  style={{
+                    marginLeft: 44,
+                    marginTop: 10,
+                    padding: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    backgroundColor: colors.surface,
+                  }}
+                >
+                  {s.status === "in_progress" && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <MaterialIcons
+                        name="check-circle"
+                        size={17}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={{
+                          color: colors.primary,
+                          fontWeight: "700",
+                        }}
+                      >
+                        Arrived
+                      </Text>
+                    </View>
+                  )}
                   {["completed", "skipped"].includes(s.status) ? (
                     <Text
                       style={{
@@ -1126,31 +1462,33 @@ const Trips = () => {
                           : "Skipped"}
                     </Text>
                   ) : (
-                    <View style={{ alignItems: "flex-end", gap: 6 }}>
-                      <TouchableOpacity
-                        onPress={() => handleStop(s, "arrived")}
-                        disabled={!online || busy}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 4,
-                          opacity: !online || busy ? 0.45 : 1,
-                        }}
-                      >
-                        <MaterialIcons
-                          name="location-on"
-                          size={17}
-                          color={colors.primary}
-                        />
-                        <Text
+                    <View style={{ alignItems: "flex-start", gap: 8 }}>
+                      {s.status !== "in_progress" && (
+                        <TouchableOpacity
+                          onPress={() => handleStop(s, "arrived")}
+                          disabled={!online || busy}
                           style={{
-                            color: colors.primary,
-                            fontWeight: "700",
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 4,
+                            opacity: !online || busy ? 0.45 : 1,
                           }}
                         >
-                          Arrived
-                        </Text>
-                      </TouchableOpacity>
+                          <MaterialIcons
+                            name="location-on"
+                            size={17}
+                            color={colors.primary}
+                          />
+                          <Text
+                            style={{
+                              color: colors.primary,
+                              fontWeight: "700",
+                            }}
+                          >
+                            Arrived
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
                       {s.stop_type === "pickup" ? (
                         <TouchableOpacity
@@ -1203,33 +1541,6 @@ const Trips = () => {
                           </Text>
                         </TouchableOpacity>
                       )}
-
-                      {s.stop_type === "dropoff" ? (
-                        <TouchableOpacity
-                          onPress={() => handleStop(s, "guardian_verified")}
-                          disabled={!online || busy}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 4,
-                            opacity: !online || busy ? 0.45 : 1,
-                          }}
-                        >
-                          <MaterialIcons
-                            name="verified-user"
-                            size={17}
-                            color="#7C3AED"
-                          />
-                          <Text
-                            style={{
-                              color: "#7C3AED",
-                              fontWeight: "700",
-                            }}
-                          >
-                            Guardian verified
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
 
                       <TouchableOpacity
                         onPress={() => handleStop(s, "child_not_present")}
@@ -1312,6 +1623,7 @@ const Trips = () => {
             ))
           )}
         </View>
+        ) : null}
 
         {/* Start Route CTA */}
         <View style={{ margin: 16, marginTop: 22 }}>
@@ -1370,6 +1682,128 @@ const Trips = () => {
             <Text style={{ color: "#DC2626", marginTop: 8 }}>{error}</Text>
           ) : null}
         </View>
+
+        <Modal
+          visible={Boolean(handoffStop)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            if (!handoffBusy) setHandoffStop(null);
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              padding: 20,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+            }}
+          >
+            <View
+              style={{
+                padding: 20,
+                borderRadius: 16,
+                backgroundColor: colors.surface,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.text.primary,
+                  fontSize: 20,
+                  fontWeight: "800",
+                }}
+              >
+                Verify child handoff
+              </Text>
+              <Text
+                style={{
+                  color: colors.text.secondary,
+                  marginTop: 8,
+                  lineHeight: 20,
+                }}
+              >
+                Confirm who received the child and enter the parent’s safety PIN
+                before completing drop-off.
+              </Text>
+              <TextInput
+                value={recipientName}
+                onChangeText={setRecipientName}
+                placeholder="Recipient full name"
+                placeholderTextColor={colors.text.secondary}
+                editable={!handoffBusy}
+                autoCapitalize="words"
+                style={{
+                  marginTop: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  padding: 12,
+                  color: colors.text.primary,
+                  backgroundColor: colors.background,
+                }}
+              />
+              <TextInput
+                value={safetyPin}
+                onChangeText={(value) =>
+                  setSafetyPin(value.replace(/\D/g, "").slice(0, 6))
+                }
+                placeholder="Parent safety PIN"
+                placeholderTextColor={colors.text.secondary}
+                editable={!handoffBusy}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                style={{
+                  marginTop: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  padding: 12,
+                  color: colors.text.primary,
+                  backgroundColor: colors.background,
+                }}
+              />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  marginTop: 18,
+                }}
+              >
+                <TouchableOpacity
+                  disabled={handoffBusy}
+                  onPress={() => setHandoffStop(null)}
+                  style={{ paddingVertical: 12, paddingHorizontal: 14 }}
+                >
+                  <Text
+                    style={{
+                      color: colors.text.secondary,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={handoffBusy}
+                  onPress={() => void confirmDropoff()}
+                  style={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 9,
+                    backgroundColor: colors.primary,
+                    opacity: handoffBusy ? 0.6 : 1,
+                  }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontWeight: "800" }}>
+                    {handoffBusy ? "Verifying…" : "Verify & complete"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );

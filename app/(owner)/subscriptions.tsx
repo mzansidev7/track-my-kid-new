@@ -47,6 +47,9 @@ export default function OwnerSubscriptions() {
     string | null
   >(null);
   const [isStripeTestMode, setIsStripeTestMode] = useState(false);
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paystack">(
+    "stripe",
+  );
 
   const currentPlanId =
     ownerSubscription?.subscription_plan_id ||
@@ -149,24 +152,31 @@ export default function OwnerSubscriptions() {
 
       setPlans(data.plans || []);
       setOwnerSubscription(data.subscription || null);
-      // fetch stripe publishable key and determine test/live mode
-      try {
-        const cfgRes = await fetch(`${baseUrl}/owner/payments/stripe-config`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-            "Content-Type": "application/json",
-          },
-        });
-        const cfg = await cfgRes.json();
-        if (cfgRes.ok && cfg.publishable_key) {
-          setStripePublishableKey(cfg.publishable_key);
-          setIsStripeTestMode(
-            String(cfg.publishable_key).startsWith("pk_test_"),
-          );
+      const provider = data.payment_provider === "paystack" ? "paystack" : "stripe";
+      setPaymentProvider(provider);
+      if (provider === "stripe") {
+        try {
+          const cfgRes = await fetch(`${baseUrl}/owner/payments/stripe-config`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+              "Content-Type": "application/json",
+            },
+          });
+          const cfg = await cfgRes.json();
+          if (cfgRes.ok && cfg.publishable_key) {
+            setStripePublishableKey(cfg.publishable_key);
+            setIsStripeTestMode(
+              String(cfg.publishable_key).startsWith("pk_test_"),
+            );
+          }
+        } catch {
+          setStripePublishableKey(null);
+          setIsStripeTestMode(false);
         }
-      } catch {
-        // ignore stripe config errors for now
+      } else {
+        setStripePublishableKey(null);
+        setIsStripeTestMode(false);
       }
     } catch (err: any) {
       setNotification({
@@ -191,7 +201,7 @@ export default function OwnerSubscriptions() {
         console.warn("Failed to init Stripe SDK:", e);
       }
     }
-  }, [stripePublishableKey]);
+  }, [paymentProvider, stripePublishableKey]);
 
   useEffect(() => {
     // Detect checkout completion from Stripe redirect
@@ -418,7 +428,7 @@ export default function OwnerSubscriptions() {
         <Text style={styles.headerSubtitle}>All features, no limit.</Text>
       </View>
 
-      {isStripeTestMode && (
+      {paymentProvider === "stripe" && isStripeTestMode && (
         <View style={styles.testBanner}>
           <MaterialIcons name="info" size={18} color="#111827" />
           <Text style={styles.testBannerText}>
@@ -581,7 +591,7 @@ export default function OwnerSubscriptions() {
               <View style={styles.modalForm}>
                 {paymentMethod === "card" ? (
                   <Text style={styles.checkOutMessage}>
-                    You will be redirected to a secure Stripe checkout page to
+                    You will be redirected to a secure {paymentProvider === "paystack" ? "Paystack" : "Stripe"} checkout page to
                     complete your payment.
                   </Text>
                 ) : (

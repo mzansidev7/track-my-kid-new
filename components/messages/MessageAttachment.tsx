@@ -26,30 +26,66 @@ export interface MessageAttachmentData {
   caption?: string;
 }
 
+export interface MessageAttachmentGroupData {
+  type: "attachment_group";
+  attachments: MessageAttachmentData[];
+  caption?: string;
+}
+
+export type ParsedMessageAttachment =
+  | MessageAttachmentData
+  | MessageAttachmentGroupData;
+
 export const parseMessageAttachment = (
   content: string,
-): MessageAttachmentData | null => {
+): ParsedMessageAttachment | null => {
   try {
     const value = JSON.parse(content);
-    if (
-      value?.type === "attachment" &&
-      (value.mediaType === "image" ||
-        value.mediaType === "audio" ||
-        value.mediaType === "pdf") &&
-      typeof value.url === "string" &&
-      /^https:\/\//i.test(value.url) &&
-      typeof value.name === "string" &&
-      typeof value.mimeType === "string"
-    ) {
+    const normalizeAttachment = (
+      item: Record<string, unknown>,
+    ): MessageAttachmentData | null => {
+      if (
+        (item.mediaType !== "image" &&
+          item.mediaType !== "audio" &&
+          item.mediaType !== "pdf") ||
+        typeof item.url !== "string" ||
+        !/^https:\/\//i.test(item.url) ||
+        typeof item.name !== "string" ||
+        typeof item.mimeType !== "string"
+      ) {
+        return null;
+      }
       return {
         type: "attachment",
-        mediaType: value.mediaType,
-        url: value.url,
-        name: value.name,
-        mimeType: value.mimeType,
+        mediaType: item.mediaType,
+        url: item.url,
+        name: item.name,
+        mimeType: item.mimeType,
         caption:
-          typeof value.caption === "string" ? value.caption : undefined,
+          typeof item.caption === "string" ? item.caption : undefined,
       };
+    };
+    if (value?.type === "attachment") {
+      return normalizeAttachment(value);
+    }
+    if (
+      value?.type === "attachment_group" &&
+      Array.isArray(value.attachments)
+    ) {
+      const attachments = value.attachments
+        .map((item: Record<string, unknown>) => normalizeAttachment(item))
+        .filter(
+          (item: MessageAttachmentData | null): item is MessageAttachmentData =>
+            item !== null,
+        );
+      if (attachments.length) {
+        return {
+          type: "attachment_group",
+          attachments,
+          caption:
+            typeof value.caption === "string" ? value.caption : undefined,
+        };
+      }
     }
   } catch {
     return null;
@@ -62,6 +98,23 @@ export const getMessagePreview = (content?: string | null) => {
   if (!content) return "";
   const attachment = parseMessageAttachment(content);
   if (!attachment) return content;
+  if (attachment.type === "attachment_group") {
+    const imageCount = attachment.attachments.filter(
+      (item) => item.mediaType === "image",
+    ).length;
+    const otherCount = attachment.attachments.length - imageCount;
+    const labels = [
+      imageCount
+        ? `${imageCount} ${imageCount === 1 ? "photo" : "photos"}`
+        : "",
+      otherCount
+        ? `${otherCount} ${otherCount === 1 ? "attachment" : "attachments"}`
+        : "",
+    ].filter(Boolean);
+    return `${labels.join(" · ")}${
+      attachment.caption ? `: ${attachment.caption}` : ""
+    }`;
+  }
   const label =
     attachment.mediaType === "image"
       ? "Photo"
@@ -206,9 +259,40 @@ export const MessageAttachment = ({
   const attachment = parseMessageAttachment(content);
   if (!attachment) return null;
 
-  if (attachment.mediaType === "image") {
+  if (attachment.type === "attachment_group") {
     return (
       <View style={styles.attachmentContent}>
+        <View style={styles.attachmentGroup}>
+          {attachment.attachments.map((item, index) => (
+            <SingleMessageAttachment
+              key={`${item.url}-${index}`}
+              attachment={item}
+              isOwn={isOwn}
+            />
+          ))}
+        </View>
+        {attachment.caption ? (
+          <Text style={[styles.caption, isOwn && styles.captionOwn]}>
+            {attachment.caption}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+
+  return <SingleMessageAttachment attachment={attachment} isOwn={isOwn} />;
+};
+
+const SingleMessageAttachment = ({
+  attachment,
+  isOwn,
+}: {
+  attachment: MessageAttachmentData;
+  isOwn: boolean;
+}) => {
+  if (attachment.mediaType === "image") {
+    return (
+      <View style={styles.singleAttachment}>
         <Image
           source={{ uri: attachment.url }}
           style={styles.image}
@@ -226,7 +310,7 @@ export const MessageAttachment = ({
 
   if (attachment.mediaType === "pdf") {
     return (
-      <View style={styles.attachmentContent}>
+      <View style={styles.singleAttachment}>
         <TouchableOpacity
           style={[styles.pdfMessage, isOwn && styles.pdfMessageOwn]}
           onPress={() => Linking.openURL(attachment.url)}
@@ -249,7 +333,7 @@ export const MessageAttachment = ({
   }
 
   return (
-    <View style={styles.attachmentContent}>
+    <View style={styles.singleAttachment}>
       <AudioMessage attachment={attachment} isOwn={isOwn} />
       {attachment.caption ? (
         <Text style={[styles.caption, isOwn && styles.captionOwn]}>
@@ -263,6 +347,14 @@ export const MessageAttachment = ({
 const styles = StyleSheet.create({
   attachmentContent: {
     gap: 7,
+  },
+  attachmentGroup: {
+    flexDirection: "column",
+    gap: 6,
+  },
+  singleAttachment: {
+    gap: 7,
+    maxWidth: 228,
   },
   caption: {
     color: "#17385F",

@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRoutes } from "../ownerHelpers/hooks/useRoutes";
+import { useRoutes } from "@/app-support/owner/ownerHelpers/hooks/useRoutes";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 

@@ -23,7 +23,7 @@ import {
   subscribeToPaymentUpdates,
   unsubscribeFromRealtime,
 } from "../../store/subscriptions/clientRealtime";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 
 const formatCurrency = (cents: number, currency = "zar") => {
   const value = Number(cents || 0) / 100;
@@ -44,6 +44,9 @@ export default function OwnerPayments() {
   const [history, setHistory] = useState<any[]>([]);
   const [childStatuses, setChildStatuses] = useState<any[]>([]);
   const [cashCommissionInvoices, setCashCommissionInvoices] = useState<any[]>([]);
+  const [payingCommissionInvoiceId, setPayingCommissionInvoiceId] = useState<
+    string | null
+  >(null);
   const [confirmingCashPaymentId, setConfirmingCashPaymentId] = useState<
     string | null
   >(null);
@@ -54,6 +57,8 @@ export default function OwnerPayments() {
     details_submitted: false,
     charges_enabled: false,
     payouts_enabled: false,
+    payment_provider: "stripe",
+    automatic_payouts_enabled: false,
   });
   const [notification, setNotification] = useState<{
     visible: boolean;
@@ -78,7 +83,7 @@ export default function OwnerPayments() {
       const [profileRes, historyRes, stripeStatusRes, paymentStatusRes] =
         await Promise.all([
           fetch(`${baseUrl}/owner/profile`, {
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: "Bearer " + user.token },
           }),
           fetch(`${baseUrl}/owner/payments/history`, {
             headers: { Authorization: `Bearer ${user.token}` },
@@ -157,7 +162,7 @@ export default function OwnerPayments() {
         `${baseUrl}/owner/payments/${paymentId}/confirm-cash`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${user.token}` },
+          headers: { Authorization: "Bearer " + user.token },
         },
       );
       const data = await response.json();
@@ -166,8 +171,7 @@ export default function OwnerPayments() {
       }
       setNotification({
         visible: true,
-        message:
-          "Cash receipt confirmed. The 5% platform fee will be included in the monthly invoice.",
+        message: "Cash receipt confirmed. The client-paid service fee is not billed to you.",
         type: "success",
       });
       await loadData();
@@ -183,28 +187,45 @@ export default function OwnerPayments() {
   };
 
   const openCashCommissionInvoice = async (invoice: any) => {
-    if (!invoice.hosted_invoice_url) {
-      setNotification({
-        visible: true,
-        message: "This invoice does not have a payment link yet.",
-        type: "warning",
-      });
-      return;
-    }
     try {
-      await Linking.openURL(invoice.hosted_invoice_url);
+      let paymentUrl = invoice.hosted_invoice_url;
+      if (invoice.payment_provider === "paystack") {
+        if (!user?.token) throw new Error("Please sign in again to pay this invoice.");
+        setPayingCommissionInvoiceId(invoice.id);
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/owner/payments/cash-commission-invoices/${invoice.id}/checkout`,
+          {
+            method: "POST",
+            headers: { Authorization: "Bearer " + user.token },
+          },
+        );
+        const data = await response.json();
+        if (!response.ok || !data.checkout_url) {
+          throw new Error(
+            data.error || "Unable to initialize commission invoice checkout.",
+          );
+        }
+        paymentUrl = data.checkout_url;
+      }
+      if (!paymentUrl) {
+        throw new Error("This invoice does not have a payment link yet.");
+      }
+      await Linking.openURL(paymentUrl);
     } catch (error: any) {
       setNotification({
         visible: true,
         message: error?.message || "Unable to open the commission invoice.",
         type: "error",
       });
+    } finally {
+      setPayingCommissionInvoiceId(null);
     }
   };
 
   useEffect(() => {
     loadData();
-  }, [user?.token]);
+  }, [user?.token, searchParams.paystack]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,7 +287,9 @@ export default function OwnerPayments() {
   };
 
   useEffect(() => {
-    if (!(fromOnboarding || stripeReturn) || !stripeStatus.payouts_enabled) {
+    const payoutSetupComplete =
+      stripeStatus.payment_provider === "paystack" || stripeStatus.payouts_enabled;
+    if (!(fromOnboarding || stripeReturn) || !payoutSetupComplete) {
       return;
     }
 
@@ -281,7 +304,13 @@ export default function OwnerPayments() {
     };
 
     finalizeOnboarding();
-  }, [fromOnboarding, router, stripeReturn, stripeStatus.payouts_enabled]);
+  }, [
+    fromOnboarding,
+    router,
+    stripeReturn,
+    stripeStatus.payment_provider,
+    stripeStatus.payouts_enabled,
+  ]);
 
   const connectStripeAccount = async () => {
     if (!user?.token) return;
@@ -305,6 +334,8 @@ export default function OwnerPayments() {
         details_submitted: Boolean(data.details_submitted),
         charges_enabled: Boolean(data.charges_enabled),
         payouts_enabled: Boolean(data.payouts_enabled),
+        payment_provider: "stripe",
+        automatic_payouts_enabled: Boolean(data.payouts_enabled),
       });
       setNotification({
         visible: true,
@@ -339,20 +370,25 @@ export default function OwnerPayments() {
         "Status",
         "Payment Method",
         "Amount",
-        "Platform Fee",
-        "Owner Received",
+        "Service Fee",
+        "Owner Payout",
         "Currency",
         "Date",
       ];
       const rows = history.map((item) => {
-        const fee =
-          item.platform_fee_cents ??
-          item.service_fee_amount_cents ??
-          (item.children_count || 0) * 500;
+        const fee = item.platform_fee_cents ?? item.service_fee_amount_cents ?? 0;
+        const ownerFeeOwed =
+          item.payment_method === "cash" &&
+          ["owed", "invoiced"].includes(item.platform_fee_status);
         const payout =
-          item.payment_method === "cash"
-            ? item.amount_cents || 0
-            : (item.amount_cents || 0) - fee;
+          item.payment_provider === "paystack"
+            ? "Not automated"
+            : formatCurrency(
+                item.payment_method === "cash"
+                  ? item.amount_cents || 0
+                  : (item.amount_cents || 0) - fee,
+                item.currency,
+              );
         const date = item.created_at || item.processed_at || "";
         return [
           item.clients?.users?.name || "Client",
@@ -360,8 +396,10 @@ export default function OwnerPayments() {
           item.status || "",
           item.payment_method || "card",
           formatCurrency(item.amount_cents || 0, item.currency),
-          formatCurrency(fee, item.currency),
-          formatCurrency(payout, item.currency),
+          ownerFeeOwed
+            ? formatCurrency(fee, item.currency)
+            : "Client-paid; not owner-billed",
+          payout,
           (item.currency || "zar").toUpperCase(),
           date,
         ]
@@ -445,7 +483,9 @@ export default function OwnerPayments() {
                 <View style={styles.payoutCopy}>
                   <Text style={styles.stripeStatusLabel}>Payout account</Text>
                   <Text style={styles.stripeStatusValue}>
-                    {stripeStatus.payouts_enabled
+                    {stripeStatus.payment_provider === "paystack"
+                      ? "Automatic payouts are disabled"
+                      : stripeStatus.payouts_enabled
                       ? "Ready to receive money"
                       : stripeStatus.connected
                         ? "Finish Stripe setup"
@@ -454,27 +494,32 @@ export default function OwnerPayments() {
                 </View>
               </View>
               <Text style={styles.payoutDescription}>
-                {stripeStatus.payouts_enabled
+                {stripeStatus.payment_provider === "paystack"
+                  ? "Paystack client charges are collected by the platform. Owner transfers are not automated yet."
+                  : stripeStatus.payouts_enabled
                   ? "Client payments will be transferred to your Stripe account."
                   : "Connect Stripe to verify your identity and add payout details."}
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.button, connectingStripe && styles.buttonDisabled]}
-              onPress={connectStripeAccount}
-              disabled={connectingStripe}
-            >
-              <Text style={styles.buttonText}>
-                {connectingStripe
-                  ? "Opening Stripe..."
-                  : connectedAccountId
-                    ? "Update payout details"
-                    : "Connect payout account"}
-              </Text>
-            </TouchableOpacity>
+            {stripeStatus.payment_provider !== "paystack" && (
+              <TouchableOpacity
+                style={[styles.button, connectingStripe && styles.buttonDisabled]}
+                onPress={connectStripeAccount}
+                disabled={connectingStripe}
+              >
+                <Text style={styles.buttonText}>
+                  {connectingStripe
+                    ? "Opening Stripe..."
+                    : connectedAccountId
+                      ? "Update payout details"
+                      : "Connect payout account"}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {(fromOnboarding || stripeReturn) &&
-              stripeStatus.payouts_enabled && (
+              (stripeStatus.payment_provider === "paystack" ||
+                stripeStatus.payouts_enabled) && (
                 <TouchableOpacity
                   style={[styles.button, styles.continueButton]}
                   onPress={completeOnboarding}
@@ -483,36 +528,40 @@ export default function OwnerPayments() {
                 </TouchableOpacity>
               )}
 
-            <Text style={[styles.noteText, { marginTop: 12 }]}>
-              Stripe securely manages your payout banking details. Track My Kids
-              does not store your banking information.
-            </Text>
-            <View style={{ marginTop: 10 }}>
-              <Text style={styles.noteText}>
-                If you have any issues with Stripe, please contact their support
-                at{" "}
-                <Text
-                  style={{ color: "#4A90E2" }}
-                  onPress={() => Linking.openURL("mailto:support@stripe.com")}
-                >
-                  support@stripe.com
+            {stripeStatus.payment_provider !== "paystack" && (
+              <>
+                <Text style={[styles.noteText, { marginTop: 12 }]}>
+                  Stripe securely manages legacy payout banking details. Track My Kids
+                  does not store this information.
                 </Text>
-              </Text>
-            </View>
-            <View style={{ marginTop: 10 }}>
-              <Text style={styles.noteText}>
-                For more information about how Stripe handles your data.
-              </Text>
-              <Text style={styles.noteText}>
-                Visit the Stripe Privacy Policy at{" "}
-                <Text
-                  style={{ color: "#4A90E2" }}
-                  onPress={() => Linking.openURL("https://stripe.com/privacy")}
-                >
-                  stripe.com/privacy
-                </Text>
-              </Text>
-            </View>
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.noteText}>
+                    If you have any issues with Stripe, please contact their support
+                    at{" "}
+                    <Text
+                      style={{ color: "#4A90E2" }}
+                      onPress={() => Linking.openURL("mailto:support@stripe.com")}
+                    >
+                      support@stripe.com
+                    </Text>
+                  </Text>
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.noteText}>
+                    For more information about how Stripe handles your data.
+                  </Text>
+                  <Text style={styles.noteText}>
+                    Visit the Stripe Privacy Policy at{" "}
+                    <Text
+                      style={{ color: "#4A90E2" }}
+                      onPress={() => Linking.openURL("https://stripe.com/privacy")}
+                    >
+                      stripe.com/privacy
+                    </Text>
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.card}>
@@ -548,7 +597,7 @@ export default function OwnerPayments() {
           <View style={styles.card}>
             <Text style={styles.title}>Cash commission invoices</Text>
             <Text style={styles.rowSub}>
-              Monthly 5% platform fees on confirmed cash payments.
+              Fees due from owner-confirmed cash payments.
             </Text>
             <FlatList
               data={cashCommissionInvoices}
@@ -556,7 +605,7 @@ export default function OwnerPayments() {
               scrollEnabled={false}
               ListEmptyComponent={
                 <Text style={styles.emptyText}>
-                  No cash commission invoices.
+                  No outstanding cash commission invoices.
                 </Text>
               }
               renderItem={({ item }) => (
@@ -576,12 +625,23 @@ export default function OwnerPayments() {
                   <Text style={styles.amount}>
                     {formatCurrency(item.amount_cents, item.currency)}
                   </Text>
-                  {item.status === "open" && item.hosted_invoice_url ? (
+                  {item.status === "open" &&
+                  (item.hosted_invoice_url ||
+                    item.payment_provider === "paystack") ? (
                     <TouchableOpacity
-                      style={styles.confirmCashButton}
+                      style={[
+                        styles.confirmCashButton,
+                        payingCommissionInvoiceId === item.id &&
+                          styles.buttonDisabled,
+                      ]}
+                      disabled={payingCommissionInvoiceId === item.id}
                       onPress={() => openCashCommissionInvoice(item)}
                     >
-                      <Text style={styles.confirmCashButtonText}>Pay</Text>
+                      <Text style={styles.confirmCashButtonText}>
+                        {payingCommissionInvoiceId === item.id
+                          ? "Opening..."
+                          : "Pay"}
+                      </Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -607,14 +667,22 @@ export default function OwnerPayments() {
                 <Text style={styles.emptyText}>No payments yet.</Text>
               }
               renderItem={({ item }) => {
-                const fee =
-                  item.platform_fee_cents ??
-                  item.service_fee_amount_cents ??
-                  (item.children_count || 0) * 500;
+                const fee = item.platform_fee_cents ?? item.service_fee_amount_cents ?? 0;
+                const ownerFeeOwed =
+                  item.payment_method === "cash" &&
+                  ["owed", "invoiced"].includes(item.platform_fee_status);
+                const serviceFeeReady = ["collected", "waived"].includes(
+                  item.platform_fee_status,
+                );
                 const payout =
-                  item.payment_method === "cash"
-                    ? item.amount_cents || 0
-                    : (item.amount_cents || 0) - fee;
+                  item.payment_provider === "paystack"
+                    ? "Owner payout not automated"
+                    : `Owner received: ${formatCurrency(
+                        item.payment_method === "cash"
+                          ? item.amount_cents || 0
+                          : (item.amount_cents || 0) - fee,
+                        item.currency,
+                      )}`;
                 return (
                   <View style={styles.row}>
                     <View style={{ flex: 1 }}>
@@ -628,24 +696,41 @@ export default function OwnerPayments() {
                       </Text>
                       <Text style={styles.rowSub}>
                         Vehicle: {item.vehicles?.name || "Not recorded"} -{" "}
-                        {item.payment_method === "cash"
-                          ? `Platform fee owed: ${formatCurrency(fee, item.currency)}`
-                          : `Platform fee: ${formatCurrency(fee, item.currency)}`}{" "}
-                        • Owner received: {formatCurrency(payout, item.currency)}
+                        {ownerFeeOwed
+                          ? `Legacy owner fee owed: ${formatCurrency(fee, item.currency)}`
+                          : item.platform_fee_status === "waived"
+                            ? "Client service fee waived"
+                          : `Client-paid service fee: ${formatCurrency(fee, item.currency)}`}{" "}
+                        • {payout}
                       </Text>
                       {item.payment_method === "cash" &&
                       item.status === "pending" ? (
-                        <TouchableOpacity
-                          style={styles.confirmCashButton}
-                          disabled={confirmingCashPaymentId !== null}
-                          onPress={() => confirmCashPayment(item.id)}
-                        >
-                          <Text style={styles.confirmCashButtonText}>
-                            {confirmingCashPaymentId === item.id
-                              ? "Confirming..."
-                              : "Confirm cash received"}
-                          </Text>
-                        </TouchableOpacity>
+                        <>
+                          {!serviceFeeReady && (
+                            <Text style={styles.rowSub}>
+                              Client must pay the service fee online before you can confirm.
+                            </Text>
+                          )}
+                          {item.platform_fee_status === "waived" && (
+                            <Text style={styles.rowSub}>
+                              Service fee waived for the client’s free period.
+                            </Text>
+                          )}
+                          <TouchableOpacity
+                            style={styles.confirmCashButton}
+                            disabled={
+                              confirmingCashPaymentId !== null ||
+                              !serviceFeeReady
+                            }
+                            onPress={() => confirmCashPayment(item.id)}
+                          >
+                            <Text style={styles.confirmCashButtonText}>
+                              {confirmingCashPaymentId === item.id
+                                ? "Confirming..."
+                                : "Confirm cash received"}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
                       ) : null}
                     </View>
                     <Text style={styles.amount}>

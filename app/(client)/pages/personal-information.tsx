@@ -16,7 +16,7 @@ import MapView, { Marker } from "react-native-maps";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useClientProfile } from "../clientHelpers/hooks/useClientProfile";
+import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import GooglePlacesAutoComplete from "../../../components/GooglePlacesAutoComplete";

@@ -8,6 +8,7 @@ import React, {
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -23,6 +24,7 @@ import {
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
+import MessageReactions from "../../../components/messages/MessageReactions";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import {
@@ -40,7 +42,7 @@ import {
   formatTime,
   getInitials,
   getRoleLabel,
-} from "../schoolHelpers/actionHelpers/actions";
+} from "@/app-support/school/schoolHelpers/actionHelpers/actions";
 
 export default function Messages() {
   const { user } = useContext(AuthContext);
@@ -116,6 +118,17 @@ export default function Messages() {
   const sendMessage = async (content = draft.trim()) => {
     if (!content || !selectedConversation || sending || !user?.token)
       return false;
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage: MessageData = {
+      id: optimisticId,
+      content,
+      sent_at: new Date().toISOString(),
+      is_read: false,
+      sender_id: userId,
+      users: user?.userData,
+    };
+    setMessages((current) => [...current, optimisticMessage]);
+    setDraft("");
     setSending(true);
     try {
       const response = await fetch(`${BASE_URL}/school/messages`, {
@@ -130,14 +143,26 @@ export default function Messages() {
         }),
       });
       if (response.ok) {
-        setDraft("");
         setMessages(await fetchMessagesWithCache(selectedConversation.id));
         return true;
       }
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       return false;
     } catch (err) {
-      setSending(false);
       console.warn(err);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       return false;
     } finally {
       setSending(false);
@@ -158,6 +183,9 @@ export default function Messages() {
             <Avatar
               name={selectedConversation.other_participant?.name}
               color={colors.purple}
+              isSupport={
+                selectedConversation.other_participant?.role === "admin"
+              }
             />
             <View>
               <Text style={styles.chatName}>
@@ -211,9 +239,47 @@ export default function Messages() {
                         {item.content}
                       </Text>
                     )}
-                    <Text style={own ? styles.timeOwn : styles.time}>
-                      {formatTime(item.sent_at)}
-                    </Text>
+                    <View
+                      style={[
+                        styles.messageFooter,
+                        own && styles.messageFooterOwn,
+                      ]}
+                    >
+                      <Text style={own ? styles.timeOwn : styles.time}>
+                        {formatTime(item.sent_at)}
+                      </Text>
+                      {!item.deliveryError && own && item.reactions?.length ? (
+                        <MessageReactions
+                          apiBaseUrl={BASE_URL}
+                          role="school"
+                          conversationId={selectedConversation.id}
+                          messageId={item.id}
+                          token={user?.token || ""}
+                          currentUserId={userId}
+                          accentColor="#159B3A"
+                          reactions={item.reactions}
+                          isOwn
+                        />
+                      ) : null}
+                      {!item.deliveryError && !own ? (
+                        <MessageReactions
+                          apiBaseUrl={BASE_URL}
+                          role="school"
+                          conversationId={selectedConversation.id}
+                          messageId={item.id}
+                          token={user?.token || ""}
+                          currentUserId={userId}
+                          accentColor="#159B3A"
+                          reactions={item.reactions}
+                          isOwn={own}
+                        />
+                      ) : null}
+                    </View>
+                    {item.deliveryError ? (
+                      <Text style={styles.messageDeliveryError}>
+                        Message not sent
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
               );
@@ -298,10 +364,26 @@ export default function Messages() {
   );
 }
 
-function Avatar({ name, color }: { name?: string; color: string }) {
+function Avatar({
+  name,
+  color,
+  isSupport = false,
+}: {
+  name?: string;
+  color: string;
+  isSupport?: boolean;
+}) {
   return (
     <View style={[styles.avatar, { backgroundColor: `${color}18` }]}>
-      <Text style={[styles.avatarText, { color }]}>{getInitials(name)}</Text>
+      {isSupport ? (
+        <Image
+          source={require("@/assets/images/logo.png")}
+          style={styles.avatarImage}
+          resizeMode="contain"
+        />
+      ) : (
+        <Text style={[styles.avatarText, { color }]}>{getInitials(name)}</Text>
+      )}
     </View>
   );
 }
@@ -326,7 +408,11 @@ function ConversationRow({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Avatar name={item.other_participant?.name} color={colors.blue} />
+      <Avatar
+        name={item.other_participant?.name}
+        color={colors.blue}
+        isSupport={item.other_participant?.role === "admin"}
+      />
       <View style={styles.conversationCopy}>
         <View style={styles.conversationTop}>
           <Text style={styles.name} numberOfLines={1}>
@@ -431,7 +517,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
+  avatarImage: { width: "100%", height: "100%" },
   avatarText: { fontSize: 15, fontWeight: "800" },
   conversationCopy: { flex: 1, marginLeft: 12 },
   conversationTop: {
@@ -533,7 +621,26 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.72)",
     fontSize: 9,
     textAlign: "right",
+  },
+  messageFooter: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
     marginTop: 4,
+    maxWidth: "100%",
+  },
+  messageFooterOwn: {
+    alignSelf: "flex-end",
+    justifyContent: "flex-end",
+  },
+  messageDeliveryError: {
+    marginTop: 5,
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "right",
   },
   composer: {
     padding: 10,

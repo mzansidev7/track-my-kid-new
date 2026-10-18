@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerPageHeader } from "../ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 
 const BillingPayments = () => {
   const router = useRouter();

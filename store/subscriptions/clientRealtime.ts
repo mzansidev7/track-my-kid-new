@@ -201,6 +201,28 @@ export const subscribeToClientChildrenAndSchoolsUpdates = (
   return channel;
 };
 
+export const subscribeToRouteStopUpdates = (onStopsChange: () => void) => {
+  const channel = client
+    .channel(
+      `client-route-stops-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_stops",
+      },
+      onStopsChange,
+    );
+
+  channel.subscribe((status: string) => {
+    logSubscriptionStatus("Client route stops subscription", "current-user", status);
+  });
+
+  return channel;
+};
+
 export const subscribeToPaymentUpdates = (
   scope: "client_id" | "owner_id",
   id: string,

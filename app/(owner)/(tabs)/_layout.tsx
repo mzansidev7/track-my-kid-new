@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import OwnerTabBar from "../ownerHelpers/components/OwnerTabBar";
+import OwnerTabBar from "@/app-support/owner/ownerHelpers/components/OwnerTabBar";
 
 export default function TabsLayout() {
   return (

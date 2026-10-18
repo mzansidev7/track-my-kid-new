@@ -237,7 +237,7 @@ export default function VerifyOTP() {
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* HEADER */}
-        <LinearGradient colors={["#FF6B6B", "#FF8E8E"]} style={styles.header}>
+        <LinearGradient colors={["#173F70", "#1683F8"]} style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
@@ -246,7 +246,12 @@ export default function VerifyOTP() {
           </TouchableOpacity>
 
           <View style={styles.headerContent}>
-            <Text style={styles.headerIcon}>📧</Text>
+            <MaterialIcons
+              name="email"
+              size={32}
+              color="#FFFFFF"
+              style={styles.headerIcon}
+            />
             <Text style={styles.headerTitle}>Hi, {name}</Text>
             <Text style={styles.headerSubtitle}>
               Enter the 6-digit code sent to {email}
@@ -289,7 +294,7 @@ export default function VerifyOTP() {
             disabled={loading || otp.some((d) => d === "")}
           >
             <LinearGradient
-              colors={["#FF6B6B", "#FF5252"]}
+              colors={["#173F70", "#1683F8"]}
               style={styles.buttonGradient}
             >
               {loading ? (
@@ -310,7 +315,7 @@ export default function VerifyOTP() {
               style={styles.resendButtonContainer}
             >
               {resendLoading ? (
-                <ActivityIndicator size="small" color="#FF6B6B" />
+                <ActivityIndicator size="small" color="#1683F8" />
               ) : canResend ? (
                 <Text style={styles.activeText}>Resend OTP</Text>
               ) : (
@@ -337,92 +342,113 @@ export default function VerifyOTP() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F5FAFF",
   },
   scrollContent: {
-    paddingBottom: 40,
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   header: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   backButton: {
     position: "absolute",
-    left: 20,
-    top: 20,
+    left: 14,
+    top: 14,
     zIndex: 10,
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
   headerContent: {
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 8,
   },
   headerIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFF",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  otpSection: {
-    paddingHorizontal: 20,
-    marginBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
     marginBottom: 8,
   },
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#FFF",
+    marginBottom: 3,
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  otpSection: {
+    marginHorizontal: 18,
+    marginTop: 4,
+    padding: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D8EAF9",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#174574",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#174574",
+    marginBottom: 5,
+  },
   sectionDesc: {
-    fontSize: 14,
-    color: "#999",
-    marginBottom: 30,
+    fontSize: 11,
+    color: "#64809C",
+    marginBottom: 20,
   },
   otpContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 30,
+    justifyContent: "center",
+    gap: 7,
+    marginBottom: 22,
   },
   otpInput: {
-    width: 48, // 👈 fixed width
-    height: 56,
+    flex: 1,
+    maxWidth: 46,
+    height: 50,
     backgroundColor: "#FFF",
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#D8E4EF",
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#174574",
   },
   verifyButton: {
     borderRadius: 12,
     overflow: "hidden",
-    marginBottom: 20,
-    shadowColor: "#FF6B6B",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 14,
+    shadowColor: "#174574",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
   },
   buttonGradient: {
-    paddingVertical: 16,
+    minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
   },
   verifyButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "800",
     color: "#FFF",
   },
   buttonDisabled: {
@@ -455,8 +481,9 @@ const styles = StyleSheet.create({
   },
 
   activeText: {
-    color: "#FF6B6B",
-    fontWeight: "600",
+    color: "#1769D2",
+    fontWeight: "700",
+    fontSize: 11,
   },
 
   disabledText: {
@@ -467,36 +494,36 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   resendText: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 12,
+    fontSize: 10,
+    color: "#64809C",
+    marginBottom: 8,
   },
   resendButtonContainer: {
-    height: 80,
-    width: 80,
+    height: 38,
+    minWidth: 72,
     justifyContent: "center",
     alignItems: "center",
   },
   circularTimer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
   },
   circularTimerBorder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: "#FF6B6B",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 3,
+    borderColor: "#1683F8",
     position: "absolute",
   },
   timerText: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FF6B6B",
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#1769D2",
     zIndex: 1,
   },
   resendButton: {
@@ -504,41 +531,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   resendButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FF6B6B",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1769D2",
   },
   resendButtonTextDisabled: {
     color: "#CCC",
   },
   infoBox: {
-    backgroundColor: "rgba(255, 107, 107, 0.1)",
+    backgroundColor: "#EDF6FF",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 14,
   },
   infoText: {
-    fontSize: 13,
-    color: "#FF6B6B",
-    fontWeight: "500",
+    fontSize: 11,
+    color: "#35516B",
+    fontWeight: "600",
     flex: 1,
   },
   footer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     alignItems: "center",
   },
   footerText: {
-    fontSize: 12,
-    color: "#999",
+    fontSize: 10,
+    color: "#64809C",
     textAlign: "center",
     lineHeight: 18,
   },
   footerLink: {
-    color: "#FF6B6B",
+    color: "#1769D2",
     fontWeight: "600",
   },
 });

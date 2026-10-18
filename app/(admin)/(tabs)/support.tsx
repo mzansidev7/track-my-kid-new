@@ -29,8 +29,8 @@ type Ticket = {
   users?: { name?: string; email?: string; role?: string } | null;
 };
 type CommissionSummary = {
-  owing_cents: number;
-  owing_owner_count: number;
+  legacy_owner_fees_owing_cents: number;
+  legacy_owner_count: number;
 };
 const statusOrder: Ticket["status"][] = [
   "open",
@@ -72,18 +72,24 @@ export default function AdminSupport() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "Unable to load commission summary.");
+        throw new Error(data?.error || "Unable to load finance summary.");
       }
       setCommissionSummary({
-        owing_cents: Number(data?.summary?.owing_cents || 0),
-        owing_owner_count: Number(data?.summary?.owing_owner_count || 0),
+        legacy_owner_fees_owing_cents: Number(
+          data?.summary?.legacy_owner_fees_owing_cents || 0,
+        ),
+        legacy_owner_count: Array.isArray(
+          data?.legacy_owner_fees?.owners_owing,
+        )
+          ? data.legacy_owner_fees.owners_owing.length
+          : 0,
       });
       setCommissionError(null);
     } catch (requestError) {
       setCommissionError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to load commission summary.",
+          : "Unable to load finance summary.",
       );
     }
   }, [userToken]);
@@ -249,7 +255,7 @@ export default function AdminSupport() {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.commissionTitle}>Cash commissions</Text>
+            <Text style={styles.commissionTitle}>Platform finance</Text>
             {commissionError ? (
               <Text style={styles.commissionError}>
                 {commissionError} Tap to open the full report.
@@ -259,13 +265,15 @@ export default function AdminSupport() {
                 {new Intl.NumberFormat("en-ZA", {
                   style: "currency",
                   currency: "ZAR",
-                }).format(commissionSummary.owing_cents / 100)}{" "}
-                owed by {commissionSummary.owing_owner_count} fleet owner
-                {commissionSummary.owing_owner_count === 1 ? "" : "s"}
+                }).format(
+                  commissionSummary.legacy_owner_fees_owing_cents / 100,
+                )}{" "}
+                legacy fees owed by {commissionSummary.legacy_owner_count} owner
+                {commissionSummary.legacy_owner_count === 1 ? "" : "s"}
               </Text>
             ) : (
               <Text style={styles.commissionSubtitle}>
-                View amounts due from fleet owners
+                Review subscriptions, client payments and balances
               </Text>
             )}
           </View>

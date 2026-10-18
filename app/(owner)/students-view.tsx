@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import OwnerCompactHeader from "./ownerHelpers/components/OwnerCompactHeader";
+import OwnerCompactHeader from "@/app-support/owner/ownerHelpers/components/OwnerCompactHeader";
 
 const StudentsView = () => {
   const router = useRouter();

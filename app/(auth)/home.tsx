@@ -294,7 +294,7 @@ const WelcomeScreen = () => {
               <View style={styles.ctaWrap}>
                 <TouchableWithoutFeedback onPress={handleGetStarted}>
                   <LinearGradient
-                    colors={["#4E54FF", "#3247FF"]}
+                    colors={["#173F70", "#1683F8"]}
                     style={styles.getStartedBtn}
                     start={{ x: 0, y: 0.5 }}
                     end={{ x: 1, y: 0.5 }}

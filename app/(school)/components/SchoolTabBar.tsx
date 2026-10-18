@@ -4,7 +4,7 @@ import React, { useContext } from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../../styles/theme";
-import { SchoolBillingAccessContext } from "../schoolBillingAccess";
+import { SchoolBillingAccessContext } from "@/app-support/school/schoolBillingAccess";
 
 const tabs = [
   {
@@ -96,7 +96,7 @@ export default function SchoolTabBar() {
         {(trialExpired
           ? [
               ...tabs.filter((tab) =>
-                ["home", "students", "routes", "trips", "messages"].includes(tab.key),
+                ["home", "students", "routes", "trips", "messages", "more"].includes(tab.key),
               ),
               {
                 key: "billing",

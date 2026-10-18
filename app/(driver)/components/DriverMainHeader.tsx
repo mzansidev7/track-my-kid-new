@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Props = {
   driverName: string;
@@ -18,13 +18,13 @@ const DriverHeader = ({
   notificationCount = 0,
   subtitle,
 }: Props) => {
-  const { colors } = useTheme();
   return (
-    <View style={[styles.container]}>
+    <View style={styles.container}>
       <View>
-        <Text style={styles.greeting}>Hello, {driverName} 👋</Text>
+        <Text style={styles.eyebrow}>DRIVER DASHBOARD</Text>
+        <Text style={styles.greeting}>Good day, {driverName}</Text>
         {subtitle && (
-          <Text style={[styles.subtitle, { color: colors.primary }]}>
+          <Text style={styles.subtitle}>
             {subtitle}
           </Text>
         )}
@@ -32,18 +32,18 @@ const DriverHeader = ({
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.iconButton, { backgroundColor: colors.surface }]}
+          style={styles.iconButton}
           onPress={onNotificationPress}
         >
           <MaterialIcons
             name="notifications-none"
             size={25}
-            color={colors.primary}
+            color={DRIVER_COLORS.primary}
           />
 
           {notificationCount > 0 && (
             <View style={styles.notificationBadge}>
-              <Text style={[styles.badgeText, { color: colors.surface }]}>
+              <Text style={styles.badgeText}>
                 {notificationCount > 99 ? "99+" : notificationCount}
               </Text>
             </View>
@@ -51,10 +51,10 @@ const DriverHeader = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.profileButton, { backgroundColor: colors.surface }]}
+          style={styles.profileButton}
           onPress={onProfilePress}
         >
-          <MaterialIcons name="person" size={23} color={colors.primary} />
+          <MaterialIcons name="person" size={23} color={DRIVER_COLORS.white} />
         </TouchableOpacity>
       </View>
     </View>
@@ -66,17 +66,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 22,
+    marginBottom: 20,
+  },
+
+  eyebrow: {
+    color: DRIVER_COLORS.primary,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    marginBottom: 5,
   },
 
   greeting: {
-    color: "#0F172A",
-    fontSize: 22,
-    fontWeight: "700",
+    color: DRIVER_COLORS.text,
+    fontSize: 25,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
 
   subtitle: {
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     fontSize: 13,
     marginTop: 5,
   },
@@ -91,11 +100,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DRIVER_COLORS.card,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.18)",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
 
   notificationBadge: {
@@ -121,11 +130,11 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.18)",
+    borderColor: DRIVER_COLORS.primary,
   },
 });
 

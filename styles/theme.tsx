@@ -11,22 +11,22 @@ import { getStoredTheme, saveTheme } from "../store/themeStore/themeStore";
 
 // Driver-specific color tokens requested by the designer
 export const DRIVER_COLORS = {
-  background: "#F5FBF7",
+  background: "#F3F7F4",
   card: "#FFFFFF",
-  cardBorder: "rgba(15, 157, 88, 0.18)",
+  cardBorder: "#DFE8E2",
 
-  primary: "#0F9D58",
-  primaryDark: "#0A7A43",
+  primary: "#145A45",
+  primaryDark: "#0C3F31",
 
-  cyan: "#22C55E",
+  cyan: "#B6D94C",
 
-  success: "#25D6A2",
-  warning: "#F59E0B",
-  danger: "#EF5350",
+  success: "#21845D",
+  warning: "#D58A16",
+  danger: "#D94D48",
 
   white: "#FFFFFF",
-  text: "#0F172A",
-  muted: "#4B5563",
+  text: "#172B24",
+  muted: "#64766D",
 };
 
 export const CLIENT_COLORS = {
@@ -94,8 +94,8 @@ export const lightTheme = {
 
         primary: DRIVER_COLORS.primary,
         primaryDark: DRIVER_COLORS.primaryDark,
-        gradientStart: DRIVER_COLORS.primary,
-        gradientEnd: DRIVER_COLORS.cyan,
+        gradientStart: DRIVER_COLORS.primaryDark,
+        gradientEnd: DRIVER_COLORS.primary,
         surface: DRIVER_COLORS.card,
         border: DRIVER_COLORS.cardBorder,
         divider: DRIVER_COLORS.cyan,
@@ -187,8 +187,8 @@ export const darkTheme = {
 
         primary: DRIVER_COLORS.primary,
         primaryDark: DRIVER_COLORS.primaryDark,
-        gradientStart: DRIVER_COLORS.primary,
-        gradientEnd: DRIVER_COLORS.cyan,
+        gradientStart: DRIVER_COLORS.primaryDark,
+        gradientEnd: DRIVER_COLORS.primary,
         surface: DRIVER_COLORS.background,
         border: DRIVER_COLORS.cardBorder,
         divider: DRIVER_COLORS.cyan,

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 type Props = {
   isOnline: boolean;
@@ -16,18 +16,19 @@ const DriverStatusCard = ({
   vehicleName,
   licensePlate,
 }: Props) => {
-  const { colors } = useTheme();
-
   return (
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        {
+          backgroundColor: DRIVER_COLORS.primaryDark,
+          borderColor: DRIVER_COLORS.primary,
+        },
       ]}
     >
       <View style={styles.topRow}>
         <View>
-          <Text style={[styles.label, { color: colors.primary }]}>
+          <Text style={[styles.label, { color: "rgba(255,255,255,0.72)" }]}>
             Driver Status
           </Text>
 
@@ -36,7 +37,9 @@ const DriverStatusCard = ({
               style={[
                 styles.statusDot,
                 {
-                  backgroundColor: isOnline ? colors.success : colors.error,
+                  backgroundColor: isOnline
+                    ? DRIVER_COLORS.cyan
+                    : DRIVER_COLORS.danger,
                 },
               ]}
             />
@@ -44,7 +47,9 @@ const DriverStatusCard = ({
             <Text
               style={[
                 styles.statusText,
-                isOnline ? { color: colors.success } : { color: colors.error },
+                isOnline
+                  ? { color: DRIVER_COLORS.cyan }
+                  : { color: "#FFB4AE" },
               ]}
             >
               {isOnline ? "Online" : "Offline"}
@@ -52,35 +57,41 @@ const DriverStatusCard = ({
           </View>
         </View>
 
-        <View style={[styles.gpsIcon, { backgroundColor: colors.background }]}>
-          <MaterialIcons name="gps-fixed" size={24} color={colors.primary} />
+        <View style={styles.gpsIcon}>
+          <MaterialIcons
+            name="gps-fixed"
+            size={24}
+            color={DRIVER_COLORS.cyan}
+          />
         </View>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      <View
+        style={[styles.divider, { backgroundColor: "rgba(255,255,255,0.18)" }]}
+      />
 
       <View style={styles.bottomRow}>
         <View>
-          <Text style={[styles.smallLabel, { color: colors.primary }]}>
+          <Text style={[styles.smallLabel, { color: "rgba(255,255,255,0.68)" }]}>
             Vehicle
           </Text>
-          <Text style={[styles.value, { color: colors.primary }]}>
+          <Text style={[styles.value, { color: DRIVER_COLORS.white }]}>
             {vehicleName || "No vehicle assigned"}
           </Text>
         </View>
 
         <View style={styles.rightInfo}>
-          <Text style={[styles.smallLabel, { color: colors.primary }]}>
+          <Text style={[styles.smallLabel, { color: "rgba(255,255,255,0.68)" }]}>
             Registration
           </Text>
-          <Text style={[styles.value, { color: colors.primary }]}>
+          <Text style={[styles.value, { color: DRIVER_COLORS.white }]}>
             {licensePlate || "N/A"}
           </Text>
         </View>
       </View>
 
       {!isOnline && lastUpdated ? (
-        <Text style={[styles.lastUpdated, { color: colors.primary }]}>
+        <Text style={[styles.lastUpdated, { color: DRIVER_COLORS.cyan }]}>
           Last online: {lastUpdated}
         </Text>
       ) : null}
@@ -90,12 +101,10 @@ const DriverStatusCard = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 22,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(15, 157, 88, 0.16)",
   },
 
   topRow: {
@@ -105,7 +114,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: "#4B5563",
+    color: "rgba(255,255,255,0.72)",
     fontSize: 13,
     marginBottom: 7,
   },
@@ -123,8 +132,8 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    color: "#0F172A",
-    fontSize: 20,
+    color: DRIVER_COLORS.white,
+    fontSize: 22,
     fontWeight: "700",
   },
 
@@ -132,14 +141,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: "#0F9D58",
+    backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
 
   divider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "rgba(255,255,255,0.18)",
     marginVertical: 17,
   },
 
@@ -149,13 +158,13 @@ const styles = StyleSheet.create({
   },
 
   smallLabel: {
-    color: "#64748B",
+    color: "rgba(255,255,255,0.68)",
     fontSize: 11,
     marginBottom: 4,
   },
 
   value: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.white,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -165,7 +174,7 @@ const styles = StyleSheet.create({
   },
 
   lastUpdated: {
-    color: "#F59E0B",
+    color: DRIVER_COLORS.cyan,
     fontSize: 11,
     marginTop: 12,
   },

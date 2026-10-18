@@ -1,8 +1,12 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "../../../styles/theme";
 
 export default function DriversTabBar({
   state,
@@ -11,26 +15,20 @@ export default function DriversTabBar({
   state: any;
   navigation: any;
 }) {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const getIcon = (routeName: string) => {
     switch (routeName) {
       case "index":
-        return "dashboard";
-
+        return "home";
       case "trips":
-        return "navigation";
-
+        return "route";
       case "students":
         return "people";
-
       case "messages":
-        return "chat-bubble-outline";
-
+        return "message";
       case "profile":
-        return "person-outline";
-
+        return "person";
       default:
         return "circle";
     }
@@ -43,6 +41,7 @@ export default function DriversTabBar({
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
+          backgroundColor: "#17385F",
         },
       ]}
     >
@@ -50,14 +49,12 @@ export default function DriversTabBar({
         style={[
           styles.tabBar,
           {
-            backgroundColor: "#FFFFFF",
-            borderWidth: 1,
-            borderColor: "rgba(15, 157, 88, 0.16)",
+            backgroundColor: "#17385F",
           },
         ]}
       >
         {state.routes.map((route: any, index: number) => {
-          const isFocused = state.index === index;
+          const focused = state.index === index;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -66,7 +63,7 @@ export default function DriversTabBar({
               canPreventDefault: true,
             });
 
-            if (!isFocused && !event.defaultPrevented) {
+            if (!focused && !event.defaultPrevented) {
               navigation.navigate(route.name as never);
             }
           };
@@ -81,27 +78,23 @@ export default function DriversTabBar({
               <View
                 style={[
                   styles.iconContainer,
-                  isFocused && {
-                    backgroundColor: "rgba(15, 157, 88, 0.08)",
+                  focused && {
+                    backgroundColor: "white",
                   },
                 ]}
               >
                 <MaterialIcons
                   name={getIcon(route.name) as any}
-                  size={isFocused ? 23 : 22}
-                  color={
-                    isFocused ? colors.primary : colors.secondary || "#8A8A8A"
-                  }
+                  size={focused ? 23 : 22}
+                  color={focused ? "#17385F" : "white"}
                 />
               </View>
 
-              {isFocused && (
+              {focused && (
                 <View
                   style={[
                     styles.activeIndicator,
-                    {
-                      backgroundColor: colors.primary,
-                    },
+                    { backgroundColor: "white" },
                   ]}
                 />
               )}
@@ -115,11 +108,7 @@ export default function DriversTabBar({
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-
+    width: "100%",
     paddingHorizontal: 14,
 
     ...Platform.select({
@@ -170,17 +159,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
 
-    borderRadius: 13,
+    borderRadius: 50,
   },
 
   activeIndicator: {
     position: "absolute",
-
     bottom: 5,
-
     width: 20,
     height: 3,
-
     borderRadius: 10,
   },
 });

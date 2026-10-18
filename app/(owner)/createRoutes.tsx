@@ -75,6 +75,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
   const [pickupEndTime, setPickupEndTime] = useState("");
   const [dropoffStartTime, setDropoffStartTime] = useState("");
   const [dropoffEndTime, setDropoffEndTime] = useState("");
+  const [operatingDays, setOperatingDays] = useState([1, 2, 3, 4, 5]);
   const [routeType, setRouteType] = useState<
     "one_way" | "round_trip" | "multi_stop"
   >("one_way");
@@ -258,6 +259,14 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       return;
     }
     if (currentStep === 2) {
+      if (operatingDays.length === 0) {
+        setNotification({
+          visible: true,
+          message: "Select at least one weekly service day.",
+          type: "error",
+        });
+        return;
+      }
       const departureMinutes = clockMinutes(departureTime)!;
       const pickupStartMinutes = clockMinutes(pickupStartTime)!;
       const pickupEndMinutes = clockMinutes(pickupEndTime)!;
@@ -326,6 +335,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               <View style={styles.routePlaceField}>
                 <GooglePlacesAutoComplete
                   compact
+                  suggestionsPlacement="below"
                   value={pickupLocation.name}
                   placeholder="Search or select start location"
                   onChangeText={(name) =>
@@ -390,6 +400,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 <View style={styles.routePlaceField}>
                   <GooglePlacesAutoComplete
                     compact
+                    suggestionsPlacement="below"
                     value={stop.name}
                     placeholder="Add intermediate stop..."
                     onChangeText={(name) =>
@@ -449,6 +460,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               <View style={styles.routePlaceField}>
                 <GooglePlacesAutoComplete
                   compact
+                  suggestionsPlacement="below"
                   value={dropoffLocation.name}
                   placeholder="Search or select end location"
                   onChangeText={(name) =>
@@ -809,6 +821,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
         estimated_distance_km: currentRouteEstimate?.distanceKm ?? null,
         estimated_duration: formattedEstimateDuration,
         departure_time: formatLocalDateTime(departureDate, departureTime),
+        operating_days: operatingDays,
         pickup_start_time: pickupStartTime,
         pickup_end_time: pickupEndTime,
         dropoff_start_time: dropoffStartTime,
@@ -879,6 +892,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
       setPickupEndTime("");
       setDropoffStartTime("");
       setDropoffEndTime("");
+      setOperatingDays([1, 2, 3, 4, 5]);
       setPerChildAmount("200");
       setTimeReference("year");
       setRouteType("one_way");
@@ -1170,6 +1184,56 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                       }}
                     />
                   )}
+                  <Text style={styles.fieldLabel}>Weekly Service Days</Text>
+                  <Text style={styles.sectionHint}>
+                    This recurring route will run on the selected days.
+                    Weekend trips scheduled by parents remain date-specific.
+                  </Text>
+                  <View style={styles.operatingDaysRow}>
+                    {[
+                      [1, "Mon"],
+                      [2, "Tue"],
+                      [3, "Wed"],
+                      [4, "Thu"],
+                      [5, "Fri"],
+                      [6, "Sat"],
+                      [0, "Sun"],
+                    ].map(([day, label]) => {
+                      const selected = operatingDays.includes(Number(day));
+                      return (
+                        <TouchableOpacity
+                          key={day}
+                          style={[
+                            styles.operatingDayOption,
+                            selected && styles.operatingDayOptionSelected,
+                          ]}
+                          onPress={() =>
+                            setOperatingDays((current) =>
+                              selected
+                                ? current.filter(
+                                    (value) => value !== Number(day),
+                                  )
+                                : [...current, Number(day)].sort(
+                                    (first, second) => first - second,
+                                  ),
+                            )
+                          }
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`${label}${selected ? " selected" : ""}`}
+                        >
+                          <Text
+                            style={[
+                              styles.operatingDayText,
+                              selected && styles.operatingDayTextSelected,
+                            ]}
+                          >
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                   <View style={styles.scheduleTimesColumn}>
                     <Text style={styles.fieldLabel}>
                       Departure Time <Text style={styles.requiredMark}>*</Text>
@@ -2520,6 +2584,35 @@ const styles = StyleSheet.create({
   scheduleTimeRow: {
     flexDirection: "row",
     gap: 12,
+  },
+  operatingDaysRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  operatingDayOption: {
+    minWidth: 42,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#C9D8E8",
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  operatingDayOptionSelected: {
+    borderColor: "#1769D2",
+    backgroundColor: "#1769D2",
+  },
+  operatingDayText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  operatingDayTextSelected: {
+    color: "#FFFFFF",
   },
   scheduleTimeField: {
     flex: 1,

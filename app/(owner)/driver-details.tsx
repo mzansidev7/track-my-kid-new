@@ -20,7 +20,7 @@ import { subscribeToDriverProfileUpdates } from "../../store/subscriptions/drive
 import { resolveWorkingBaseUrl } from "../../url";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRoutes } from "./ownerHelpers/hooks/useRoutes";
+import { useRoutes } from "@/app-support/owner/ownerHelpers/hooks/useRoutes";
 // import Header from "./components/header";
 
 interface Driver {

@@ -15,6 +15,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
 } from "react-native";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import {
@@ -23,6 +24,7 @@ import {
   parseMessageAttachment,
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
+import MessageReactions from "../../../components/messages/MessageReactions";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ClientHeader from "../components/ClientHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
@@ -273,6 +275,17 @@ const ClientMessages = () => {
       return false;
     }
 
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMessage = {
+      id: optimisticId,
+      content,
+      sent_at: new Date().toISOString(),
+      is_read: false,
+      sender_id: user?.userData?.id || user?.userData?.user_id || "",
+      users: user?.userData,
+    };
+    setConversationMessages((current) => [...current, optimisticMessage]);
+    setDraft("");
     setSending(true);
     try {
       const response = await fetch(`${BASE_URL}/client/messages`, {
@@ -287,14 +300,20 @@ const ClientMessages = () => {
         }),
       });
       if (!response.ok) throw new Error("Unable to send message");
-      setDraft("");
-      setConversationMessages(
-        await fetchMessagesWithCache(selectedConversation.id),
+      const freshMessages = await fetchMessagesWithCache(
+        selectedConversation.id,
       );
+      setConversationMessages(freshMessages);
       return true;
     } catch (error) {
       console.error("Error sending client message:", error);
-      Alert.alert("Message failed", "Unable to send this message.");
+      setConversationMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, deliveryError: true }
+            : message,
+        ),
+      );
       return false;
     } finally {
       setSending(false);
@@ -330,16 +349,26 @@ const ClientMessages = () => {
           </TouchableOpacity>
           <View style={styles.chatHeaderIdentity}>
             <View style={styles.chatAvatar}>
-              <Text style={styles.avatarText}>
-                {getInitials(participant.name)}
-              </Text>
+              {participant.role?.toLowerCase() === "admin" ? (
+                <Image
+                  source={require("@/assets/images/logo.png")}
+                  style={styles.chatAvatarImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {getInitials(participant.name)}
+                </Text>
+              )}
             </View>
             <View>
               <Text style={styles.chatName}>
                 {participant.name || "Contact"}
               </Text>
               <Text style={styles.chatRole}>
-                {participant.role || "Contact"}
+                {participant.role === "group"
+                  ? "Group chat"
+                  : participant.role || "Contact"}
               </Text>
             </View>
           </View>
@@ -393,10 +422,36 @@ const ClientMessages = () => {
                           {message.content}
                         </Text>
                       )}
-                      <Text style={own ? styles.chatTimeOwn : styles.chatTime}>
-                        {formatConversationTime(message.sent_at)}
-                        {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
-                      </Text>
+                      <View
+                        style={[
+                          styles.chatFooter,
+                          own && styles.chatFooterOwn,
+                        ]}
+                      >
+                        <Text style={own ? styles.chatTimeOwn : styles.chatTime}>
+                          {formatConversationTime(message.sent_at)}
+                          {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
+                        </Text>
+                        {!message.deliveryError &&
+                        (!own || message.reactions?.length) ? (
+                          <MessageReactions
+                            apiBaseUrl={BASE_URL}
+                            role="client"
+                            conversationId={selectedConversation.id}
+                            messageId={message.id}
+                            token={user?.token || ""}
+                            currentUserId={userId}
+                            accentColor="#159B3A"
+                            reactions={message.reactions}
+                            isOwn={own}
+                          />
+                        ) : null}
+                      </View>
+                      {message.deliveryError ? (
+                        <Text style={styles.messageDeliveryError}>
+                          Message not sent
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -530,7 +585,8 @@ const ClientMessages = () => {
               const role = (participant.role || "").toLowerCase();
               const lastMessage = item.last_message || {};
               const preview =
-                getMessagePreview(lastMessage.content) || "Start a conversation";
+                getMessagePreview(lastMessage.content) ||
+                "Start a conversation";
               const time = formatConversationTime(
                 item.last_message_at || lastMessage.sent_at,
               );
@@ -550,9 +606,17 @@ const ClientMessages = () => {
                       { backgroundColor: getRoleColor(role) },
                     ]}
                   >
-                    <Text style={styles.avatarText}>
-                      {getInitials(participant.name)}
-                    </Text>
+                    {role === "admin" ? (
+                      <Image
+                        source={require("@/assets/images/logo.png")}
+                        style={styles.conversationAvatarImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Text style={styles.avatarText}>
+                        {getInitials(participant.name)}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.messageBody}>
@@ -653,6 +717,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
     backgroundColor: "#EDF7FF",
   },
+  chatAvatarImage: {
+    width: "100%",
+    height: "100%",
+  },
   chatName: {
     color: "#17365E",
     fontSize: 16,
@@ -717,14 +785,32 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   chatTime: {
-    marginTop: 4,
     color: "#607A98",
     fontSize: 10,
   },
   chatTimeOwn: {
-    marginTop: 4,
     color: "#E9F8EE",
     fontSize: 10,
+    textAlign: "right",
+  },
+  chatFooter: {
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    marginTop: 4,
+    maxWidth: "100%",
+  },
+  chatFooterOwn: {
+    alignSelf: "flex-end",
+    justifyContent: "flex-end",
+  },
+  messageDeliveryError: {
+    marginTop: 5,
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "600",
     textAlign: "right",
   },
   composer: {
@@ -927,6 +1013,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+    overflow: "hidden",
+  },
+  conversationAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
   avatarText: {
     color: "#17365E",

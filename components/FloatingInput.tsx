@@ -7,6 +7,7 @@ import {
   TextInputProps,
   View,
 } from "react-native";
+import { useTheme } from "../styles/theme";
 
 interface FloatingInputProps extends TextInputProps {
   label: string;
@@ -24,6 +25,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
   rightIcon,
   ...props
 }) => {
+  const { colors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -44,15 +46,15 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
     }),
     fontSize: animatedIsFocused.interpolate({
       inputRange: [0, 1],
-      outputRange: [16, 12],
+      outputRange: [14, 11],
     }),
     color: error
-      ? "#FF6B6B"
+      ? colors.error
       : animatedIsFocused.interpolate({
           inputRange: [0, 1],
-          outputRange: ["#999", "#357ABD"],
+          outputRange: [colors.text.tertiary, "#1683F8"],
         }),
-    backgroundColor: "#FFF",
+    backgroundColor: colors.surface,
     paddingHorizontal: 2,
     zIndex: 2,
   };
@@ -69,7 +71,16 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
             styles.input,
             leftIcon ? { paddingLeft: 40 } : undefined,
             rightIcon ? { paddingRight: 40 } : undefined,
-            error ? styles.inputError : undefined,
+            isFocused && !error ? styles.inputFocused : undefined,
+            {
+              borderColor: error
+                ? "#DC4545"
+                : isFocused
+                  ? "#1683F8"
+                  : colors.border,
+              backgroundColor: colors.surface,
+              color: colors.text.primary,
+            },
           ]}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -77,14 +88,16 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
         />
         {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+      ) : null}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 24,
+    marginBottom: 18,
     position: "relative",
   },
   inputRow: {
@@ -95,32 +108,32 @@ const styles = StyleSheet.create({
   leftIcon: {
     position: "absolute",
     left: 8,
-    top: 18,
+    top: 17,
     zIndex: 3,
   },
   rightIcon: {
     position: "absolute",
     right: 8,
-    top: 18,
+    top: 17,
     zIndex: 3,
   },
   input: {
     flex: 1,
-    height: 48,
+    height: 52,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
+    borderColor: "#D8E4EF",
+    borderRadius: 12,
     paddingHorizontal: 12,
-    fontSize: 16,
+    fontSize: 14,
     backgroundColor: "#FFF",
     color: "#222",
   },
-  inputError: {
-    borderColor: "#FF6B6B",
+  inputFocused: {
+    borderColor: "#1683F8",
   },
   errorText: {
-    color: "#FF6B6B",
-    fontSize: 12,
+    color: "#DC4545",
+    fontSize: 10,
     marginTop: 4,
     marginLeft: 4,
   },

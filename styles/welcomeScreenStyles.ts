@@ -10,40 +10,40 @@ export const useWelcomeScreenStyles = () => {
 
     header: {
       alignItems: "center",
-      paddingVertical: 40,
+      paddingVertical: 20,
       borderBottomWidth: 1,
-      marginBottom: 30,
+      marginBottom: 16,
     },
 
     logo: {
-      width: 250,
-      height: 250,
+      width: 104,
+      height: 104,
       resizeMode: "contain",
-      marginBottom: 12,
+      marginBottom: 6,
     },
 
-    title: { fontSize: 22, fontWeight: "800" },
+    title: { fontSize: 19, fontWeight: "800" },
 
     tagline: {
-      fontSize: 20,
-      color: "#0B57D0",
-      marginTop: 8,
-      fontWeight: "700",
+      fontSize: 19,
+      color: "#174574",
+      marginTop: 6,
+      fontWeight: "800",
     },
 
     taglineSecondary: {
-      fontSize: 20,
-      color: "#0B57D0",
+      fontSize: 15,
+      color: "#1769D2",
       marginTop: 2,
       fontWeight: "700",
     },
 
     subText: {
-      fontSize: 14,
+      fontSize: 11,
       marginTop: 10,
       textAlign: "center",
-      paddingHorizontal: 28,
-      lineHeight: 20,
+      paddingHorizontal: 18,
+      lineHeight: 16,
     },
 
     scrollView: {
@@ -54,41 +54,41 @@ export const useWelcomeScreenStyles = () => {
 
     scrollContent: {
       flexGrow: 1,
-      paddingBottom: 40,
+      paddingBottom: 20,
       alignItems: "center",
     },
 
     contentWrapper: {
       width: "100%",
       maxWidth: width,
-      paddingTop: 10,
-      paddingHorizontal: 16,
+      paddingTop: 4,
+      paddingHorizontal: 18,
       alignItems: "center",
     },
 
     selectRoleContainer: {
       width: "100%",
-      paddingTop: 16,
-      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingHorizontal: 18,
       alignItems: "center",
     },
 
     headerRow: {
       width: "100%",
-      height: 50,
+      minHeight: 44,
       justifyContent: "center",
       alignItems: "center",
       position: "relative",
-      marginBottom: 16,
+      marginBottom: 8,
     },
 
     backButton: {
       position: "absolute",
       left: 0,
 
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 36,
+      height: 36,
+      borderRadius: 12,
 
       borderWidth: 1,
 
@@ -97,16 +97,16 @@ export const useWelcomeScreenStyles = () => {
     },
 
     roleTitle: {
-      fontSize: 28,
+      fontSize: 19,
       fontWeight: "800",
       textAlign: "center",
     },
 
     roleSubtitle: {
-      fontSize: 14,
+      fontSize: 11,
       textAlign: "center",
-      marginBottom: 22,
-      lineHeight: 20,
+      marginBottom: 16,
+      lineHeight: 16,
     },
 
     roleCards: {
@@ -115,9 +115,9 @@ export const useWelcomeScreenStyles = () => {
 
     roleCard: {
       width: "100%",
-      borderRadius: 20,
-      padding: 16,
-      marginBottom: 12,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 9,
       borderWidth: 1,
     },
 
@@ -133,23 +133,23 @@ export const useWelcomeScreenStyles = () => {
     },
 
     roleCardImage: {
-      width: 62,
-      height: 62,
-      borderRadius: 18,
-      marginRight: 14,
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      marginRight: 10,
     },
 
     roleCardIconWrap: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: "center",
       justifyContent: "center",
-      marginRight: 12,
+      marginRight: 10,
     },
 
     roleCardIcon: {
-      fontSize: 20,
+      fontSize: 14,
     },
 
     roleCardText: {
@@ -158,14 +158,14 @@ export const useWelcomeScreenStyles = () => {
     },
 
     roleCardTitle: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 14,
+      fontWeight: "800",
     },
 
     roleCardDescription: {
-      fontSize: 13,
-      marginTop: 5,
-      lineHeight: 18,
+      fontSize: 10,
+      marginTop: 3,
+      lineHeight: 14,
     },
 
     radio: {
@@ -190,10 +190,10 @@ export const useWelcomeScreenStyles = () => {
 
     heroCard: {
       width: "100%",
-      borderRadius: 28,
-      padding: 20,
-      marginTop: 50,
-      marginBottom: 24,
+      borderRadius: 16,
+      padding: 16,
+      marginTop: 18,
+      marginBottom: 14,
       borderWidth: 1,
       shadowColor: "#000",
     },
@@ -222,7 +222,7 @@ export const useWelcomeScreenStyles = () => {
     },
 
     heroEyebrow: {
-      fontSize: 12,
+      fontSize: 10,
       fontWeight: "700",
       textTransform: "uppercase",
       letterSpacing: 1.2,
@@ -233,9 +233,9 @@ export const useWelcomeScreenStyles = () => {
       width: "100%",
       flexDirection: "row",
       justifyContent: "space-between",
-      marginTop: 20,
-      borderRadius: 18,
-      padding: 12,
+      marginTop: 14,
+      borderRadius: 12,
+      padding: 10,
     },
 
     heroStat: {
@@ -245,7 +245,7 @@ export const useWelcomeScreenStyles = () => {
     },
 
     heroStatValue: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: "800",
     },
 
@@ -257,20 +257,20 @@ export const useWelcomeScreenStyles = () => {
 
     ctaWrap: {
       width: "100%",
-      paddingHorizontal: 16,
+      paddingHorizontal: 8,
       alignItems: "center",
-      marginTop: 6,
+      marginTop: 4,
     },
 
     continueBtn: {
       width: "100%",
       maxWidth: width - 32,
-      backgroundColor: "#2563EB",
-      paddingVertical: 18,
-      borderRadius: 28,
+      backgroundColor: "#173F70",
+      minHeight: 48,
+      borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: 10,
+      marginBottom: 8,
     },
 
     continueBtnDisabled: {
@@ -279,31 +279,31 @@ export const useWelcomeScreenStyles = () => {
 
     continueText: {
       color: "#fff",
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 15,
+      fontWeight: "800",
     },
 
     helpText: {
       color: "#64748B",
-      fontSize: 12,
+      fontSize: 10,
       textAlign: "center",
     },
 
-    section: { paddingHorizontal: 20, marginTop: 25 },
+    section: { paddingHorizontal: 18, marginTop: 18 },
 
     sectionTitle: {
-      fontSize: 16,
-      fontWeight: "700",
-      marginBottom: 12,
+      fontSize: 14,
+      fontWeight: "800",
+      marginBottom: 9,
     },
 
     featureCard: {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: "#EAF3FF",
-      padding: 12,
-      borderRadius: 12,
-      marginBottom: 10,
+      padding: 10,
+      borderRadius: 10,
+      marginBottom: 8,
     },
 
     featureIcon: { marginRight: 10 },
@@ -311,26 +311,26 @@ export const useWelcomeScreenStyles = () => {
     featureText: { fontWeight: "600" },
 
     step: {
-      fontSize: 13,
-      marginBottom: 6,
+      fontSize: 11,
+      marginBottom: 5,
       color: "#555",
     },
 
     card: {
-      padding: 18,
-      borderRadius: 14,
-      marginBottom: 12,
+      padding: 14,
+      borderRadius: 12,
+      marginBottom: 10,
     },
 
     cardTitle: {
       color: "#FFF",
       fontWeight: "700",
-      fontSize: 15,
+      fontSize: 14,
     },
 
     cardDesc: {
       color: "#FFF",
-      fontSize: 12,
+      fontSize: 10,
       marginTop: 4,
     },
 
@@ -347,17 +347,17 @@ export const useWelcomeScreenStyles = () => {
     trustBox: {
       backgroundColor: "#EAF3FF",
       margin: 20,
-      padding: 16,
-      borderRadius: 12,
+      padding: 12,
+      borderRadius: 10,
     },
 
     heroImageWrap: {
       width: "100%",
-      height: 260,
+      height: 210,
       position: "relative",
       overflow: "hidden",
-      marginTop: 20,
-      marginBottom: -30,
+      marginTop: 12,
+      marginBottom: -22,
     },
 
     heroImage: {
@@ -370,18 +370,18 @@ export const useWelcomeScreenStyles = () => {
       left: 0,
       right: 0,
       bottom: 0,
-      height: 120,
+      height: 96,
     },
 
     getStartedBtn: {
       width: "100%",
       maxWidth: width - 32,
-      paddingVertical: 18,
-      borderRadius: 15,
+      minHeight: 48,
+      borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: 30,
-      marginBottom: 12,
+      marginTop: 18,
+      marginBottom: 8,
       shadowColor: "#000",
       shadowOpacity: 0.12,
       shadowRadius: 8,
@@ -390,8 +390,8 @@ export const useWelcomeScreenStyles = () => {
 
     getStartedText: {
       color: "#fff",
-      fontSize: 16,
-      fontWeight: "700",
+      fontSize: 15,
+      fontWeight: "800",
     },
 
     loginLinkWrap: {
@@ -399,9 +399,9 @@ export const useWelcomeScreenStyles = () => {
     },
 
     loginLink: {
-      color: "#2563EB",
-      fontSize: 15,
-      fontWeight: "600",
+      color: "#1769D2",
+      fontSize: 12,
+      fontWeight: "700",
     },
 
     trustTitle: {
@@ -410,7 +410,7 @@ export const useWelcomeScreenStyles = () => {
     },
 
     trustText: {
-      fontSize: 12,
+      fontSize: 10,
       color: "#333",
     },
 
@@ -428,7 +428,7 @@ export const useWelcomeScreenStyles = () => {
 
     author: {
       marginTop: 6,
-      fontSize: 12,
+      fontSize: 10,
       color: "#888",
     },
 
@@ -442,11 +442,11 @@ export const useWelcomeScreenStyles = () => {
 
     statNumber: { color: "#4A90E2", fontWeight: "700" },
 
-    statLabel: { fontSize: 12, color: "#666" },
+    statLabel: {     fontSize: 10, color: "#666" },
 
     footer: {
-      marginTop: 40,
-      marginBottom: 20,
+      marginTop: 16,
+      marginBottom: 12,
       alignItems: "center",
     },
 
@@ -462,7 +462,7 @@ export const useWelcomeScreenStyles = () => {
       paddingTop: 10,
     },
     footerText: {
-      fontSize: 11,
+      fontSize: 10,
       color: "#999",
     },
   });

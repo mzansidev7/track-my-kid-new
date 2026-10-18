@@ -8,6 +8,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
+import EmojiPicker from "./EmojiPicker";
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +20,6 @@ import {
   View,
 } from "react-native";
 
-const EMOJI_OPTIONS = ["😀", "😊", "👍", "❤️", "🙏", "🎉", "👋", "🚗", "✅", "🤝"];
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 
 type MessageComposerProps = {
@@ -232,20 +232,12 @@ const MessageComposer = ({
 
   return (
     <View style={styles.container}>
-      {emojiPickerOpen ? (
-        <View style={styles.emojiRow}>
-          {EMOJI_OPTIONS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={styles.emojiButton}
-              onPress={() => setDraft((current) => `${current}${emoji}`)}
-              accessibilityLabel={`Insert ${emoji}`}
-            >
-              <Text style={styles.emoji}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
+      <EmojiPicker
+        visible={emojiPickerOpen}
+        accentColor={accentColor}
+        onSelect={(emoji) => setDraft((current) => `${current}${emoji}`)}
+        onClose={() => setEmojiPickerOpen(false)}
+      />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {recording ? (
         <Text style={styles.recordingLabel}>Recording voice message… Tap stop to send.</Text>
@@ -325,17 +317,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#DCE6F0",
     backgroundColor: "#FFFFFF",
-  },
-  emojiRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  emojiButton: {
-    padding: 5,
-  },
-  emoji: {
-    fontSize: 22,
   },
   error: {
     color: "#B42318",

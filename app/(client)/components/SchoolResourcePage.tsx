@@ -10,7 +10,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useChildren } from "../clientHelpers/hooks/useChildren";
+import { useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
 
 type Resource = "attendance" | "documents" | "teachers" | "school-info";
 

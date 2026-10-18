@@ -3,6 +3,7 @@ import { useFocusEffect } from "expo-router";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,54 +15,36 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 
-type CommissionData = {
-  summary: {
-    accrued_cents: number;
-    settled_cents: number;
-    owing_cents: number;
-    not_invoiced_cents: number;
-    owing_owner_count: number;
-  };
-  owners_owing: {
-    owner_id: string;
-    owner_name: string;
-    email: string | null;
-    owing_cents: number;
-    not_invoiced_cents: number;
-    payment_count: number;
-  }[];
-  invoices: {
-    id: string;
-    owner_name: string;
-    owner_email: string | null;
-    period_start: string;
-    period_end: string;
-    amount_cents: number;
-    currency: string;
-    status: string;
-    due_at: string | null;
-    paid_at: string | null;
-  }[];
+type FinanceSection =
+  | "subscriptions"
+  | "fares"
+  | "fees"
+  | "legacy";
+
+type FinanceData = {
+  summary: Record<string, number>;
+  subscriptions: any[];
+  subscription_invoices: any[];
+  client_fares: any[];
+  client_service_fees: any[];
+  legacy_owner_fees: { owners_owing: any[]; invoices: any[] };
   generated_at: string;
 };
 
-const emptyData: CommissionData = {
-  summary: {
-    accrued_cents: 0,
-    settled_cents: 0,
-    owing_cents: 0,
-    not_invoiced_cents: 0,
-    owing_owner_count: 0,
-  },
-  owners_owing: [],
-  invoices: [],
+const emptyData: FinanceData = {
+  summary: {},
+  subscriptions: [],
+  subscription_invoices: [],
+  client_fares: [],
+  client_service_fees: [],
+  legacy_owner_fees: { owners_owing: [], invoices: [] },
   generated_at: "",
 };
 
-const formatMoney = (cents: number, currency = "zar") =>
+const formatMoney = (cents = 0, currency = "zar") =>
   new Intl.NumberFormat("en-ZA", {
     style: "currency",
-    currency: currency.toUpperCase(),
+    currency: String(currency || "zar").toUpperCase(),
   }).format(Number(cents || 0) / 100);
 
 const formatDate = (value?: string | null) => {
@@ -70,10 +53,48 @@ const formatDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-ZA");
 };
 
-export default function AdminCommissions() {
+const statusLabel = (item: any) =>
+  item.overdue ? "Overdue" : String(item.status || "unknown").replaceAll("_", " ");
+
+function MoneyRow({
+  title,
+  detail,
+  amount,
+  status,
+  overdue,
+  url,
+}: {
+  title: string;
+  detail: string;
+  amount: string;
+  status: string;
+  overdue?: boolean;
+  url?: string | null;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowSub}>{detail}</Text>
+        <Text style={[styles.status, overdue && styles.overdue]}>
+          {status}
+        </Text>
+        {url ? (
+          <TouchableOpacity onPress={() => void Linking.openURL(url)}>
+            <Text style={styles.link}>Open invoice</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <Text style={[styles.amount, overdue && styles.overdue]}>{amount}</Text>
+    </View>
+  );
+}
+
+export default function AdminFinance() {
   const { user } = useContext(AuthContext);
   const userToken = user?.token;
   const [data, setData] = useState(emptyData);
+  const [section, setSection] = useState<FinanceSection>("subscriptions");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,22 +115,40 @@ export default function AdminCommissions() {
         });
         const result = await response.json();
         if (!response.ok) {
-          throw new Error(result.error || "Unable to load cash commissions.");
+          throw new Error(result.error || "Unable to load finance records.");
         }
         setData({
           ...emptyData,
           ...result,
-          summary: { ...emptyData.summary, ...result.summary },
-          owners_owing: Array.isArray(result.owners_owing)
-            ? result.owners_owing
+          summary: result.summary || {},
+          subscriptions: Array.isArray(result.subscriptions)
+            ? result.subscriptions
             : [],
-          invoices: Array.isArray(result.invoices) ? result.invoices : [],
+          subscription_invoices: Array.isArray(result.subscription_invoices)
+            ? result.subscription_invoices
+            : [],
+          client_fares: Array.isArray(result.client_fares)
+            ? result.client_fares
+            : [],
+          client_service_fees: Array.isArray(result.client_service_fees)
+            ? result.client_service_fees
+            : [],
+          legacy_owner_fees: {
+            owners_owing: Array.isArray(
+              result.legacy_owner_fees?.owners_owing,
+            )
+              ? result.legacy_owner_fees.owners_owing
+              : [],
+            invoices: Array.isArray(result.legacy_owner_fees?.invoices)
+              ? result.legacy_owner_fees.invoices
+              : [],
+          },
         });
       } catch (requestError) {
         setError(
           requestError instanceof Error
             ? requestError.message
-            : "Unable to load cash commissions.",
+            : "Unable to load finance records.",
         );
       } finally {
         setLoading(false);
@@ -126,11 +165,45 @@ export default function AdminCommissions() {
     }, [loadData]),
   );
 
-  const metrics = [
-    { label: "Owed to platform", amount: data.summary.owing_cents, color: "#B91C1C" },
-    { label: "Already settled", amount: data.summary.settled_cents, color: "#047857" },
-    { label: "Not invoiced yet", amount: data.summary.not_invoiced_cents, color: "#B45309" },
-    { label: "Total accrued", amount: data.summary.accrued_cents, color: "#1D4ED8" },
+  const summary = data.summary;
+  const cards = [
+    {
+      label: "Unpaid owner subscription invoices",
+      value: summary.owner_subscription_invoices_outstanding_cents,
+      color: "#B91C1C",
+    },
+    {
+      label: "Client fares outstanding",
+      value: summary.client_fare_outstanding_cents,
+      color: "#B45309",
+    },
+    {
+      label: "Client fares collected",
+      value: summary.client_fare_collected_cents,
+      color: "#047857",
+    },
+    {
+      label: "Client service fees collected",
+      value: summary.client_service_fees_collected_cents,
+      color: "#047857",
+    },
+    {
+      label: "Owner subscription revenue",
+      value: summary.owner_subscription_revenue_collected_cents,
+      color: "#1D4ED8",
+    },
+    {
+      label: "Legacy owner fees owed",
+      value: summary.legacy_owner_fees_owing_cents,
+      color: "#6D28D9",
+    },
+  ];
+
+  const sections: { id: FinanceSection; label: string }[] = [
+    { id: "subscriptions", label: "Owner subscriptions" },
+    { id: "fares", label: "Client fares" },
+    { id: "fees", label: "Service fees" },
+    { id: "legacy", label: "Legacy owner fees" },
   ];
 
   return (
@@ -147,15 +220,15 @@ export default function AdminCommissions() {
         <View style={styles.header}>
           <View style={styles.heading}>
             <Text style={styles.kicker}>PLATFORM FINANCE</Text>
-            <Text style={styles.title}>Cash commissions</Text>
+            <Text style={styles.title}>Finance</Text>
             <Text style={styles.subtitle}>
-              Fees due from fleet owners on confirmed cash payments
+              Subscription income, client payments and outstanding balances
             </Text>
           </View>
           <TouchableOpacity
             style={styles.refreshButton}
             onPress={() => void loadData(true)}
-            accessibilityLabel="Refresh commission data"
+            accessibilityLabel="Refresh finance data"
           >
             <MaterialIcons name="refresh" size={22} color="#2563EB" />
           </TouchableOpacity>
@@ -171,103 +244,176 @@ export default function AdminCommissions() {
           </View>
         ) : null}
 
+        <View style={styles.metrics}>
+          {cards.map((card) => (
+            <View key={card.label} style={styles.metricCard}>
+              <Text style={styles.metricLabel}>{card.label}</Text>
+              <Text style={[styles.metricAmount, { color: card.color }]}>
+                {formatMoney(card.value)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+        >
+          {sections.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              onPress={() => setSection(item.id)}
+              style={[styles.tab, section === item.id && styles.activeTab]}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  section === item.id && styles.activeTabText,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         {loading && !data.generated_at ? (
           <View style={styles.loading}>
             <ActivityIndicator color="#2563EB" />
-            <Text style={styles.subtitle}>Loading commission ledger…</Text>
+            <Text style={styles.subtitle}>Loading finance records…</Text>
           </View>
         ) : (
           <>
-            <View style={styles.metrics}>
-              {metrics.map((metric) => (
-                <View key={metric.label} style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>{metric.label}</Text>
-                  <Text style={[styles.metricAmount, { color: metric.color }]}>
-                    {formatMoney(metric.amount)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.card}>
-              <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>Fleet owners owing</Text>
-                <Text style={styles.count}>
-                  {data.summary.owing_owner_count}
-                </Text>
-              </View>
-              {data.owners_owing.length ? (
-                data.owners_owing.map((owner) => (
-                  <View key={owner.owner_id} style={styles.row}>
-                    <View style={styles.ownerIcon}>
-                      <MaterialIcons
-                        name="account-balance-wallet"
-                        size={18}
-                        color="#B45309"
+            {section === "subscriptions" ? (
+              <>
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Owner subscriptions</Text>
+                  {data.subscriptions.length ? (
+                    data.subscriptions.map((item) => (
+                      <MoneyRow
+                        key={item.id}
+                        title={`${item.owner_name} · ${item.plan_name}`}
+                        detail={`${item.billing_interval} · Next period ends ${formatDate(item.current_period_end)} · ${item.auto_renew ? "Auto-renew on" : "Auto-renew off"}`}
+                        amount={formatMoney(item.amount_cents, item.currency)}
+                        status={item.overdue ? "Overdue" : item.status}
+                        overdue={item.overdue}
                       />
-                    </View>
-                    <View style={styles.rowCopy}>
-                      <Text style={styles.ownerName}>{owner.owner_name}</Text>
-                      <Text style={styles.rowSub}>
-                        {owner.email || "No billing email"} ·{" "}
-                        {owner.payment_count} cash payment
-                        {owner.payment_count === 1 ? "" : "s"}
-                      </Text>
-                      {owner.not_invoiced_cents > 0 ? (
-                        <Text style={styles.notInvoiced}>
-                          {formatMoney(owner.not_invoiced_cents)} not invoiced
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text style={styles.owingAmount}>
-                      {formatMoney(owner.owing_cents)}
+                    ))
+                  ) : (
+                    <Text style={styles.empty}>No owner subscriptions found.</Text>
+                  )}
+                </View>
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Subscription invoices</Text>
+                  {data.subscription_invoices.length ? (
+                    data.subscription_invoices.map((item) => (
+                      <MoneyRow
+                        key={item.stripe_invoice_id}
+                        title={item.owner_name}
+                        detail={`${formatDate(item.period_start)} – ${formatDate(item.period_end)} · Due ${formatDate(item.due_at)}`}
+                        amount={formatMoney(
+                          item.amount_due_cents,
+                          item.currency,
+                        )}
+                        status={statusLabel(item)}
+                        overdue={item.overdue}
+                        url={item.hosted_invoice_url}
+                      />
+                    ))
+                  ) : (
+                    <Text style={styles.empty}>
+                      Invoice history starts as Stripe billing events arrive.
                     </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.empty}>
-                  No outstanding cash commissions.
-                </Text>
-              )}
-            </View>
+                  )}
+                </View>
+              </>
+            ) : null}
 
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Commission invoices</Text>
-              {data.invoices.length ? (
-                data.invoices.map((invoice) => (
-                  <View key={invoice.id} style={styles.invoiceRow}>
-                    <View style={styles.rowCopy}>
-                      <Text style={styles.ownerName}>{invoice.owner_name}</Text>
-                      <Text style={styles.rowSub}>
-                        {invoice.period_start} – {invoice.period_end}
-                      </Text>
-                      <Text style={styles.rowSub}>
-                        {invoice.status === "paid"
-                          ? `Paid ${formatDate(invoice.paid_at)}`
-                          : `Due ${formatDate(invoice.due_at)}`}
-                      </Text>
-                    </View>
-                    <View style={styles.invoiceAmountCopy}>
-                      <Text style={styles.invoiceAmount}>
-                        {formatMoney(invoice.amount_cents, invoice.currency)}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.invoiceStatus,
-                          invoice.status === "paid"
-                            ? styles.paidStatus
-                            : styles.openStatus,
-                        ]}
-                      >
-                        {invoice.status.replaceAll("_", " ")}
-                      </Text>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.empty}>No commission invoices yet.</Text>
-              )}
-            </View>
+            {section === "fares" ? (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Client transport fares</Text>
+                {data.client_fares.length ? (
+                  data.client_fares.map((item) => (
+                    <MoneyRow
+                      key={item.id}
+                      title={`${item.client_name} → ${item.owner_name}`}
+                      detail={`${item.payment_method} · ${item.children_count} child(ren) · Due ${formatDate(item.due_at)} · ${item.vehicle_name}`}
+                      amount={formatMoney(item.amount_cents, item.currency)}
+                      status={statusLabel(item)}
+                      overdue={item.overdue}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.empty}>No client fares recorded.</Text>
+                )}
+              </View>
+            ) : null}
+
+            {section === "fees" ? (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Client service fees</Text>
+                {data.client_service_fees.length ? (
+                  data.client_service_fees.map((item) => (
+                    <MoneyRow
+                      key={item.id}
+                      title={`${item.client_name} · ${item.owner_name}`}
+                      detail={`${item.payment_method} fare · Related payment ${item.payment_id.slice(0, 8)} · Due ${formatDate(item.due_at)}`}
+                      amount={formatMoney(item.amount_cents, item.currency)}
+                      status={statusLabel(item)}
+                      overdue={item.overdue}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.empty}>No client service fees recorded.</Text>
+                )}
+              </View>
+            ) : null}
+
+            {section === "legacy" ? (
+              <>
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>
+                    Legacy owner balances
+                  </Text>
+                  <Text style={styles.sectionNote}>
+                    Only balances from the previous owner-billed cash-fee
+                    policy appear here. New client-paid fees are not owner debt.
+                  </Text>
+                  {data.legacy_owner_fees.owners_owing.length ? (
+                    data.legacy_owner_fees.owners_owing.map((item) => (
+                      <MoneyRow
+                        key={item.owner_id}
+                        title={item.name}
+                        detail={`${item.payment_count} legacy cash payment(s) · ${item.not_invoiced_cents > 0 ? `${formatMoney(item.not_invoiced_cents)} not invoiced` : "Invoiced"}`}
+                        amount={formatMoney(item.owing_cents)}
+                        status="Outstanding"
+                      />
+                    ))
+                  ) : (
+                    <Text style={styles.empty}>No legacy owner balance owed.</Text>
+                  )}
+                </View>
+                <View style={styles.card}>
+                  <Text style={styles.sectionTitle}>Legacy owner invoices</Text>
+                  {data.legacy_owner_fees.invoices.length ? (
+                    data.legacy_owner_fees.invoices.map((item) => (
+                      <MoneyRow
+                        key={item.id}
+                        title={item.owner_name}
+                        detail={`${item.period_start} – ${item.period_end} · Due ${formatDate(item.due_at)}`}
+                        amount={formatMoney(item.amount_cents, item.currency)}
+                        status={item.status}
+                        overdue={item.status !== "paid" && item.overdue}
+                        url={item.hosted_invoice_url}
+                      />
+                    ))
+                  ) : (
+                    <Text style={styles.empty}>No legacy invoices found.</Text>
+                  )}
+                </View>
+              </>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -307,6 +453,18 @@ const styles = StyleSheet.create({
   },
   metricLabel: { color: "#64748B", fontSize: 10, fontWeight: "700" },
   metricAmount: { marginTop: 5, fontSize: 18, fontWeight: "900" },
+  tabs: { gap: 8, paddingVertical: 2 },
+  tab: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  activeTab: { borderColor: "#2563EB", backgroundColor: "#2563EB" },
+  tabText: { color: "#475569", fontSize: 10, fontWeight: "700" },
+  activeTabText: { color: "#FFFFFF" },
   card: {
     padding: 13,
     borderWidth: 1,
@@ -314,24 +472,8 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#FFFFFF",
   },
-  sectionHeading: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
   sectionTitle: { color: "#1E293B", fontSize: 13, fontWeight: "800" },
-  count: {
-    minWidth: 25,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
-    overflow: "hidden",
-    backgroundColor: "#FEF2F2",
-    color: "#B91C1C",
-    fontSize: 10,
-    textAlign: "center",
-    fontWeight: "800",
-  },
+  sectionNote: { marginTop: 5, color: "#64748B", fontSize: 10, lineHeight: 15 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -341,41 +483,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
   },
-  ownerIcon: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: "#FFFBEB",
-  },
   rowCopy: { flex: 1, minWidth: 0 },
-  ownerName: { color: "#1E293B", fontSize: 11, fontWeight: "800" },
+  rowTitle: { color: "#1E293B", fontSize: 11, fontWeight: "800" },
   rowSub: { marginTop: 3, color: "#64748B", fontSize: 9 },
-  notInvoiced: { marginTop: 3, color: "#B45309", fontSize: 9, fontWeight: "700" },
-  owingAmount: { color: "#B91C1C", fontSize: 12, fontWeight: "900" },
-  invoiceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-  },
-  invoiceAmountCopy: { alignItems: "flex-end", marginLeft: 8 },
-  invoiceAmount: { color: "#1E293B", fontSize: 11, fontWeight: "800" },
-  invoiceStatus: {
+  status: {
+    alignSelf: "flex-start",
     marginTop: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    overflow: "hidden",
-    fontSize: 8,
-    fontWeight: "800",
+    color: "#475569",
+    fontSize: 9,
+    fontWeight: "700",
     textTransform: "capitalize",
   },
-  paidStatus: { color: "#047857", backgroundColor: "#ECFDF5" },
-  openStatus: { color: "#B45309", backgroundColor: "#FFFBEB" },
+  amount: { color: "#1E293B", fontSize: 11, fontWeight: "900" },
+  overdue: { color: "#B91C1C" },
+  link: { marginTop: 5, color: "#2563EB", fontSize: 9, fontWeight: "800" },
   empty: { marginTop: 12, color: "#64748B", fontSize: 10 },
   loading: { alignItems: "center", gap: 8, padding: 26 },
   errorCard: {

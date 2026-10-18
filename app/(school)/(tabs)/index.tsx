@@ -18,13 +18,13 @@ import { useAuth } from "../../../context/authContext/auth-context";
 import {
   useRecentTrips,
   useSchoolDashboard,
-} from "../schoolHelpers/hooks/useSchoolDashboard";
+} from "@/app-support/school/schoolHelpers/hooks/useSchoolDashboard";
 import { RecentTrip } from "@/types/school/client.interfaces";
 import {
   getUserName,
   schoolQuickActions,
   schoolStats,
-} from "../schoolHelpers/actionHelpers/actions";
+} from "@/app-support/school/schoolHelpers/actionHelpers/actions";
 
 const SchoolDashboard = () => {
   const router = useRouter();

@@ -1,5 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { File as ExpoFile } from "expo-file-system";
 import { useRouter } from "expo-router";
 import React, { useContext, useEffect, useState } from "react";
 import {
@@ -14,12 +15,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useOwnerProfile } from "./ownerHelpers/hooks/useOwnerProfile";
+import { useOwnerProfile } from "@/app-support/owner/ownerHelpers/hooks/useOwnerProfile";
 import { updateUser } from "../../store/asyncStorage/authStore";
 import { AuthContext } from "../../context/authContext/auth-context";
 import AppNotification from "../../components/Notification";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 
 const normalizeAddressValue = (value: any) => {
   if (typeof value === "string") {
@@ -196,15 +197,6 @@ const PersonalInfo = () => {
 
   const uploadAvatar = async (uri: string) => {
     const fileName = uri.split("/").pop() || `avatar-${Date.now()}.jpg`;
-    const ext = fileName.split(".").pop()?.toLowerCase() || "jpg";
-    const contentType =
-      ext === "png"
-        ? "image/png"
-        : ext === "gif"
-          ? "image/gif"
-          : ext === "webp"
-            ? "image/webp"
-            : "image/jpeg";
 
     const formData = new FormData();
 
@@ -213,11 +205,7 @@ const PersonalInfo = () => {
       const blob = await response.blob();
       formData.append("avatar", blob, fileName);
     } else {
-      formData.append("avatar", {
-        uri,
-        name: fileName,
-        type: contentType,
-      } as any);
+      formData.append("avatar", new ExpoFile(uri), fileName);
     }
 
     const baseUrl = await resolveWorkingBaseUrl();
@@ -245,15 +233,6 @@ const PersonalInfo = () => {
 
   const uploadCompanyLogo = async (uri: string) => {
     const fileName = uri.split("/").pop() || `company-logo-${Date.now()}.jpg`;
-    const ext = fileName.split(".").pop()?.toLowerCase() || "jpg";
-    const contentType =
-      ext === "png"
-        ? "image/png"
-        : ext === "gif"
-          ? "image/gif"
-          : ext === "webp"
-            ? "image/webp"
-            : "image/jpeg";
 
     const formData = new FormData();
 
@@ -262,11 +241,7 @@ const PersonalInfo = () => {
       const blob = await response.blob();
       formData.append("avatar", blob, fileName);
     } else {
-      formData.append("avatar", {
-        uri,
-        name: fileName,
-        type: contentType,
-      } as any);
+      formData.append("avatar", new ExpoFile(uri), fileName);
     }
 
     const baseUrl = await resolveWorkingBaseUrl();

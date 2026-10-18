@@ -6,6 +6,7 @@ import {
 } from "../store/asyncStorage/authStore";
 import { DEBUG_API_CONFIG, resolveWorkingBaseUrl } from "../url";
 import { UserAuthData } from "./interface";
+import { setSupabaseSession } from "../supabaseConfig/supabaseConfig";
 
 export const userAuth = async (formData: UserAuthData) => {
   try {
@@ -43,11 +44,13 @@ export const userAuth = async (formData: UserAuthData) => {
     });
 
     // Extract token and user from response
-    const { token, user, emailSent } = response.data;
+    const { token, user, emailSent, supabaseSession } = response.data;
 
-    if (!token || !user) {
+    if (!token || !user || !supabaseSession) {
       throw new Error("Invalid response from server");
     }
+
+    await setSupabaseSession(supabaseSession);
 
     // Ensure role is included in the user object
     const userWithRole = { ...user, role: user.role || role };
@@ -111,31 +114,24 @@ export const loginUser = async (formData: any) => {
 
     const res = await axios.post(`${baseUrl}/login`, formData);
 
-    const { token, user } = res.data;
+    const { token, user, supabaseSession } = res.data;
+    if (!token || !user || !supabaseSession) {
+      throw new Error("Supabase Auth session missing from login response");
+    }
 
-    if (token && user) {
-      await saveAuthToken(token, user);
-      await getUserFromAsyncStorage();
-      return { token, user };
-    } else {
-      return {
-        success: false,
-        message: "Please enter the correct user credentials",
-      };
-    }
+    await setSupabaseSession(supabaseSession);
+    await saveAuthToken(token, user);
+    await getUserFromAsyncStorage();
+    return { token, user };
   } catch (error: any) {
-    console.error("❌ Login error:", error);
-    console.error("❌ Error message:", error?.message);
-    console.error("❌ Error code:", error?.code);
-    console.error("❌ Error response:", error?.response?.data);
-    console.error("❌ Error status:", error?.response?.status);
-    if (typeof error?.toJSON === "function") {
-      try {
-        console.error("❌ Error toJSON:", error.toJSON());
-      } catch {
-        // ignore
-      }
-    }
+    console.error("❌ Login request failed:", {
+      status: error?.response?.status,
+      code: error?.code,
+      serverError:
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        "UNKNOWN_ERROR",
+    });
 
     if (error?.code === "ERR_NETWORK") {
       console.error(

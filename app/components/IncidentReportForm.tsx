@@ -3,6 +3,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -20,8 +21,15 @@ import { useRouter } from "expo-router";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { DRIVER_COLORS, useTheme } from "../../styles/theme";
 import { resolveWorkingBaseUrl } from "../../url";
-import { useOwnerPageHeader } from "../(owner)/ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { client as supabase } from "../../supabaseConfig/supabaseConfig";
+import {
+  loadIncidentReportsCache,
+  saveIncidentReportsCache,
+} from "../../store/asyncStorage/incidentReportsCache";
+
+const authHeaderKey = "Authorization";
 
 type ReporterRole = "client" | "driver" | "owner";
 type RelatedRoute = {
@@ -31,6 +39,22 @@ type RelatedRoute = {
   children?: any[];
 };
 type RelatedChild = { id: string; name: string; lastname?: string };
+type IncidentReport = {
+  id: string;
+  recipient_type: "school" | "support";
+  status: "open" | "in_progress" | "resolved";
+  incident_type: string;
+  description: string;
+  created_at: string;
+  is_escalated?: boolean;
+};
+type IncidentReply = {
+  id: string;
+  author_user_id: string;
+  body: string;
+  created_at: string;
+  users?: { name?: string; role?: string } | null;
+};
 type IncidentPalette = {
   background: string;
   surface: string;
@@ -65,6 +89,7 @@ export default function IncidentReportForm({
   const router = useRouter();
   const { colors, getBrandColors } = useTheme();
   const { user } = useContext(AuthContext);
+  const token = user?.token;
   const brandColors = getBrandColors(role) as Record<
     string,
     string | undefined
@@ -106,19 +131,36 @@ export default function IncidentReportForm({
   const [routeId, setRouteId] = useState(initialRouteId || "");
   const [childId, setChildId] = useState(initialChildId || "");
   const [incidentType, setIncidentType] = useState("safety_concern");
+  const [recipientType, setRecipientType] = useState<"school" | "support">(
+    "school",
+  );
   const [severity, setSeverity] = useState("medium");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [reports, setReports] = useState<IncidentReport[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState("");
+  const [replies, setReplies] = useState<IncidentReply[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [cacheReady, setCacheReady] = useState(false);
+  const userId = String(user?.userData?.id || user?.id || "");
+  const repliesByIncidentId = useRef<Record<string, IncidentReply[]>>({});
 
   const { renderHeader } = useOwnerPageHeader({
     title: "SAFETY & SUPPORT",
-    subtitle: `Send a report to the school and support team.`,
+    subtitle: "Report an incident and follow up on responses.",
     actionLabel: "+ Add New Driver",
-    onBackPress: () => router.push("/(owner)/(tabs)"),
+    onBackPress:
+      role === "owner"
+        ? () => router.push("/(owner)/(tabs)/profile")
+        : role === "driver"
+          ? () => router.push("/(driver)/(tabs)/profile")
+          : role === "client"
+            ? () => router.push("/(client)/(tabs)/profile")
+            : undefined,
     headerColors:
       role === "client" ? (["#159B3A", "#087C2B"] as const) : undefined,
   });
@@ -137,7 +179,7 @@ export default function IncidentReportForm({
     try {
       const baseUrl = await resolveWorkingBaseUrl();
       const response = await fetch(`${baseUrl}${endpoint}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
+        headers: { [authHeaderKey]: `Bearer ${user.token}` },
       });
       const data = await response.json();
       if (!response.ok)
@@ -184,12 +226,162 @@ export default function IncidentReportForm({
     } finally {
       setLoadingOptions(false);
     }
-  }, [initialRouteId, role, user?.token]);
+  }, [initialRouteId, role, user]);
 
   useEffect(() => {
     const timer = setTimeout(() => void loadOptions(), 0);
     return () => clearTimeout(timer);
   }, [loadOptions]);
+
+  const loadReports = useCallback(async (background = false) => {
+    if (!token) return;
+    if (!background) setLoadingReports(true);
+    if (!background) setReportError("");
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/${role}/incidents`, {
+        headers: { [authHeaderKey]: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        throw new Error(data.error || "Unable to load your incident reports.");
+      }
+      setReports(data);
+      const validIds = new Set(data.map((report: IncidentReport) => report.id));
+      repliesByIncidentId.current = Object.fromEntries(
+        Object.entries(repliesByIncidentId.current).filter(([id]) =>
+          validIds.has(id),
+        ),
+      );
+      setSelectedReportId((current) =>
+        data.some((report: IncidentReport) => report.id === current)
+          ? current
+          : data[0]?.id || "",
+      );
+    } catch (requestError) {
+      setReportError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load your incident reports.",
+      );
+    } finally {
+      setLoadingReports(false);
+    }
+  }, [role, token]);
+
+  useEffect(() => {
+    let active = true;
+    const initialize = async () => {
+      let hasCachedData = false;
+      if (userId) {
+        const cached = await loadIncidentReportsCache(role, userId);
+        if (active && cached) {
+          hasCachedData = true;
+          const cachedReports = cached.reports as IncidentReport[];
+          const cachedReplies =
+            cached.repliesByIncidentId as Record<string, IncidentReply[]>;
+          repliesByIncidentId.current = cachedReplies;
+          setReports(cachedReports);
+          setSelectedReportId(cachedReports[0]?.id || "");
+          setReplies(cachedReplies[cachedReports[0]?.id || ""] || []);
+        }
+      }
+      if (active) setCacheReady(true);
+      if (active) await loadReports(hasCachedData);
+    };
+    void initialize();
+    return () => {
+      active = false;
+    };
+  }, [loadReports, role, userId]);
+
+  useEffect(() => {
+    if (!userId || !cacheReady) return;
+    void saveIncidentReportsCache(role, userId, {
+      reports,
+      repliesByIncidentId: repliesByIncidentId.current,
+    });
+  }, [cacheReady, reports, replies, role, userId]);
+
+  const loadReplies = useCallback(async (incidentId: string) => {
+    if (!incidentId || !token) return;
+    const cachedReplies = repliesByIncidentId.current[incidentId];
+    if (cachedReplies) setReplies(cachedReplies);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/${role}/incidents/${incidentId}/replies`,
+        { headers: { [authHeaderKey]: `Bearer ${token}` } },
+      );
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        throw new Error(data.error || "Unable to load incident responses.");
+      }
+      repliesByIncidentId.current[incidentId] = data;
+      setReplies(data);
+    } catch (requestError) {
+      setReportError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load incident responses.",
+      );
+    }
+  }, [role, token]);
+
+  useEffect(() => {
+    if (!selectedReportId) return;
+    void loadReplies(selectedReportId);
+  }, [loadReplies, selectedReportId]);
+
+  useEffect(() => {
+    if (!token || !userId) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let active = true;
+    const refreshTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!active) return;
+        void loadReports(true);
+        if (selectedReportId) void loadReplies(selectedReportId);
+      }, 300);
+    };
+    const channel = supabase
+      .channel(`incident-reports-${role}-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "support_dashboard_events" },
+        (payload) => {
+          const resource =
+            payload.new &&
+            typeof payload.new === "object" &&
+            "resource_type" in payload.new
+              ? payload.new.resource_type
+              : undefined;
+          if (
+            resource === "incident_reports" ||
+            resource === "incident_report_replies"
+          ) {
+            refreshTimer();
+          }
+        },
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Incident realtime unavailable; periodic refresh remains active.");
+        }
+      });
+    interval = setInterval(() => {
+      void loadReports(true);
+      if (selectedReportId) void loadReplies(selectedReportId);
+    }, 30_000);
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      if (interval) clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadReplies, loadReports, role, selectedReportId, token, userId]);
 
   const selectedRoute = routes.find(
     (route) => String(route.id) === String(routeId),
@@ -212,7 +404,7 @@ export default function IncidentReportForm({
   }, [children, selectedRoute]);
 
   const submit = async () => {
-    if (!user?.token || saving) return;
+    if (!token || saving) return;
     if (role === "client" && !childId) {
       Alert.alert("Select a student", "Choose the child this report is about.");
       return;
@@ -239,13 +431,14 @@ export default function IncidentReportForm({
       const response = await fetch(`${baseUrl}/${role}/incidents`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${user.token}`,
+          [authHeaderKey]: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           incident_type: incidentType,
           description: description.trim(),
           severity,
+          recipient_type: recipientType,
           location: location.trim() || null,
           child_id: childId || null,
           route_id: routeId || null,
@@ -254,11 +447,14 @@ export default function IncidentReportForm({
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Unable to submit incident report.");
-      setSuccess(true);
+      setDescription("");
+      setLocation("");
+      await loadReports();
       Alert.alert(
         "Report submitted",
-        "Your incident report was sent to the school.",
-        [{ text: "Done", onPress: () => router.back() }],
+        recipientType === "support"
+          ? "Your report was sent to Support and remains visible to the related school."
+          : "Your report was sent to the related school.",
       );
     } catch (requestError) {
       Alert.alert(
@@ -272,12 +468,10 @@ export default function IncidentReportForm({
     }
   };
 
-  const title =
-    role === "client"
-      ? "Report a transport incident"
-      : role === "driver"
-        ? "Report a route incident"
-        : "Report an incident";
+  const selectedReport = reports.find(
+    (report) => report.id === selectedReportId,
+  );
+
   const childOptions = role === "client" ? children : routeChildren;
 
   return (
@@ -385,6 +579,22 @@ export default function IncidentReportForm({
           </View>
         </View>
         <View style={styles.field}>
+          <Text style={styles.label}>Send report to *</Text>
+          <View style={styles.picker}>
+            <Picker
+              style={{ color: palette.textPrimary }}
+              selectedValue={recipientType}
+              onValueChange={(value) => setRecipientType(value)}
+            >
+              <Picker.Item label="Related school" value="school" />
+              <Picker.Item label="Support team" value="support" />
+            </Picker>
+          </View>
+          <Text style={styles.muted}>
+            Support-routed reports are also visible to the related school.
+          </Text>
+        </View>
+        <View style={styles.field}>
           <Text style={styles.label}>Location (optional)</Text>
           <TextInput
             style={styles.input}
@@ -410,12 +620,9 @@ export default function IncidentReportForm({
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.submit,
-            (saving || success || loadingOptions) && styles.disabled,
-          ]}
+          style={[styles.submit, (saving || loadingOptions) && styles.disabled]}
           onPress={submit}
-          disabled={saving || success || loadingOptions}
+          disabled={saving || loadingOptions}
         >
           {saving ? (
             <ActivityIndicator color="#FFF" />
@@ -424,9 +631,87 @@ export default function IncidentReportForm({
           )}
         </TouchableOpacity>
         <Text style={styles.footnote}>
-          Your report is shared with the school associated with the selected
-          student or route.
+          You can follow status updates and continue the conversation below.
         </Text>
+        <View style={styles.history}>
+          <Text style={styles.historyTitle}>My incident reports</Text>
+          {reportError ? <Text style={styles.error}>{reportError}</Text> : null}
+          {loadingReports ? (
+            <ActivityIndicator color={palette.accent} />
+          ) : reports.length ? (
+            <>
+              <View style={styles.picker}>
+                <Picker
+                  style={{ color: palette.textPrimary }}
+                  selectedValue={selectedReportId}
+                  onValueChange={(value) => {
+                    setReplies([]);
+                    setSelectedReportId(String(value));
+                  }}
+                >
+                  {reports.map((report) => (
+                    <Picker.Item
+                      key={report.id}
+                      label={`${labels[report.incident_type] || report.incident_type} · ${
+                        report.status === "resolved"
+                          ? "Closed"
+                          : report.status === "in_progress"
+                            ? "In progress"
+                            : "Open"
+                      }`}
+                      value={report.id}
+                    />
+                  ))}
+                </Picker>
+              </View>
+              {selectedReport ? (
+                <View style={styles.reportSummary}>
+                  <Text style={styles.reportMeta}>
+                    To{" "}
+                    {selectedReport.recipient_type === "support"
+                      ? "Support"
+                      : "school"}{" "}
+                    ·{" "}
+                    {selectedReport.status === "resolved"
+                      ? "Closed"
+                      : selectedReport.status.replaceAll("_", " ")}
+                    {selectedReport.is_escalated ? " · Escalated" : ""}
+                  </Text>
+                  <Text style={styles.reportDescription}>
+                    {selectedReport.description}
+                  </Text>
+                </View>
+              ) : null}
+              <Text style={styles.label}>Responses</Text>
+              {replies.length ? (
+                replies.map((reply) => (
+                  <View key={reply.id} style={styles.reply}>
+                    <Text style={styles.replyAuthor}>
+                      {reply.users?.name || "Incident team"} ·{" "}
+                      {new Date(reply.created_at).toLocaleString()}
+                    </Text>
+                    <Text style={styles.replyBody}>{reply.body}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.muted}>No responses yet.</Text>
+              )}
+              {selectedReport?.status === "resolved" ? (
+                <Text style={styles.muted}>This report is closed.</Text>
+              ) : (
+                <Text style={styles.muted}>
+                  {selectedReport?.recipient_type === "support"
+                    ? "Only Support will respond here."
+                    : "The school and Support team can respond here."}
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.muted}>
+              Your submitted reports will appear here.
+            </Text>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -519,4 +804,47 @@ const createStyles = (palette: IncidentPalette) =>
     },
     muted: { color: palette.textSecondary, fontSize: 11, marginTop: 5 },
     error: { marginBottom: 14, color: palette.error, fontSize: 12 },
+    history: {
+      marginTop: 24,
+      padding: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      gap: 10,
+    },
+    historyTitle: {
+      color: palette.textPrimary,
+      fontSize: 17,
+      fontWeight: "800",
+    },
+    reportSummary: { paddingVertical: 8 },
+    reportMeta: {
+      color: palette.accent,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "capitalize",
+    },
+    reportDescription: {
+      color: palette.textPrimary,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 5,
+    },
+    reply: {
+      padding: 10,
+      borderRadius: 9,
+      backgroundColor: palette.background,
+    },
+    replyAuthor: {
+      color: palette.textSecondary,
+      fontSize: 10,
+      fontWeight: "700",
+    },
+    replyBody: {
+      color: palette.textPrimary,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 4,
+    },
   });

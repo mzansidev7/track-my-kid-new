@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, {
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -25,7 +26,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../../context/authContext/auth-context";
-import { useAdminProfile } from "../../../../adminHelpers/hooks/useAdminProfile";
+import { useAdminProfile } from "@/app-support/admin/adminHelpers/hooks/useAdminProfile";
 import {
   cacheAdminDrivers,
   getCachedAdminDrivers,
@@ -39,8 +40,14 @@ import {
   getCachedAdminVehicles,
 } from "../../../../store/asyncStorage/adminVehiclesCache";
 import { client as supabase } from "../../../../supabaseConfig/supabaseConfig";
+import {
+  loadIncidentReportsCache,
+  saveIncidentReportsCache,
+} from "../../../../store/asyncStorage/incidentReportsCache";
 import { resolveWorkingBaseUrl } from "../../../../url";
 import { useTheme } from "../../../../styles/theme";
+
+const authHeaderKey = "Authorization";
 
 type Row = Record<string, unknown>;
 type ToolKey =
@@ -52,6 +59,7 @@ type ToolKey =
   | "live-map"
   | "messages"
   | "requests"
+  | "incidents"
   | "support-users"
   | "settings"
   | "profile";
@@ -65,6 +73,8 @@ type SupportUserForm = {
   temporary_password: string;
 };
 
+type IncidentFilter = "all" | "open" | "in_progress" | "resolved" | "escalated";
+
 const toolTitles: Record<ToolKey, string> = {
   users: "Platform users",
   drivers: "Drivers",
@@ -74,6 +84,7 @@ const toolTitles: Record<ToolKey, string> = {
   "live-map": "Live vehicle map",
   messages: "Messages",
   requests: "Requests",
+  incidents: "Incidents",
   "support-users": "Support users",
   settings: "Support settings",
   profile: "Admin profile",
@@ -115,6 +126,18 @@ const getText = (row: Row, ...paths: string[]): string => {
 const pretty = (value: string) =>
   value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const conversationTypeLabels: Record<string, string> = {
+  client_driver: "Client ↔ Driver",
+  client_owner: "Client ↔ Owner",
+  driver_owner: "Driver ↔ Owner",
+  client_school: "Client ↔ School",
+  owner_school: "Owner ↔ School",
+  driver_school: "Driver ↔ School",
+  school_staff: "School staff",
+  admin_user: "Support ↔ User",
+  admin_driver: "Support ↔ Driver",
+};
+
 const formatDate = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -137,7 +160,7 @@ const apiRequest = async (
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${token}`,
+      [authHeaderKey]: `Bearer ${token}`,
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },
@@ -152,7 +175,9 @@ const apiRequest = async (
 };
 
 const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "The request could not be completed.";
+  error instanceof Error
+    ? error.message
+    : "The request could not be completed.";
 
 const rowsFor = (tool: ToolKey, value: unknown): Row[] => {
   if (Array.isArray(value)) return value.map(asRow);
@@ -162,10 +187,12 @@ const rowsFor = (tool: ToolKey, value: unknown): Row[] => {
       ...(Array.isArray(result.owners_owing) ? result.owners_owing : []).map(
         (item) => ({ ...asRow(item), _kind: "owner" }),
       ),
-      ...(Array.isArray(result.invoices) ? result.invoices : []).map((item) => ({
-        ...asRow(item),
-        _kind: "invoice",
-      })),
+      ...(Array.isArray(result.invoices) ? result.invoices : []).map(
+        (item) => ({
+          ...asRow(item),
+          _kind: "invoice",
+        }),
+      ),
     ];
   }
   if (tool === "requests") {
@@ -254,6 +281,7 @@ const getRequestPath = (tool: ToolKey) => {
     payments: "/admin/commissions",
     "live-map": "/admin/live-trips",
     messages: "/admin/conversations",
+    incidents: "/admin/incident-reports?limit=200",
     "support-users": "/admin/support-users",
     settings: "/admin/support-settings",
     profile: "/admin/profile",
@@ -287,13 +315,30 @@ export default function AdminToolScreen() {
     tool?: string | string[];
     chatId?: string | string[];
     conversationType?: string | string[];
+    conversationLabel?: string | string[];
+    conversationAvatar?: string | string[];
   }>();
   const toolParam = Array.isArray(params.tool) ? params.tool[0] : params.tool;
   const tool = (toolParam || "users") as ToolKey;
-  const chatId = Array.isArray(params.chatId) ? params.chatId[0] : params.chatId;
+  const chatId = Array.isArray(params.chatId)
+    ? params.chatId[0]
+    : params.chatId;
   const conversationType = Array.isArray(params.conversationType)
     ? params.conversationType[0]
     : params.conversationType;
+  const conversationLabel = Array.isArray(params.conversationLabel)
+    ? params.conversationLabel[0]
+    : params.conversationLabel;
+  const conversationAvatar = Array.isArray(params.conversationAvatar)
+    ? params.conversationAvatar[0]
+    : params.conversationAvatar;
+
+  React.useEffect(() => {
+    if (tool === "payments") {
+      router.replace("/(admin)/(tabs)/commissions" as never);
+    }
+  }, [router, tool]);
+
   const { user } = useContext(AuthContext);
   const { admin } = useAdminProfile();
   const { colors } = useTheme();
@@ -307,8 +352,18 @@ export default function AdminToolScreen() {
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [requestKind, setRequestKind] = useState("ticket");
+  const [incidentFilter, setIncidentFilter] = useState<IncidentFilter>("all");
   const [messageKind, setMessageKind] = useState<
-    "all" | "admin_user" | "admin_driver"
+    | "all"
+    | "admin_user"
+    | "admin_driver"
+    | "client_driver"
+    | "client_owner"
+    | "driver_owner"
+    | "client_school"
+    | "owner_school"
+    | "driver_school"
+    | "school_staff"
   >("all");
   const [unreadMessagesOnly, setUnreadMessagesOnly] = useState(false);
   const [vehicleScopeFilter, setVehicleScopeFilter] = useState<
@@ -316,8 +371,21 @@ export default function AdminToolScreen() {
   >("all");
   const [vehicleOwnerFilter, setVehicleOwnerFilter] = useState("all");
   const [selectedTicket, setSelectedTicket] = useState<Row | null>(null);
+  const [selectedIncident, setSelectedIncident] = useState<Row | null>(null);
+  const [incidentReplies, setIncidentReplies] = useState<Row[]>([]);
+  const [incidentCacheReady, setIncidentCacheReady] = useState(false);
+  const [incidentReplyDraft, setIncidentReplyDraft] = useState("");
   const [selectedVehicle, setSelectedVehicle] = useState<Row | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Row | null>(null);
+  const [selectedUserPhoto, setSelectedUserPhoto] = useState<{
+    uri: string;
+    name: string;
+  } | null>(null);
+  const [supportStaff, setSupportStaff] = useState<Row[]>([]);
+  const [selectedIncidentToEscalate, setSelectedIncidentToEscalate] =
+    useState<Row | null>(null);
+  const [incidentEscalationNote, setIncidentEscalationNote] = useState("");
+  const [incidentEscalationOpen, setIncidentEscalationOpen] = useState(false);
   const [ticketReplies, setTicketReplies] = useState<Row[]>([]);
   const [replyDraft, setReplyDraft] = useState("");
   const [loading, setLoading] = useState(true);
@@ -334,6 +402,9 @@ export default function AdminToolScreen() {
   const driversRequestInFlight = useRef(false);
   const tripsRequestInFlight = useRef(false);
   const vehiclesRequestInFlight = useRef(false);
+  const incidentRepliesById = useRef<Record<string, Row[]>>({});
+  const selectedIncidentRef = useRef<Row | null>(selectedIncident);
+  selectedIncidentRef.current = selectedIncident;
   const [driversCachedAt, setDriversCachedAt] = useState("");
   const [tripsCachedAt, setTripsCachedAt] = useState("");
   const [vehiclesCachedAt, setVehiclesCachedAt] = useState("");
@@ -368,7 +439,21 @@ export default function AdminToolScreen() {
       if (isRefresh) setRefreshing(true);
       setError("");
       try {
-        if (tool === "requests") {
+        if (tool === "incidents") {
+          const [result, staffResult] = await Promise.all([
+            apiRequest("/admin/incident-reports?limit=200", token),
+            isSuperAdmin
+              ? apiRequest("/admin/support-staff", token)
+              : Promise.resolve({ staff: [] }),
+          ]);
+          const incidents = Array.isArray(result) ? result : [];
+          const staff = asRow(staffResult);
+          setSupportStaff(
+            Array.isArray(staff.staff) ? staff.staff.map(asRow) : [],
+          );
+          setToolData({ incidents });
+          setItems(rowsFor(tool, incidents));
+        } else if (tool === "requests") {
           const [tickets, incidents, schools] = await Promise.all([
             apiRequest("/admin/support-tickets?limit=100", token),
             apiRequest("/admin/incident-reports?limit=200", token),
@@ -383,9 +468,20 @@ export default function AdminToolScreen() {
           setItems(rowsFor(tool, result));
         } else if (tool === "messages" && chatId) {
           const driverConversation = conversationType === "admin_driver";
-          const path = driverConversation
-            ? `/admin/driver-conversations/${encodeURIComponent(chatId)}/messages`
-            : `/admin/user-conversations/${encodeURIComponent(chatId)}/messages`;
+          const linkedConversation = [
+            "client_driver",
+            "client_owner",
+            "driver_owner",
+            "client_school",
+            "owner_school",
+            "driver_school",
+            "school_staff",
+          ].includes(conversationType || "");
+          const path = linkedConversation
+            ? `/admin/linked-conversations/${encodeURIComponent(chatId)}/messages`
+            : driverConversation
+              ? `/admin/driver-conversations/${encodeURIComponent(chatId)}/messages`
+              : `/admin/user-conversations/${encodeURIComponent(chatId)}/messages`;
           const result = await apiRequest(path, token);
           setMessages(Array.isArray(result) ? result.map(asRow) : []);
         } else if (tool === "profile") {
@@ -426,14 +522,28 @@ export default function AdminToolScreen() {
         setRefreshing(false);
       }
     },
-    [adminUserId, chatId, conversationType, token, tool],
+    [adminUserId, chatId, conversationType, isSuperAdmin, token, tool],
   );
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       const initialize = async () => {
-        if (
+        if (tool === "incidents" && adminUserId) {
+          const cached = await loadIncidentReportsCache("admin", adminUserId);
+          if (active && cached) {
+            const cachedIncidents = cached.reports.map(asRow);
+            incidentRepliesById.current = Object.fromEntries(
+              Object.entries(cached.repliesByIncidentId).map(
+                ([id, replies]) => [id, replies.map(asRow)],
+              ),
+            );
+            setToolData({ incidents: cachedIncidents });
+            setItems(cachedIncidents);
+            setLoading(false);
+          }
+          if (active) setIncidentCacheReady(true);
+        } else if (
           (tool === "drivers" || tool === "trips" || tool === "vehicles") &&
           adminUserId
         ) {
@@ -465,6 +575,135 @@ export default function AdminToolScreen() {
       void initialize();
       return () => {
         active = false;
+      };
+    }, [adminUserId, loadData, tool]),
+  );
+
+  useEffect(() => {
+    if (tool !== "incidents" || !adminUserId || !incidentCacheReady) return;
+    void saveIncidentReportsCache("admin", adminUserId, {
+      reports: items,
+      repliesByIncidentId: incidentRepliesById.current,
+    });
+  }, [adminUserId, incidentCacheReady, incidentReplies, items, tool]);
+
+  const refreshIncidentReplies = useCallback(
+    async (incidentId: string) => {
+      if (!token || !incidentId) return;
+      const result = await apiRequest(
+        `/admin/incident-reports/${encodeURIComponent(incidentId)}/replies`,
+        token,
+      );
+      if (!Array.isArray(result)) {
+        throw new Error("Unable to load incident responses.");
+      }
+      const nextReplies = result.map(asRow);
+      incidentRepliesById.current[incidentId] = nextReplies;
+      if (getText(selectedIncidentRef.current || {}, "id") === incidentId) {
+        setIncidentReplies(nextReplies);
+      }
+    },
+    [token],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (tool !== "incidents" || !token) return undefined;
+      let active = true;
+      let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+      const refreshOpenIncident = () => {
+        const incidentId = getText(selectedIncidentRef.current || {}, "id");
+        if (incidentId) {
+          void refreshIncidentReplies(incidentId).catch((refreshError) => {
+            if (active) setError(errorMessage(refreshError));
+          });
+        }
+      };
+      const channel = supabase
+        .channel(`admin-incidents-live-${adminUserId || "session"}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "support_dashboard_events",
+          },
+          (payload) => {
+            const resourceType = asRow(payload.new).resource_type;
+            if (
+              resourceType !== "incident_reports" &&
+              resourceType !== "incident_report_replies"
+            ) {
+              return;
+            }
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => {
+              if (!active) return;
+              void loadData(true);
+              refreshOpenIncident();
+            }, 350);
+          },
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn(
+              "Admin incident realtime unavailable; periodic refresh remains active.",
+              status,
+            );
+          }
+        });
+      const interval = setInterval(() => {
+        void loadData(true);
+        refreshOpenIncident();
+      }, 30_000);
+      return () => {
+        active = false;
+        if (refreshTimer) clearTimeout(refreshTimer);
+        clearInterval(interval);
+        void supabase.removeChannel(channel);
+      };
+    }, [adminUserId, loadData, refreshIncidentReplies, token, tool]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (tool !== "settings") return undefined;
+
+      let active = true;
+      let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+      const channel = supabase
+        .channel(`admin-support-settings-live-${adminUserId || "session"}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "support_dashboard_events",
+          },
+          (payload) => {
+            if (asRow(payload.new).resource_type !== "support_settings") return;
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => {
+              if (active) void loadData(true);
+            }, 250);
+          },
+        )
+        .subscribe((status) => {
+          if (
+            active &&
+            (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
+          ) {
+            console.warn(
+              "Admin support settings realtime unavailable; refresh the screen to load the latest settings.",
+              status,
+            );
+          }
+        });
+
+      return () => {
+        active = false;
+        if (refreshTimer) clearTimeout(refreshTimer);
+        void supabase.removeChannel(channel);
       };
     }, [adminUserId, loadData, tool]),
   );
@@ -551,6 +790,14 @@ export default function AdminToolScreen() {
     const normalized = query.trim().toLowerCase();
     return items.filter((item) => {
       if (tool === "requests" && item._kind !== requestKind) return false;
+      if (
+        tool === "incidents" &&
+        (incidentFilter === "escalated"
+          ? item.is_escalated !== true
+          : incidentFilter !== "all" && item.status !== incidentFilter)
+      ) {
+        return false;
+      }
       if (tool === "messages" && !chatId) {
         if (
           messageKind !== "all" &&
@@ -581,6 +828,7 @@ export default function AdminToolScreen() {
   }, [
     chatId,
     items,
+    incidentFilter,
     messageKind,
     query,
     requestKind,
@@ -612,11 +860,16 @@ export default function AdminToolScreen() {
       const endpoint = driver
         ? `/admin/drivers/${encodeURIComponent(userId)}/conversation`
         : `/admin/users/${encodeURIComponent(userId)}/conversation`;
-      const result = asRow(await apiRequest(endpoint, token, { method: "POST" }));
+      const result = asRow(
+        await apiRequest(endpoint, token, { method: "POST" }),
+      );
       const targetType = driver ? "admin_driver" : "admin_user";
       router.push({
         pathname: "/(admin)/(tabs)/tools/messages",
-        params: { chatId: String(result.conversationId || ""), conversationType: targetType },
+        params: {
+          chatId: String(result.conversationId || ""),
+          conversationType: targetType,
+        },
       } as never);
     } catch (requestError) {
       Alert.alert("Could not open conversation", errorMessage(requestError));
@@ -667,16 +920,62 @@ export default function AdminToolScreen() {
   const updateIncident = async (row: Row) => {
     if (!token) return;
     const status = getText(row, "status");
-    const nextStatus = status === "open" ? "in_progress" : status === "in_progress" ? "resolved" : "open";
+    const nextStatus =
+      status === "open"
+        ? "in_progress"
+        : status === "in_progress"
+          ? "resolved"
+          : "open";
     try {
-      await apiRequest(`/admin/incident-reports/${String(row.id)}`, token, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      });
+      await apiRequest(
+        `/admin/incident-reports/${encodeURIComponent(getText(row, "id"))}`,
+        token,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: nextStatus }),
+        },
+      );
       await loadData(true);
     } catch (requestError) {
       Alert.alert("Incident update failed", errorMessage(requestError));
     }
+  };
+
+  const assignIncident = async (row: Row, supportStaffId: string) => {
+    if (!token || !isSuperAdmin) return;
+    try {
+      await apiRequest(
+        `/admin/incident-reports/${encodeURIComponent(getText(row, "id"))}`,
+        token,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ assigned_to: supportStaffId || null }),
+        },
+      );
+      await loadData(true);
+    } catch (requestError) {
+      Alert.alert("Incident assignment failed", errorMessage(requestError));
+    }
+  };
+
+  const confirmIncidentStatusUpdate = (row: Row) => {
+    const status = getText(row, "status");
+    if (status !== "in_progress") {
+      void updateIncident(row);
+      return;
+    }
+
+    Alert.alert(
+      "Resolve this incident?",
+      "Only resolve it after the follow-up is complete.",
+      [
+        { text: "Keep investigating", style: "cancel" },
+        {
+          text: "Resolve incident",
+          onPress: () => void updateIncident(row),
+        },
+      ],
+    );
   };
 
   const reviewSchool = async (
@@ -684,11 +983,12 @@ export default function AdminToolScreen() {
     decision: "approved" | "rejected" | "needs_info",
   ) => {
     if (!token) return;
-    const note = decision === "approved"
-      ? ""
-      : decision === "rejected"
-        ? "Unable to verify this school registration."
-        : "Please provide the missing registration information.";
+    const note =
+      decision === "approved"
+        ? ""
+        : decision === "rejected"
+          ? "Unable to verify this school registration."
+          : "Please provide the missing registration information.";
     try {
       await apiRequest(`/admin/schools/${String(row.id)}/review`, token, {
         method: "PATCH",
@@ -712,6 +1012,48 @@ export default function AdminToolScreen() {
       setReplyDraft("");
     } catch (requestError) {
       Alert.alert("Could not load ticket replies", errorMessage(requestError));
+    }
+  };
+
+  const openIncidentReplies = async (row: Row) => {
+    if (!token) return;
+    const incidentId = getText(row, "id");
+    selectedIncidentRef.current = row;
+    setSelectedIncident(row);
+    setIncidentReplyDraft("");
+    const cachedReplies = incidentRepliesById.current[incidentId];
+    if (cachedReplies) setIncidentReplies(cachedReplies);
+    try {
+      await refreshIncidentReplies(incidentId);
+    } catch (requestError) {
+      Alert.alert("Could not load incident responses", errorMessage(requestError));
+    }
+  };
+
+  const sendIncidentReply = async () => {
+    if (!token || !selectedIncident || !incidentReplyDraft.trim() || saving) return;
+    setSaving(true);
+    try {
+      await apiRequest(
+        `/admin/incident-reports/${encodeURIComponent(getText(selectedIncident, "id"))}/replies`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({ body: incidentReplyDraft.trim() }),
+        },
+      );
+      const result = await apiRequest(
+        `/admin/incident-reports/${encodeURIComponent(getText(selectedIncident, "id"))}/replies`,
+        token,
+      );
+      const nextReplies = Array.isArray(result) ? result.map(asRow) : [];
+      incidentRepliesById.current[getText(selectedIncident, "id")] = nextReplies;
+      setIncidentReplies(nextReplies);
+      setIncidentReplyDraft("");
+    } catch (requestError) {
+      Alert.alert("Could not send incident response", errorMessage(requestError));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -740,20 +1082,39 @@ export default function AdminToolScreen() {
     }
   };
 
-  const escalateIncident = async (row: Row) => {
-    if (!token) return;
+  const openIncidentEscalation = (row: Row) => {
+    setSelectedIncidentToEscalate(row);
+    setIncidentEscalationNote("");
+    setIncidentEscalationOpen(true);
+  };
+
+  const escalateIncident = async () => {
+    if (!token || !selectedIncidentToEscalate) return;
+    const note = incidentEscalationNote.trim();
+    if (!note) {
+      Alert.alert(
+        "Add an escalation reason",
+        "Describe why this incident needs higher-priority attention.",
+      );
+      return;
+    }
+    setSaving(true);
     try {
       await apiRequest(
-        `/admin/incident-reports/${encodeURIComponent(getText(row, "id"))}/escalate`,
+        `/admin/incident-reports/${encodeURIComponent(getText(selectedIncidentToEscalate, "id"))}/escalate`,
         token,
         {
           method: "POST",
-          body: JSON.stringify({ note: "Escalated from the Admin mobile app." }),
+          body: JSON.stringify({ note }),
         },
       );
+      setIncidentEscalationOpen(false);
+      setSelectedIncidentToEscalate(null);
       await loadData(true);
     } catch (requestError) {
       Alert.alert("Incident escalation failed", errorMessage(requestError));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -763,7 +1124,10 @@ export default function AdminToolScreen() {
     try {
       await apiRequest("/admin/profile", token, {
         method: "PUT",
-        body: JSON.stringify({ name: profileName.trim(), phone: profilePhone.trim() }),
+        body: JSON.stringify({
+          name: profileName.trim(),
+          phone: profilePhone.trim(),
+        }),
       });
       Alert.alert("Profile updated", "Your Admin profile has been saved.");
       await loadData(true);
@@ -776,7 +1140,10 @@ export default function AdminToolScreen() {
 
   const changePassword = async () => {
     if (!token || !currentPassword || newPassword.length < 8) {
-      Alert.alert("Check password", "Enter your current password and a new password of at least 8 characters.");
+      Alert.alert(
+        "Check password",
+        "Enter your current password and a new password of at least 8 characters.",
+      );
       return;
     }
     setSaving(true);
@@ -799,11 +1166,28 @@ export default function AdminToolScreen() {
     if (!token || !isSuperAdmin) return;
     setSaving(true);
     try {
-      await apiRequest("/admin/support-settings", token, {
-        method: "PUT",
-        body: JSON.stringify({ settings }),
-      });
-      Alert.alert("Settings saved", "Support control settings have been updated.");
+      const result = asRow(
+        await apiRequest("/admin/support-settings", token, {
+          method: "PUT",
+          body: JSON.stringify({ settings }),
+        }),
+      );
+      if (result.settings) {
+        const savedSettings = asRow(result.settings);
+        setSettings(savedSettings);
+        setToolData((current) => ({ ...current, settings: savedSettings }));
+      }
+      Alert.alert(
+        "Settings saved",
+        [
+          result.notifications_sent === false
+            ? "Super-admin notifications could not be sent. Check the server logs and apply the notifications migration."
+            : "All active super admins were notified.",
+          result.realtime_updated === false
+            ? "The live update signal could not be sent; refresh to load the latest settings."
+            : "The live update was sent.",
+        ].join(" "),
+      );
     } catch (requestError) {
       Alert.alert("Settings update failed", errorMessage(requestError));
     } finally {
@@ -836,7 +1220,10 @@ export default function AdminToolScreen() {
       setSupportUserForm(emptySupportUser);
       await loadData(true);
     } catch (requestError) {
-      Alert.alert("Support user could not be saved", errorMessage(requestError));
+      Alert.alert(
+        "Support user could not be saved",
+        errorMessage(requestError),
+      );
     } finally {
       setSaving(false);
     }
@@ -860,17 +1247,24 @@ export default function AdminToolScreen() {
       details.push(pretty(getText(row, "role") || "user"));
       details.push(getText(row, "email"));
       details.push(getText(row, "status"));
-      if (getText(row, "organization")) details.push(getText(row, "organization"));
+      if (!getText(row, "school.name") && getText(row, "organization"))
+        details.push(getText(row, "organization"));
     } else if (tool === "drivers") {
       details.push(getText(row, "users.name") || getText(row, "name"));
       details.push(getText(row, "users.email"));
       details.push(pretty(getText(row, "status") || "unknown"));
-      details.push(getText(row, "vehicle.license_plate", "vehicle_plate_number"));
+      details.push(
+        getText(row, "vehicle.license_plate", "vehicle_plate_number"),
+      );
       details.push(getText(row, "route.route_name"));
     } else if (tool === "trips") {
       details.push(getText(row, "route.route_name") || "Route unavailable");
-      details.push(`Driver: ${getText(row, "driver.users.name") || "Unassigned"}`);
-      details.push(`Vehicle: ${getText(row, "vehicle.license_plate") || "Unassigned"}`);
+      details.push(
+        `Driver: ${getText(row, "driver.users.name") || "Unassigned"}`,
+      );
+      details.push(
+        `Vehicle: ${getText(row, "vehicle.license_plate") || "Unassigned"}`,
+      );
       details.push(`${getText(row, "studentCount") || "0"} students`);
       details.push(pretty(getText(row, "status") || "unknown"));
     } else if (tool === "vehicles") {
@@ -904,62 +1298,136 @@ export default function AdminToolScreen() {
         details.push(`${getText(row, "payment_count") || "0"} cash payments`);
       } else {
         details.push(getText(row, "owner_email") || "No billing email");
-        details.push(`${formatMoney(row.amount_cents, getText(row, "currency") || "ZAR")} · ${pretty(getText(row, "status"))}`);
-        details.push(`Period: ${getText(row, "period_start")} – ${getText(row, "period_end")}`);
+        details.push(
+          `${formatMoney(row.amount_cents, getText(row, "currency") || "ZAR")} · ${pretty(getText(row, "status"))}`,
+        );
+        details.push(
+          `Period: ${getText(row, "period_start")} – ${getText(row, "period_end")}`,
+        );
         details.push(`Due: ${getText(row, "due_at") || "Not set"}`);
       }
     } else if (tool === "messages") {
-      details.push(getText(row, "participant.role") ? pretty(getText(row, "participant.role")) : "Conversation");
+      details.push(
+        row.is_linked_conversation === true
+          ? `${conversationTypeLabels[getText(row, "conversation_type")] || pretty(getText(row, "conversation_type"))} · read-only review`
+          : getText(row, "participant.role")
+            ? pretty(getText(row, "participant.role"))
+            : "Conversation",
+      );
       details.push(getText(row, "last_message.content") || "No messages yet");
-      details.push(`${getText(row, "unread_count") || "0"} unread`);
-      details.push(getText(row, "last_message_at") ? formatDate(getText(row, "last_message_at")) : "");
-    } else if (tool === "requests") {
+      if (row.is_linked_conversation !== true) {
+        details.push(`${getText(row, "unread_count") || "0"} unread`);
+      }
+      details.push(
+        getText(row, "last_message_at")
+          ? formatDate(getText(row, "last_message_at"))
+          : "",
+      );
+    } else if (tool === "requests" || tool === "incidents") {
       if (row._kind === "ticket") {
-        details.push(getText(row, "users.name", "users.email") || "Requester unavailable");
+        details.push(
+          getText(row, "users.name", "users.email") || "Requester unavailable",
+        );
         details.push(pretty(getText(row, "category") || "support request"));
-        details.push(`${pretty(getText(row, "priority") || "medium")} priority · ${pretty(getText(row, "status") || "open")}`);
+        details.push(
+          `${pretty(getText(row, "priority") || "medium")} priority · ${pretty(getText(row, "status") || "open")}`,
+        );
         details.push(getText(row, "message"));
-      } else if (row._kind === "incident") {
-        details.push(`${pretty(getText(row, "severity") || "unknown")} · ${pretty(getText(row, "status") || "open")}`);
+      } else if (row._kind === "incident" || tool === "incidents") {
+        details.push(
+          `${pretty(getText(row, "severity") || "unknown")} · ${
+            getText(row, "status") === "resolved"
+              ? "Closed"
+              : pretty(getText(row, "status") || "open")
+          }`,
+        );
+        details.push(
+          `${pretty(getText(row, "reporter_role") || "unknown")} · ${getText(row, "users.name", "users.email") || "Reporter unavailable"}`,
+        );
+        details.push(getText(row, "routes.route_name"));
+        details.push(
+          `Owner: ${getText(row, "assigned_staff.full_name", "assigned_staff.email") || "Unassigned"}`,
+        );
+        if (row.is_escalated === true) {
+          details.push(
+            `Escalated: ${getText(row, "escalation_note") || "No escalation note recorded"}`,
+          );
+        }
         details.push(getText(row, "incident_type"));
         details.push(getText(row, "description"));
       } else {
         details.push(getText(row, "school_email"));
-        details.push(`${getText(row, "province")} · ${getText(row, "district")}`);
+        details.push(
+          `${getText(row, "province")} · ${getText(row, "district")}`,
+        );
         details.push(`Status: ${pretty(getText(row, "status") || "pending")}`);
       }
     } else if (tool === "support-users") {
       details.push(getText(row, "email"));
-      details.push(roleLabels[getText(row, "admin_role")] || pretty(getText(row, "admin_role")));
+      details.push(
+        roleLabels[getText(row, "admin_role")] ||
+          pretty(getText(row, "admin_role")),
+      );
       details.push(row.is_active ? "Active" : "Inactive");
     } else if (tool === "live-map") {
       details.push(getText(row, "route.route_name") || "Route unavailable");
       details.push(`Driver: ${getText(row, "driver.users.name") || "Unknown"}`);
-      details.push(`Vehicle: ${getText(row, "vehicle.license_plate") || "Unknown"}`);
+      details.push(
+        `Vehicle: ${getText(row, "vehicle.license_plate") || "Unknown"}`,
+      );
       const latitude = getText(row, "location.latitude");
       const longitude = getText(row, "location.longitude");
-      details.push(latitude && longitude ? `GPS: ${latitude}, ${longitude}` : "GPS location unavailable");
-      details.push(getText(row, "location.recorded_at") ? `Updated ${formatDate(getText(row, "location.recorded_at"))}` : "");
+      details.push(
+        latitude && longitude
+          ? `GPS: ${latitude}, ${longitude}`
+          : "GPS location unavailable",
+      );
+      details.push(
+        getText(row, "location.recorded_at")
+          ? `Updated ${formatDate(getText(row, "location.recorded_at"))}`
+          : "",
+      );
     }
     return details.filter(Boolean).join(" · ");
   };
 
   const getTitle = (row: Row) => {
-    if (tool === "users") return getText(row, "name", "email") || "Unnamed user";
-    if (tool === "drivers") return getText(row, "users.name", "users.email") || "Driver";
+    if (tool === "users")
+      return getText(row, "name", "email") || "Unnamed user";
+    if (tool === "drivers")
+      return getText(row, "users.name", "users.email") || "Driver";
     if (tool === "trips") return getText(row, "route.route_name") || "Trip";
-    if (tool === "vehicles") return getText(row, "name", "license_plate") || "Vehicle";
-    if (tool === "payments") return row._kind === "owner"
-      ? getText(row, "owner_name") || "Fleet owner"
-      : `Invoice · ${getText(row, "owner_name") || "Fleet owner"}`;
-    if (tool === "messages") return getText(row, "participant.name") || "Conversation";
-    if (tool === "requests") {
-      if (row._kind === "ticket") return getText(row, "subject") || "Support ticket";
-      if (row._kind === "incident") return getText(row, "incident_type") || "Incident report";
+    if (tool === "vehicles")
+      return getText(row, "name", "license_plate") || "Vehicle";
+    if (tool === "payments")
+      return row._kind === "owner"
+        ? getText(row, "owner_name") || "Fleet owner"
+        : `Invoice · ${getText(row, "owner_name") || "Fleet owner"}`;
+    if (tool === "messages") {
+      const participants = Array.isArray(row.participants)
+        ? row.participants.map(asRow)
+        : [];
+      if (participants.length === 2) {
+        return participants
+          .map(
+            (participant) =>
+              `${getText(participant, "name", "email")} · ${pretty(getText(participant, "role") || "user")}`,
+          )
+          .join(" ↔ ");
+      }
+      return getText(row, "participant.name") || "Conversation";
+    }
+    if (tool === "requests" || tool === "incidents") {
+      if (row._kind === "ticket")
+        return getText(row, "subject") || "Support ticket";
+      if (row._kind === "incident" || tool === "incidents") {
+        return `${pretty(getText(row, "incident_type") || "Incident report")} · ${getText(row, "routes.route_name") || "Route"}`;
+      }
       return getText(row, "name") || "School registration";
     }
     if (tool === "support-users") return getText(row, "name") || "Support user";
-    if (tool === "live-map") return getText(row, "route.route_name") || "Active trip";
+    if (tool === "live-map")
+      return getText(row, "route.route_name") || "Active trip";
     return "Admin record";
   };
 
@@ -1016,6 +1484,10 @@ export default function AdminToolScreen() {
               params: {
                 chatId: getText(row, "id"),
                 conversationType: getText(row, "conversation_type"),
+                conversationLabel: getTitle(row),
+                conversationAvatar:
+                  getText(row, "participant.avatar") ||
+                  getText(asRow(row.participants?.[0]), "avatar"),
               },
             } as never)
           }
@@ -1028,12 +1500,20 @@ export default function AdminToolScreen() {
     if (tool === "requests" && row._kind === "ticket") {
       return (
         <View style={styles.inlineActions}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => void openTicketReplies(row)}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => void openTicketReplies(row)}
+          >
             <MaterialIcons name="forum" size={16} color="#2563EB" />
             <Text style={styles.actionText}>View / reply</Text>
           </TouchableOpacity>
-          {["super_admin", "support", "operations"].includes(admin?.admin_role || "") ? (
-            <TouchableOpacity style={styles.actionButton} onPress={() => void updateTicket(row)}>
+          {["super_admin", "support", "operations"].includes(
+            admin?.admin_role || "",
+          ) ? (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => void updateTicket(row)}
+            >
               <MaterialIcons name="sync" size={16} color="#2563EB" />
               <Text style={styles.actionText}>Advance</Text>
             </TouchableOpacity>
@@ -1041,36 +1521,105 @@ export default function AdminToolScreen() {
         </View>
       );
     }
-    if (tool === "requests" && row._kind === "incident") {
+    if (
+      (tool === "requests" && row._kind === "incident") ||
+      tool === "incidents"
+    ) {
       return (
         <View style={styles.inlineActions}>
-          {["super_admin", "support", "operations"].includes(admin?.admin_role || "") ? (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => void openIncidentReplies(row)}
+          >
+            <MaterialIcons name="forum" size={16} color="#2563EB" />
+            <Text style={styles.actionText}>Responses</Text>
+          </TouchableOpacity>
+          {["super_admin", "support", "operations"].includes(
+            admin?.admin_role || "",
+          ) ? (
             <>
-              <TouchableOpacity style={styles.actionButton} onPress={() => void updateIncident(row)}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => confirmIncidentStatusUpdate(row)}
+              >
                 <MaterialIcons name="sync" size={16} color="#2563EB" />
-                <Text style={styles.actionText}>Advance</Text>
+                <Text style={styles.actionText}>
+                  {getText(row, "status") === "open"
+                    ? "Acknowledge & investigate"
+                    : getText(row, "status") === "in_progress"
+                      ? "Resolve incident"
+                      : "Reopen incident"}
+                </Text>
               </TouchableOpacity>
-              {!row.is_escalated ? (
-                <TouchableOpacity style={styles.actionButton} onPress={() => void escalateIncident(row)}>
-                  <MaterialIcons name="priority-high" size={16} color="#B91C1C" />
-                  <Text style={[styles.actionText, { color: "#B91C1C" }]}>Escalate</Text>
+              {row.is_escalated !== true ? (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => openIncidentEscalation(row)}
+                >
+                  <MaterialIcons
+                    name="priority-high"
+                    size={16}
+                    color="#B91C1C"
+                  />
+                  <Text style={[styles.actionText, { color: "#B91C1C" }]}>
+                    Escalate
+                  </Text>
                 </TouchableOpacity>
               ) : null}
             </>
           ) : null}
+          {isSuperAdmin && tool === "incidents" ? (
+            <View style={styles.incidentAssignee}>
+              <Text style={styles.incidentAssigneeLabel}>
+                Accountable support owner
+              </Text>
+              <View style={styles.pickerWrap}>
+                <Picker
+                  selectedValue={getText(row, "assigned_to")}
+                  onValueChange={(value) =>
+                    void assignIncident(row, String(value))
+                  }
+                >
+                  <Picker.Item label="Unassigned" value="" />
+                  {supportStaff.map((staff) => (
+                    <Picker.Item
+                      key={getText(staff, "id")}
+                      label={`${getText(staff, "full_name", "email")} · ${pretty(getText(staff, "support_role"))}`}
+                      value={getText(staff, "id")}
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+          ) : null}
         </View>
       );
     }
-    if (tool === "requests" && row._kind === "school" && ["super_admin", "support"].includes(admin?.admin_role || "")) {
+    if (
+      tool === "requests" &&
+      row._kind === "school" &&
+      ["super_admin", "support"].includes(admin?.admin_role || "")
+    ) {
       return (
         <View style={styles.inlineActions}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => void reviewSchool(row, "approved")}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => void reviewSchool(row, "approved")}
+          >
             <Text style={styles.actionText}>Approve</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => void reviewSchool(row, "rejected")}>
-            <Text style={[styles.actionText, { color: "#B91C1C" }]}>Reject</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => void reviewSchool(row, "rejected")}
+          >
+            <Text style={[styles.actionText, { color: "#B91C1C" }]}>
+              Reject
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => void reviewSchool(row, "needs_info")}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => void reviewSchool(row, "needs_info")}
+          >
             <Text style={styles.actionText}>Request info</Text>
           </TouchableOpacity>
         </View>
@@ -1078,7 +1627,10 @@ export default function AdminToolScreen() {
     }
     if (tool === "support-users" && isSuperAdmin) {
       return (
-        <TouchableOpacity style={styles.actionButton} onPress={() => updateSupportUser(row)}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => updateSupportUser(row)}
+        >
           <MaterialIcons name="edit" size={16} color="#2563EB" />
           <Text style={styles.actionText}>Edit</Text>
         </TouchableOpacity>
@@ -1107,45 +1659,149 @@ export default function AdminToolScreen() {
     return null;
   };
 
+  const messageParticipantAvatar =
+    conversationAvatar ||
+    getText(
+      messages.find((message) => getText(message, "users.avatar")) || {},
+      "users.avatar",
+    );
+
   const renderMessages = () => (
     <>
       {chatId ? (
         <>
           <View style={styles.chatHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
               <MaterialIcons name="arrow-back" size={20} color="#1E293B" />
             </TouchableOpacity>
-            <Text style={styles.chatTitle}>Conversation</Text>
+            {messageParticipantAvatar ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="View conversation participant profile photo"
+                onPress={() =>
+                  setSelectedUserPhoto({
+                    uri: messageParticipantAvatar,
+                    name: conversationLabel || "Conversation participant",
+                  })
+                }
+              >
+                <Image
+                  source={{ uri: messageParticipantAvatar }}
+                  style={styles.messageParticipantAvatar}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.messageParticipantAvatarFallback}>
+                <MaterialIcons name="person" size={22} color="#2563EB" />
+              </View>
+            )}
+            <Text style={styles.chatTitle}>
+              {conversationLabel ||
+                (conversationType
+                  ? conversationTypeLabels[conversationType] ||
+                    pretty(conversationType)
+                  : "Conversation")}
+            </Text>
           </View>
+          {[
+            "client_driver",
+            "client_owner",
+            "driver_owner",
+            "client_school",
+            "owner_school",
+            "driver_school",
+            "school_staff",
+          ].includes(conversationType || "") ? (
+            <Text style={styles.readOnlyNotice}>
+              Read-only review · messages are not marked as read
+            </Text>
+          ) : null}
           {messages.map((message) => {
-            const ownMessage = getText(message, "sender_id") === String(user?.userData?.id || "");
+            const ownMessage =
+              getText(message, "sender_id") ===
+              String(user?.userData?.id || "");
+            const senderAvatar = getText(message, "users.avatar");
             return (
               <View
                 key={getText(message, "id")}
-                style={[styles.messageBubble, ownMessage ? styles.ownMessage : styles.otherMessage]}
+                style={[
+                  styles.messageRow,
+                  ownMessage && styles.ownMessageRow,
+                ]}
               >
-                <Text style={styles.messageSender}>
-                  {ownMessage ? "You" : getText(message, "users.name") || "User"}
-                </Text>
-                <Text style={styles.messageText}>{getText(message, "content")}</Text>
-                <Text style={styles.messageTime}>
-                  {getText(message, "sent_at") ? formatDate(getText(message, "sent_at")) : ""}
-                </Text>
+                {!ownMessage && senderAvatar ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${getText(message, "users.name") || "User"} profile photo`}
+                    onPress={() =>
+                      setSelectedUserPhoto({
+                        uri: senderAvatar,
+                        name: getText(message, "users.name") || "User",
+                      })
+                    }
+                  >
+                    <Image
+                      source={{ uri: senderAvatar }}
+                      style={styles.messageBubbleAvatar}
+                    />
+                  </TouchableOpacity>
+                ) : null}
+                <View
+                  style={[
+                    styles.messageBubble,
+                    ownMessage ? styles.ownMessage : styles.otherMessage,
+                  ]}
+                >
+                  <Text style={styles.messageSender}>
+                    {ownMessage
+                      ? "You"
+                      : getText(message, "users.name") || "User"}
+                  </Text>
+                  <Text style={styles.messageText}>
+                    {getText(message, "content")}
+                  </Text>
+                  <Text style={styles.messageTime}>
+                    {getText(message, "sent_at")
+                      ? formatDate(getText(message, "sent_at"))
+                      : ""}
+                  </Text>
+                </View>
               </View>
             );
           })}
-          <View style={styles.composer}>
-            <TextInput
-              style={styles.composerInput}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write a reply..."
-              multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={() => void sendMessage()} disabled={saving || !draft.trim()}>
-              {saving ? <ActivityIndicator color="#FFFFFF" /> : <MaterialIcons name="send" size={18} color="#FFFFFF" />}
-            </TouchableOpacity>
-          </View>
+          {![
+            "client_driver",
+            "client_owner",
+            "driver_owner",
+            "client_school",
+            "owner_school",
+            "driver_school",
+            "school_staff",
+          ].includes(conversationType || "") ? (
+            <View style={styles.composer}>
+              <TextInput
+                style={styles.composerInput}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Write a reply..."
+                multiline
+              />
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={() => void sendMessage()}
+                disabled={saving || !draft.trim()}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <MaterialIcons name="send" size={18} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </>
       ) : (
         renderRows()
@@ -1157,36 +1813,50 @@ export default function AdminToolScreen() {
     <>
       {tool === "messages" && !chatId ? (
         <>
-          <View style={styles.filterRow}>
-            {[
-              ["all", "All conversations"],
-              ["admin_user", "Users"],
-              ["admin_driver", "Drivers"],
-            ].map(([value, label]) => (
-              <TouchableOpacity
-                key={value}
-                activeOpacity={0.8}
-                onPress={() =>
-                  setMessageKind(
-                    value as "all" | "admin_user" | "admin_driver",
-                  )
-                }
-                style={[
-                  styles.filterChip,
-                  messageKind === value && styles.filterChipActive,
-                ]}
-              >
-                <Text
+          <TextInput
+            style={styles.search}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search participants, roles, or latest message..."
+            returnKeyType="search"
+          />
+          <Text style={styles.resultCount}>
+            {filteredItems.length} conversations
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.messageFilterRow}
+          >
+            {[["all", "All"], ...Object.entries(conversationTypeLabels)]
+              .filter(
+                ([value]) =>
+                  isSuperAdmin ||
+                  value === "all" ||
+                  value === "admin_user" ||
+                  value === "admin_driver",
+              )
+              .map(([value, label]) => (
+                <TouchableOpacity
+                  key={value}
+                  activeOpacity={0.8}
+                  onPress={() => setMessageKind(value as typeof messageKind)}
                   style={[
-                    styles.filterText,
-                    messageKind === value && styles.filterTextActive,
+                    styles.filterChip,
+                    messageKind === value && styles.filterChipActive,
                   ]}
                 >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.filterText,
+                      messageKind === value && styles.filterTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => setUnreadMessagesOnly((current) => !current)}
@@ -1221,9 +1891,54 @@ export default function AdminToolScreen() {
             <TouchableOpacity
               key={value}
               onPress={() => setRequestKind(value)}
-              style={[styles.filterChip, requestKind === value && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                requestKind === value && styles.filterChipActive,
+              ]}
             >
-              <Text style={[styles.filterText, requestKind === value && styles.filterTextActive]}>
+              <Text
+                style={[
+                  styles.filterText,
+                  requestKind === value && styles.filterTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+      {tool === "incidents" ? (
+        <View style={styles.filterRow}>
+          {(
+            [
+              ["all", "All"],
+              ["open", "Open"],
+              ["in_progress", "Investigating"],
+              ["resolved", "Closed"],
+              ["escalated", "Escalated"],
+            ] as const
+          ).map(([value, label]) => (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setIncidentFilter(value)}
+              style={[
+                styles.filterChip,
+                incidentFilter === value && styles.filterChipActive,
+                value === "escalated" &&
+                  incidentFilter === value &&
+                  styles.escalatedFilterActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterText,
+                  incidentFilter === value && styles.filterTextActive,
+                  value === "escalated" &&
+                    incidentFilter === value &&
+                    styles.escalatedFilterText,
+                ]}
+              >
                 {label}
               </Text>
             </TouchableOpacity>
@@ -1280,8 +1995,16 @@ export default function AdminToolScreen() {
           ) : null}
           <View style={styles.vehicleCounts}>
             {[
-              ["Fleet vehicles", items.filter((item) => getVehicleScope(item) === "fleet").length],
-              ["School vehicles", items.filter((item) => getVehicleScope(item) === "school").length],
+              [
+                "Fleet vehicles",
+                items.filter((item) => getVehicleScope(item) === "fleet")
+                  .length,
+              ],
+              [
+                "School vehicles",
+                items.filter((item) => getVehicleScope(item) === "school")
+                  .length,
+              ],
             ].map(([label, count]) => (
               <View key={String(label)} style={styles.vehicleCountCard}>
                 <Text style={styles.vehicleCountValue}>{String(count)}</Text>
@@ -1304,19 +2027,105 @@ export default function AdminToolScreen() {
         </TouchableOpacity>
       ) : null}
       {filteredItems.map((row) => {
+        const userAvatar =
+          tool === "users"
+            ? getText(
+                row,
+                "avatar",
+                "profiles.client.avatar",
+                "profiles.driver.avatar",
+                "profiles.owner.avatar",
+              )
+            : tool === "messages"
+              ? getText(row, "participant.avatar") ||
+                getText(asRow(row.participants?.[0]), "avatar")
+            : "";
+        const schoolName = tool === "users" ? getText(row, "school.name") : "";
+        const schoolLogo = tool === "users" ? getText(row, "school.logo") : "";
         const cardContent = (
           <View style={styles.dataCard}>
             <View style={styles.cardHeading}>
-              <View style={styles.recordIcon}>
-                <MaterialIcons
-                  name={tool === "vehicles" ? "directions-bus" : tool === "requests" ? "assignment" : tool === "payments" ? "payments" : tool === "live-map" ? "location-on" : "person-outline"}
-                  size={18}
-                  color="#2563EB"
-                />
-              </View>
+              {userAvatar && (tool === "users" || tool === "messages") ? (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${getTitle(row)} profile photo`}
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    setSelectedUserPhoto({
+                      uri: userAvatar,
+                      name: getTitle(row),
+                    })
+                  }
+                >
+                  <Image
+                    source={{ uri: userAvatar }}
+                    style={[
+                      styles.userAvatar,
+                      tool === "messages" && styles.messageParticipantAvatar,
+                    ]}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.recordIcon}>
+                  <MaterialIcons
+                    name={
+                      tool === "vehicles"
+                        ? "directions-bus"
+                        : tool === "requests"
+                          ? "assignment"
+                          : tool === "incidents"
+                            ? "warning"
+                            : tool === "payments"
+                              ? "payments"
+                              : tool === "live-map"
+                                ? "location-on"
+                                : "person-outline"
+                    }
+                    size={18}
+                    color="#2563EB"
+                  />
+                </View>
+              )}
               <View style={{ flex: 1 }}>
-                <Text style={styles.recordTitle}>{getTitle(row)}</Text>
-                <Text style={styles.recordSub} numberOfLines={4}>{formatDetails(row)}</Text>
+                <View style={styles.recordTitleRow}>
+                  <Text style={[styles.recordTitle, { flex: 1 }]}>
+                    {getTitle(row)}
+                  </Text>
+                  {(tool === "incidents" || row._kind === "incident") &&
+                  row.is_escalated === true ? (
+                    <View style={styles.escalatedBadge}>
+                      <MaterialIcons
+                        name="priority-high"
+                        size={11}
+                        color="#B91C1C"
+                      />
+                      <Text style={styles.escalatedBadgeText}>ESCALATED</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text
+                  style={styles.recordSub}
+                  numberOfLines={
+                    tool === "incidents" || row._kind === "incident" ? 8 : 4
+                  }
+                >
+                  {formatDetails(row)}
+                </Text>
+                {schoolName ? (
+                  <View style={styles.userSchoolRow}>
+                    {schoolLogo ? (
+                      <Image
+                        source={{ uri: schoolLogo }}
+                        style={styles.userSchoolLogo}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                    <Text style={styles.userSchoolName} numberOfLines={1}>
+                      {schoolName}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
               {tool === "vehicles" ? (
                 <View
@@ -1333,12 +2142,16 @@ export default function AdminToolScreen() {
                 </View>
               ) : null}
               {tool === "payments" && row._kind === "owner" ? (
-                <Text style={styles.moneyValue}>{formatMoney(row.owing_cents)}</Text>
+                <Text style={styles.moneyValue}>
+                  {formatMoney(row.owing_cents)}
+                </Text>
               ) : null}
             </View>
             {tool === "requests" && row._kind === "school" ? null : null}
             {tool === "vehicles" ? (
-              <Text style={styles.vehicleOpenHint}>Tap to view full vehicle details</Text>
+              <Text style={styles.vehicleOpenHint}>
+                Tap to view full vehicle details
+              </Text>
             ) : null}
             {renderActions(row)}
           </View>
@@ -1363,7 +2176,11 @@ export default function AdminToolScreen() {
       {!loading && filteredItems.length === 0 ? (
         <View style={styles.emptyCard}>
           <MaterialIcons name="inbox" size={32} color="#94A3B8" />
-          <Text style={styles.emptyText}>{query ? "No matching records." : "There is nothing to show here yet."}</Text>
+          <Text style={styles.emptyText}>
+            {query
+              ? "No matching records."
+              : "There is nothing to show here yet."}
+          </Text>
         </View>
       ) : null}
     </>
@@ -1372,27 +2189,72 @@ export default function AdminToolScreen() {
   const renderProfile = () => (
     <View style={styles.formCard}>
       <Text style={styles.fieldLabel}>Name</Text>
-      <TextInput style={styles.input} value={profileName} onChangeText={setProfileName} placeholder="Your name" />
+      <TextInput
+        style={styles.input}
+        value={profileName}
+        onChangeText={setProfileName}
+        placeholder="Your name"
+      />
       <Text style={styles.fieldLabel}>Email</Text>
-      <TextInput style={[styles.input, styles.disabledInput]} value={getText(profile, "email")} editable={false} />
+      <TextInput
+        style={[styles.input, styles.disabledInput]}
+        value={getText(profile, "email")}
+        editable={false}
+      />
       <Text style={styles.fieldLabel}>Phone</Text>
-      <TextInput style={styles.input} value={profilePhone} onChangeText={setProfilePhone} placeholder="Phone number" keyboardType="phone-pad" />
-      <TouchableOpacity style={styles.primaryButton} onPress={() => void saveProfile()} disabled={saving}>
-        <Text style={styles.primaryButtonText}>{saving ? "Saving..." : "Save profile"}</Text>
+      <TextInput
+        style={styles.input}
+        value={profilePhone}
+        onChangeText={setProfilePhone}
+        placeholder="Phone number"
+        keyboardType="phone-pad"
+      />
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => void saveProfile()}
+        disabled={saving}
+      >
+        <Text style={styles.primaryButtonText}>
+          {saving ? "Saving..." : "Save profile"}
+        </Text>
       </TouchableOpacity>
       <View style={styles.formDivider} />
       <Text style={styles.sectionHeading}>Change password</Text>
-      <TextInput style={styles.input} value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" secureTextEntry autoComplete="current-password" />
-      <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword} placeholder="New password (8+ characters)" secureTextEntry autoComplete="new-password" />
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => void changePassword()} disabled={saving}>
-        <Text style={styles.secondaryButtonText}>{saving ? "Updating..." : "Update password"}</Text>
+      <TextInput
+        style={styles.input}
+        value={currentPassword}
+        onChangeText={setCurrentPassword}
+        placeholder="Current password"
+        secureTextEntry
+        autoComplete="current-password"
+      />
+      <TextInput
+        style={styles.input}
+        value={newPassword}
+        onChangeText={setNewPassword}
+        placeholder="New password (8+ characters)"
+        secureTextEntry
+        autoComplete="new-password"
+      />
+      <TouchableOpacity
+        style={styles.secondaryButton}
+        onPress={() => void changePassword()}
+        disabled={saving}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {saving ? "Updating..." : "Update password"}
+        </Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderSettings = () => {
-    const permissionRows = Array.isArray(asRow(toolData.permissions)[admin?.admin_role || ""]) 
-      ? (asRow(toolData.permissions)[admin?.admin_role || ""] as unknown[]).filter((item): item is string => typeof item === "string")
+    const permissionRows = Array.isArray(
+      asRow(toolData.permissions)[admin?.admin_role || ""],
+    )
+      ? (
+          asRow(toolData.permissions)[admin?.admin_role || ""] as unknown[]
+        ).filter((item): item is string => typeof item === "string")
       : [];
     const alertKeys = [
       ["alerts.urgentTickets", "Urgent support tickets"],
@@ -1403,24 +2265,117 @@ export default function AdminToolScreen() {
       ["alerts.resolutionDeadlines", "Resolution deadlines"],
       ["escalation.enabled", "Automatic escalation"],
       ["escalation.escalateOnResponseBreach", "Escalate response SLA breaches"],
-      ["escalation.escalateOnResolutionBreach", "Escalate resolution SLA breaches"],
+      [
+        "escalation.escalateOnResolutionBreach",
+        "Escalate resolution SLA breaches",
+      ],
     ];
+    const checkedAt = getText(toolData, "health.checkedAt");
+    const checkedAtDate = checkedAt ? new Date(checkedAt) : null;
+    const checkedAtDisplay =
+      checkedAtDate && Number.isFinite(checkedAtDate.getTime())
+        ? new Intl.DateTimeFormat("en-ZA", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: "Africa/Johannesburg",
+          }).format(checkedAtDate)
+        : "Not recorded";
     return (
       <>
         <View style={styles.statusCard}>
-          <Text style={styles.sectionHeading}>Platform health</Text>
-          {Object.entries(asRow(toolData.health)).map(([key, value]) => (
-            <Text key={key} style={styles.recordSub}>{pretty(key)}: {String(value)}</Text>
-          ))}
-          <Text style={styles.recordSub}>Last updated: {getText(toolData, "updatedAt") || "Not recorded"}</Text>
+          <View style={styles.healthHeader}>
+            <View style={styles.healthIcon}>
+              <MaterialIcons
+                name="health-and-safety"
+                size={21}
+                color="#0F766E"
+              />
+            </View>
+            <View style={styles.healthHeadingCopy}>
+              <Text style={styles.sectionHeading}>Platform health</Text>
+              <Text style={styles.healthSubtitle}>
+                Live service status overview
+              </Text>
+            </View>
+            <View style={styles.healthLiveBadge}>
+              <View style={styles.healthLiveDot} />
+              <Text style={styles.healthLiveText}>MONITORING</Text>
+            </View>
+          </View>
+          <View style={styles.healthMetrics}>
+            {Object.entries(asRow(toolData.health)).length ? (
+              Object.entries(asRow(toolData.health)).map(([key, value]) => {
+                const normalizedValue = String(value).toLowerCase();
+                const isHealthy =
+                  value === true ||
+                  ["healthy", "ok", "up", "operational", "active"].includes(
+                    normalizedValue,
+                  );
+                const isUnhealthy =
+                  value === false ||
+                  ["unhealthy", "down", "failed", "error", "degraded"].includes(
+                    normalizedValue,
+                  );
+                const stateStyle = isHealthy
+                  ? styles.healthValueGood
+                  : isUnhealthy
+                    ? styles.healthValueBad
+                    : styles.healthValueNeutral;
+                return (
+                  <View key={key} style={styles.healthMetric}>
+                    <Text style={styles.healthMetricLabel}>{pretty(key)}</Text>
+                    <View style={styles.healthMetricValueRow}>
+                      <View
+                        style={[
+                          styles.healthMetricDot,
+                          isHealthy
+                            ? styles.healthMetricDotGood
+                            : isUnhealthy
+                              ? styles.healthMetricDotBad
+                              : styles.healthMetricDotNeutral,
+                        ]}
+                      />
+                      <Text style={[styles.healthMetricValue, stateStyle]}>
+                        {key === "checkedAt" ? checkedAtDisplay : String(value)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.healthEmpty}>
+                Health checks are not available yet.
+              </Text>
+            )}
+          </View>
+          <View style={styles.healthFooter}>
+            <MaterialIcons name="schedule" size={14} color="#64748B" />
+            <Text style={styles.healthUpdated}>Checked {checkedAtDisplay}</Text>
+          </View>
         </View>
         <View style={styles.formCard}>
-          <Text style={styles.sectionHeading}>Service-level targets (hours)</Text>
+          <Text style={styles.sectionHeading}>
+            Service-level targets (hours)
+          </Text>
           {[
-            ["ticketSlaHours", "Ticket priority", ["low", "medium", "high", "urgent"]],
-            ["incidentSlaHours", "Incident severity", ["low", "medium", "high", "critical"]],
+            [
+              "ticketSlaHours",
+              "Ticket priority",
+              ["low", "medium", "high", "urgent"],
+            ],
+            [
+              "incidentSlaHours",
+              "Incident severity",
+              ["low", "medium", "high", "critical"],
+            ],
           ].map(([sectionValue, label, levels]) => {
-            const section = sectionValue as "ticketSlaHours" | "incidentSlaHours";
+            const section = sectionValue as
+              | "ticketSlaHours"
+              | "incidentSlaHours";
             const levelList = levels as string[];
             return (
               <View key={section} style={styles.slaSection}>
@@ -1433,13 +2388,24 @@ export default function AdminToolScreen() {
                         <Text style={styles.helperText}>{pretty(target)}</Text>
                         <TextInput
                           style={styles.slaInput}
-                          value={String(getPath(settings, `${section}.${level}.${target}`) ?? "")}
+                          value={String(
+                            getPath(
+                              settings,
+                              `${section}.${level}.${target}`,
+                            ) ?? "",
+                          )}
                           onChangeText={(raw) => {
                             if (!isSuperAdmin || !raw.trim()) return;
                             const hours = Number(raw);
                             if (Number.isFinite(hours)) {
                               setSettings((current) =>
-                                updateSlaTarget(current, section, level, target, hours),
+                                updateSlaTarget(
+                                  current,
+                                  section,
+                                  level,
+                                  target,
+                                  hours,
+                                ),
                               );
                             }
                           }}
@@ -1456,9 +2422,15 @@ export default function AdminToolScreen() {
           <Text style={styles.fieldLabel}>Incident escalation threshold</Text>
           <View style={styles.pickerWrap}>
             <Picker
-              selectedValue={getText(settings, "escalation.incidentSeverityThreshold") || "high"}
+              selectedValue={
+                getText(settings, "escalation.incidentSeverityThreshold") ||
+                "high"
+              }
               onValueChange={(threshold) => {
-                const escalation = { ...asRow(settings.escalation), incidentSeverityThreshold: threshold };
+                const escalation = {
+                  ...asRow(settings.escalation),
+                  incidentSeverityThreshold: threshold,
+                };
                 setSettings((current) => ({ ...current, escalation }));
               }}
               enabled={isSuperAdmin}
@@ -1471,11 +2443,16 @@ export default function AdminToolScreen() {
           <Text style={styles.fieldLabel}>Alert window (hours)</Text>
           <TextInput
             style={styles.input}
-            value={String(getText(settings, "escalation.alertWindowHours") || "2")}
+            value={String(
+              getText(settings, "escalation.alertWindowHours") || "2",
+            )}
             onChangeText={(raw) => {
               const hours = Number(raw);
               if (!isSuperAdmin || !Number.isInteger(hours)) return;
-              const escalation = { ...asRow(settings.escalation), alertWindowHours: hours };
+              const escalation = {
+                ...asRow(settings.escalation),
+                alertWindowHours: hours,
+              };
               setSettings((current) => ({ ...current, escalation }));
             }}
             keyboardType="number-pad"
@@ -1487,24 +2464,40 @@ export default function AdminToolScreen() {
               <Text style={styles.switchLabel}>{label}</Text>
               <Switch
                 value={Boolean(getPath(settings, path))}
-                onValueChange={(enabled) => setSettings((current) => updateNestedBoolean(current, path, enabled))}
+                onValueChange={(enabled) =>
+                  setSettings((current) =>
+                    updateNestedBoolean(current, path, enabled),
+                  )
+                }
                 disabled={!isSuperAdmin}
                 trackColor={{ true: "#2563EB" }}
               />
             </View>
           ))}
           {isSuperAdmin ? (
-            <TouchableOpacity style={styles.primaryButton} onPress={() => void saveSettings()} disabled={saving}>
-              <Text style={styles.primaryButtonText}>{saving ? "Saving..." : "Save support settings"}</Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => void saveSettings()}
+              disabled={saving}
+            >
+              <Text style={styles.primaryButtonText}>
+                {saving ? "Saving..." : "Save support settings"}
+              </Text>
             </TouchableOpacity>
           ) : (
-            <Text style={styles.recordSub}>Only super admins can change support settings.</Text>
+            <Text style={styles.recordSub}>
+              Only super admins can change support settings.
+            </Text>
           )}
         </View>
         {permissionRows.length ? (
           <View style={styles.statusCard}>
             <Text style={styles.sectionHeading}>Your permissions</Text>
-            {permissionRows.map((permission) => <Text key={permission} style={styles.recordSub}>• {permission}</Text>)}
+            {permissionRows.map((permission) => (
+              <Text key={permission} style={styles.recordSub}>
+                • {permission}
+              </Text>
+            ))}
           </View>
         ) : null}
       </>
@@ -1523,7 +2516,9 @@ export default function AdminToolScreen() {
         ].map(([label, value, color]) => (
           <View key={String(label)} style={styles.metricCard}>
             <Text style={styles.metricLabel}>{String(label)}</Text>
-            <Text style={[styles.metricValue, { color: String(color) }]}>{formatMoney(value)}</Text>
+            <Text style={[styles.metricValue, { color: String(color) }]}>
+              {formatMoney(value)}
+            </Text>
           </View>
         ))}
       </View>
@@ -1555,7 +2550,10 @@ export default function AdminToolScreen() {
       getText(row, "driver.users.name", "driver.name") || "Not assigned";
     const details = [
       detailSection("Vehicle information", [
-        ["Vehicle type", scope === "school" ? "School vehicle" : "Fleet owner vehicle"],
+        [
+          "Vehicle type",
+          scope === "school" ? "School vehicle" : "Fleet owner vehicle",
+        ],
         ["Registration / plate", value("license_plate", "registration_number")],
         ["Make", value("make")],
         ["Model", value("model", "name")],
@@ -1576,20 +2574,32 @@ export default function AdminToolScreen() {
         ["Assigned driver", driverName],
         [
           "Driver status",
-          pretty(getText(row, "driver.status", "driver.role") || "Not recorded"),
+          pretty(
+            getText(row, "driver.status", "driver.role") || "Not recorded",
+          ),
         ],
         ["Driver phone", value("driver.phone")],
-        [scope === "school" ? "Assigned trip" : "Assigned route",
+        [
+          scope === "school" ? "Assigned trip" : "Assigned route",
           scope === "school"
             ? getText(row, "trip.name") || "No assigned trip"
-            : getText(row, "route.route_name") || "No assigned route"],
+            : getText(row, "route.route_name") || "No assigned route",
+        ],
         ...(scope === "fleet"
           ? [["Route coverage", routeDescription] as [string, string]]
           : []),
         ...(getText(row, "trip.destination")
-          ? [["Trip destination", getText(row, "trip.destination")] as [string, string]]
+          ? [
+              ["Trip destination", getText(row, "trip.destination")] as [
+                string,
+                string,
+              ],
+            ]
           : []),
-        ["Assigned students", capacity ? `${studentCount} / ${capacity}` : studentCount],
+        [
+          "Assigned students",
+          capacity ? `${studentCount} / ${capacity}` : studentCount,
+        ],
       ]),
       detailSection("Compliance & record dates", [
         ["License expiry", value("license_expiry")],
@@ -1623,7 +2633,8 @@ export default function AdminToolScreen() {
         ],
         [
           "Last location",
-          getText(row, "location.latitude") && getText(row, "location.longitude")
+          getText(row, "location.latitude") &&
+          getText(row, "location.longitude")
             ? `${getText(row, "location.latitude")}, ${getText(row, "location.longitude")}`
             : "Not available",
         ],
@@ -1673,30 +2684,37 @@ export default function AdminToolScreen() {
         {details}
         {tripAssignments.length ? (
           <View style={styles.vehicleDetailSection}>
-            <Text style={styles.vehicleDetailHeading}>School trip assignments</Text>
+            <Text style={styles.vehicleDetailHeading}>
+              School trip assignments
+            </Text>
             {tripAssignments.map((assignment) => {
               const assignmentTrip = asRow(assignment.trip);
               const assignmentDriver = asRow(assignment.driver);
               const coordinator = asRow(assignment.coordinator);
               return (
                 <View
-                  key={getText(assignment, "id") || getText(assignmentTrip, "id")}
+                  key={
+                    getText(assignment, "id") || getText(assignmentTrip, "id")
+                  }
                   style={styles.vehicleTripCard}
                 >
                   <Text style={styles.vehicleTripTitle}>
                     {getText(assignmentTrip, "name") || "School trip"}
                   </Text>
                   <Text style={styles.vehicleTripSub}>
-                    {getText(assignmentTrip, "destination") || "Destination not set"}
+                    {getText(assignmentTrip, "destination") ||
+                      "Destination not set"}
                     {getText(assignmentTrip, "status")
                       ? ` · ${pretty(getText(assignmentTrip, "status"))}`
                       : ""}
                   </Text>
                   <Text style={styles.vehicleTripSub}>
-                    Driver: {getText(assignmentDriver, "name") || "Not assigned"}
+                    Driver:{" "}
+                    {getText(assignmentDriver, "name") || "Not assigned"}
                   </Text>
                   <Text style={styles.vehicleTripSub}>
-                    Coordinator: {getText(coordinator, "name") || "Not assigned"}
+                    Coordinator:{" "}
+                    {getText(coordinator, "name") || "Not assigned"}
                   </Text>
                   <Text style={styles.vehicleTripSub}>
                     {getText(assignment, "studentCount") || "0"} students
@@ -1800,19 +2818,34 @@ export default function AdminToolScreen() {
   const title = toolTitles[tool] || "Admin tools";
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: colors.background }]}
+      edges={["top"]}
+    >
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadData(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void loadData(true)}
+          />
+        }
       >
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.kicker}>PLATFORM OPERATIONS</Text>
-            <Text style={[styles.title, { color: colors.text.primary }]}>{title}</Text>
-            <Text style={styles.subtitle}>Connected to the live Admin services.</Text>
+            <Text style={[styles.title, { color: colors.text.primary }]}>
+              {title}
+            </Text>
+            <Text style={styles.subtitle}>
+              Connected to the live Admin services.
+            </Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={() => void loadData(true)}>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={() => void loadData(true)}
+          >
             <MaterialIcons name="refresh" size={22} color="#2563EB" />
           </TouchableOpacity>
         </View>
@@ -1821,12 +2854,17 @@ export default function AdminToolScreen() {
           <View style={styles.errorCard}>
             <MaterialIcons name="error-outline" size={20} color="#B91C1C" />
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => void loadData(true)}><Text style={styles.retry}>Retry</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => void loadData(true)}>
+              <Text style={styles.retry}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
         {loading ? (
-          <View style={styles.loading}><ActivityIndicator size="large" color="#2563EB" /><Text style={styles.subtitle}>Loading {title.toLowerCase()}…</Text></View>
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color="#2563EB" />
+            <Text style={styles.subtitle}>Loading {title.toLowerCase()}…</Text>
+          </View>
         ) : tool === "profile" ? (
           renderProfile()
         ) : tool === "settings" ? (
@@ -1884,7 +2922,9 @@ export default function AdminToolScreen() {
                     : tripsRealtimeStatus === "connecting"
                       ? "Connecting to live updates…"
                       : "Live updates unavailable · syncing every 30 seconds"}
-                  {tripsCachedAt ? ` · Cached ${formatDate(tripsCachedAt)}` : ""}
+                  {tripsCachedAt
+                    ? ` · Cached ${formatDate(tripsCachedAt)}`
+                    : ""}
                 </Text>
               </View>
             ) : null}
@@ -1922,41 +2962,108 @@ export default function AdminToolScreen() {
               placeholder={`Search ${title.toLowerCase()}...`}
               returnKeyType="search"
             />
-            <Text style={styles.resultCount}>{filteredItems.length} records</Text>
+            <Text style={styles.resultCount}>
+              {filteredItems.length} records
+            </Text>
             {renderRows()}
           </>
         )}
       </ScrollView>
 
-      <Modal visible={modalOpen} transparent animationType="slide" onRequestClose={() => setModalOpen(false)}>
+      <Modal
+        visible={modalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalOpen(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{supportUserForm.id ? "Edit support user" : "Add support user"}</Text>
+            <Text style={styles.modalTitle}>
+              {supportUserForm.id ? "Edit support user" : "Add support user"}
+            </Text>
             <ScrollView keyboardShouldPersistTaps="handled">
               <Text style={styles.fieldLabel}>Name</Text>
-              <TextInput style={styles.input} value={supportUserForm.name} onChangeText={(name) => setSupportUserForm((form) => ({ ...form, name }))} />
+              <TextInput
+                style={styles.input}
+                value={supportUserForm.name}
+                onChangeText={(name) =>
+                  setSupportUserForm((form) => ({ ...form, name }))
+                }
+              />
               <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput style={styles.input} value={supportUserForm.email} onChangeText={(email) => setSupportUserForm((form) => ({ ...form, email }))} keyboardType="email-address" autoCapitalize="none" />
+              <TextInput
+                style={styles.input}
+                value={supportUserForm.email}
+                onChangeText={(email) =>
+                  setSupportUserForm((form) => ({ ...form, email }))
+                }
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
               <Text style={styles.fieldLabel}>Role</Text>
               <View style={styles.pickerWrap}>
-                <Picker selectedValue={supportUserForm.admin_role} onValueChange={(admin_role) => setSupportUserForm((form) => ({ ...form, admin_role }))}>
-                  {Object.entries(roleLabels).map(([value, label]) => <Picker.Item key={value} label={label} value={value} />)}
+                <Picker
+                  selectedValue={supportUserForm.admin_role}
+                  onValueChange={(admin_role) =>
+                    setSupportUserForm((form) => ({ ...form, admin_role }))
+                  }
+                >
+                  {Object.entries(roleLabels).map(([value, label]) => (
+                    <Picker.Item key={value} label={label} value={value} />
+                  ))}
                 </Picker>
               </View>
               {supportUserForm.id ? (
                 <View style={styles.switchRow}>
                   <Text style={styles.switchLabel}>Account active</Text>
-                  <Switch value={supportUserForm.is_active} onValueChange={(is_active) => setSupportUserForm((form) => ({ ...form, is_active }))} />
+                  <Switch
+                    value={supportUserForm.is_active}
+                    onValueChange={(is_active) =>
+                      setSupportUserForm((form) => ({ ...form, is_active }))
+                    }
+                  />
                 </View>
               ) : null}
-              <Text style={styles.fieldLabel}>{supportUserForm.id ? "Reset password (optional)" : "Temporary password"}</Text>
-              <TextInput style={styles.input} value={supportUserForm.temporary_password} onChangeText={(temporary_password) => setSupportUserForm((form) => ({ ...form, temporary_password }))} secureTextEntry autoComplete="new-password" />
-              <Text style={styles.helperText}>Temporary password must contain at least 12 characters.</Text>
+              <Text style={styles.fieldLabel}>
+                {supportUserForm.id
+                  ? "Reset password (optional)"
+                  : "Temporary password"}
+              </Text>
+              <TextInput
+                style={styles.input}
+                value={supportUserForm.temporary_password}
+                onChangeText={(temporary_password) =>
+                  setSupportUserForm((form) => ({
+                    ...form,
+                    temporary_password,
+                  }))
+                }
+                secureTextEntry
+                autoComplete="new-password"
+              />
+              <Text style={styles.helperText}>
+                Temporary password must contain at least 12 characters.
+              </Text>
             </ScrollView>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalOpen(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={() => void saveSupportUser()} disabled={saving}>
-                <Text style={styles.primaryButtonText}>{saving ? "Saving..." : supportUserForm.id ? "Save changes" : "Create user"}</Text>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setModalOpen(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => void saveSupportUser()}
+                disabled={saving}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {saving
+                    ? "Saving..."
+                    : supportUserForm.id
+                      ? "Save changes"
+                      : "Create user"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1973,7 +3080,11 @@ export default function AdminToolScreen() {
           <View style={styles.modalCard}>
             <View style={styles.vehicleModalHeader}>
               <View style={styles.vehicleModalIcon}>
-                <MaterialIcons name="directions-bus" size={23} color="#FFFFFF" />
+                <MaterialIcons
+                  name="directions-bus"
+                  size={23}
+                  color="#FFFFFF"
+                />
               </View>
               <View style={styles.vehicleModalTitleWrap}>
                 <Text style={styles.vehicleModalTitle}>
@@ -2035,6 +3146,32 @@ export default function AdminToolScreen() {
       </Modal>
 
       <Modal
+        visible={Boolean(selectedUserPhoto)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedUserPhoto(null)}
+      >
+        <View style={styles.photoModalBackdrop}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Close profile photo"
+            style={styles.photoModalClose}
+            onPress={() => setSelectedUserPhoto(null)}
+          >
+            <MaterialIcons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          {selectedUserPhoto ? (
+            <Image
+              source={{ uri: selectedUserPhoto.uri }}
+              style={styles.photoModalImage}
+              resizeMode="contain"
+              accessibilityLabel={`${selectedUserPhoto.name} profile photo`}
+            />
+          ) : null}
+        </View>
+      </Modal>
+
+      <Modal
         visible={Boolean(selectedDriver)}
         transparent
         animationType="slide"
@@ -2048,7 +3185,8 @@ export default function AdminToolScreen() {
               </View>
               <View style={styles.vehicleModalTitleWrap}>
                 <Text style={styles.vehicleModalTitle}>
-                  {getText(selectedDriver || {}, "users.name", "name") || "Driver"}
+                  {getText(selectedDriver || {}, "users.name", "name") ||
+                    "Driver"}
                 </Text>
                 <Text style={styles.vehicleModalSubtitle}>
                   {getText(selectedDriver || {}, "users.email") ||
@@ -2102,16 +3240,31 @@ export default function AdminToolScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{getText(selectedTicket || {}, "subject") || "Ticket replies"}</Text>
-            <ScrollView style={styles.repliesList} keyboardShouldPersistTaps="handled">
+            <Text style={styles.modalTitle}>
+              {getText(selectedTicket || {}, "subject") || "Ticket replies"}
+            </Text>
+            <ScrollView
+              style={styles.repliesList}
+              keyboardShouldPersistTaps="handled"
+            >
               {ticketReplies.map((reply) => (
                 <View key={getText(reply, "id")} style={styles.replyCard}>
-                  <Text style={styles.messageSender}>{getText(reply, "users.name") || "Support"}</Text>
-                  <Text style={styles.messageText}>{getText(reply, "body")}</Text>
-                  <Text style={styles.messageTime}>{getText(reply, "created_at") ? formatDate(getText(reply, "created_at")) : ""}</Text>
+                  <Text style={styles.messageSender}>
+                    {getText(reply, "users.name") || "Support"}
+                  </Text>
+                  <Text style={styles.messageText}>
+                    {getText(reply, "body")}
+                  </Text>
+                  <Text style={styles.messageTime}>
+                    {getText(reply, "created_at")
+                      ? formatDate(getText(reply, "created_at"))
+                      : ""}
+                  </Text>
                 </View>
               ))}
-              {!ticketReplies.length ? <Text style={styles.recordSub}>No replies yet.</Text> : null}
+              {!ticketReplies.length ? (
+                <Text style={styles.recordSub}>No replies yet.</Text>
+              ) : null}
             </ScrollView>
             {["super_admin", "support"].includes(admin?.admin_role || "") ? (
               <>
@@ -2122,14 +3275,139 @@ export default function AdminToolScreen() {
                   placeholder="Write a reply to the requester..."
                   multiline
                 />
-                <TouchableOpacity style={styles.primaryButton} onPress={() => void sendTicketReply()} disabled={saving || !replyDraft.trim()}>
-                  <Text style={styles.primaryButtonText}>{saving ? "Sending..." : "Send reply"}</Text>
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => void sendTicketReply()}
+                  disabled={saving || !replyDraft.trim()}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {saving ? "Sending..." : "Send reply"}
+                  </Text>
                 </TouchableOpacity>
               </>
             ) : null}
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setSelectedTicket(null)}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setSelectedTicket(null)}
+            >
               <Text style={styles.cancelText}>Close</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(selectedIncident)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedIncident(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {getText(selectedIncident || {}, "incident_type")
+                ? pretty(getText(selectedIncident || {}, "incident_type"))
+                : "Incident responses"}
+            </Text>
+            <Text style={styles.recordSub}>
+              {getText(selectedIncident || {}, "recipient_type") === "support"
+                ? "Sent to Support and visible to the related school. Only Support can respond."
+                : "Sent to the related school. The school and Support can respond."}
+            </Text>
+            {getText(selectedIncident || {}, "status") === "resolved" ? (
+              <Text style={styles.recordSub}>Status: Closed</Text>
+            ) : null}
+            <ScrollView
+              style={styles.repliesList}
+              keyboardShouldPersistTaps="handled"
+            >
+              {incidentReplies.map((reply) => (
+                <View key={getText(reply, "id")} style={styles.replyCard}>
+                  <Text style={styles.messageSender}>
+                    {getText(reply, "users.name") || "Incident team"}
+                  </Text>
+                  <Text style={styles.messageText}>{getText(reply, "body")}</Text>
+                  <Text style={styles.messageTime}>
+                    {getText(reply, "created_at")
+                      ? formatDate(getText(reply, "created_at"))
+                      : ""}
+                  </Text>
+                </View>
+              ))}
+              {!incidentReplies.length ? (
+                <Text style={styles.recordSub}>No responses yet.</Text>
+              ) : null}
+            </ScrollView>
+            {["super_admin", "support"].includes(admin?.admin_role || "") &&
+            getText(selectedIncident || {}, "status") !== "resolved" ? (
+              <>
+                <TextInput
+                  style={[styles.input, styles.replyInput]}
+                  value={incidentReplyDraft}
+                  onChangeText={setIncidentReplyDraft}
+                  placeholder="Write a response to the reporter..."
+                  multiline
+                  maxLength={3000}
+                />
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => void sendIncidentReply()}
+                  disabled={saving || !incidentReplyDraft.trim()}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {saving ? "Sending..." : "Send response"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setSelectedIncident(null)}
+            >
+              <Text style={styles.cancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={incidentEscalationOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIncidentEscalationOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Escalate incident</Text>
+            <Text style={styles.recordSub}>
+              {getTitle(selectedIncidentToEscalate || {})}
+            </Text>
+            <Text style={styles.fieldLabel}>Reason for escalation</Text>
+            <TextInput
+              style={[styles.input, styles.replyInput]}
+              value={incidentEscalationNote}
+              onChangeText={setIncidentEscalationNote}
+              placeholder="Explain why this needs higher-priority attention..."
+              multiline
+              maxLength={2000}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIncidentEscalationOpen(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.escalateButton}
+                onPress={() => void escalateIncident()}
+                disabled={saving || !incidentEscalationNote.trim()}
+              >
+                <Text style={styles.escalateButtonText}>
+                  {saving ? "Escalating..." : "Escalate"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -2141,120 +3419,661 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { padding: 18, paddingBottom: 36, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
-  kicker: { color: "#2563EB", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
+  kicker: {
+    color: "#2563EB",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
   title: { fontSize: 24, fontWeight: "900", marginTop: 3 },
   subtitle: { color: "#64748B", fontSize: 11, marginTop: 4 },
-  refreshButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" },
+  refreshButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   loading: { alignItems: "center", paddingVertical: 42, gap: 10 },
-  errorCard: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FEF2F2", borderRadius: 12, padding: 12 },
+  errorCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 12,
+    padding: 12,
+  },
   errorText: { color: "#991B1B", fontSize: 11, flex: 1 },
   retry: { color: "#2563EB", fontSize: 11, fontWeight: "800" },
-  search: { backgroundColor: "white", borderColor: "#E2E8F0", borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11, fontSize: 12, color: "#0F172A" },
+  search: {
+    backgroundColor: "white",
+    borderColor: "#E2E8F0",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 12,
+    color: "#0F172A",
+  },
   resultCount: { color: "#64748B", fontSize: 10, fontWeight: "700" },
-  dataCard: { backgroundColor: "white", borderColor: "#E2E8F0", borderWidth: 1, borderRadius: 14, padding: 13, gap: 9 },
+  dataCard: {
+    backgroundColor: "white",
+    borderColor: "#E2E8F0",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    gap: 9,
+  },
   cardHeading: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  recordIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#EFF6FF", alignItems: "center", justifyContent: "center" },
+  recordIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#DBEAFE",
+  },
+  photoModalBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.94)",
+  },
+  photoModalClose: {
+    position: "absolute",
+    top: 48,
+    right: 20,
+    zIndex: 1,
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+  },
+  photoModalImage: {
+    width: "100%",
+    height: "80%",
+  },
+  userSchoolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 5,
+  },
+  userSchoolLogo: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    backgroundColor: "#E2E8F0",
+  },
+  userSchoolName: { color: "#475569", fontSize: 10, fontWeight: "700" },
   recordTitle: { color: "#1E293B", fontSize: 12, fontWeight: "800" },
   recordSub: { color: "#64748B", fontSize: 10, lineHeight: 15, marginTop: 3 },
-  actionButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, backgroundColor: "#EFF6FF" },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 9,
+    backgroundColor: "#EFF6FF",
+  },
   actionText: { color: "#1D4ED8", fontSize: 10, fontWeight: "800" },
   inlineActions: { flexDirection: "row", gap: 8 },
-  emptyCard: { alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "white", borderRadius: 14, borderWidth: 1, borderColor: "#E2E8F0", padding: 28 },
+  escalateButton: {
+    borderRadius: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    backgroundColor: "#B91C1C",
+  },
+  escalateButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  emptyCard: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "white",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 28,
+  },
   emptyText: { color: "#64748B", fontSize: 11, textAlign: "center" },
   metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
-  metricCard: { flexBasis: "47%", flexGrow: 1, minHeight: 74, backgroundColor: "white", borderColor: "#E2E8F0", borderWidth: 1, borderRadius: 13, padding: 11, justifyContent: "center" },
+  metricCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minHeight: 74,
+    backgroundColor: "white",
+    borderColor: "#E2E8F0",
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 11,
+    justifyContent: "center",
+  },
   metricLabel: { color: "#64748B", fontSize: 10, fontWeight: "700" },
-  metricValue: { color: "#0F172A", fontSize: 14, fontWeight: "900", marginTop: 4 },
+  metricValue: {
+    color: "#0F172A",
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 4,
+  },
   driversSyncStatus: { flexDirection: "row", alignItems: "center", gap: 7 },
   driversSyncDot: { width: 7, height: 7, borderRadius: 4 },
   driversSyncText: { color: "#64748B", fontSize: 9, flex: 1 },
   moneyValue: { color: "#B91C1C", fontSize: 11, fontWeight: "900" },
   filterRow: { flexDirection: "row", gap: 7, flexWrap: "wrap" },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: "#F1F5F9" },
+  messageFilterRow: { flexDirection: "row", gap: 7, paddingRight: 16 },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+  },
   filterChipActive: { backgroundColor: "#DBEAFE" },
   filterText: { color: "#475569", fontSize: 10, fontWeight: "700" },
   filterTextActive: { color: "#1D4ED8" },
-  unreadFilter: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 10, backgroundColor: "#F1F5F9" },
+  escalatedFilterActive: { backgroundColor: "#FEE2E2" },
+  escalatedFilterText: { color: "#B91C1C" },
+  incidentAssignee: { width: "100%", gap: 4 },
+  incidentAssigneeLabel: { color: "#475569", fontSize: 9, fontWeight: "800" },
+  escalatedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: "#FEE2E2",
+  },
+  escalatedBadgeText: { color: "#B91C1C", fontSize: 7, fontWeight: "900" },
+  recordTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  unreadFilter: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+  },
   unreadFilterActive: { backgroundColor: "#DBEAFE" },
   vehicleCounts: { flexDirection: "row", gap: 9 },
-  vehicleCountCard: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E2E8F0" },
+  vehicleCountCard: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
   vehicleCountValue: { color: "#0F172A", fontSize: 16, fontWeight: "900" },
-  vehicleCountLabel: { color: "#64748B", fontSize: 9, fontWeight: "700", marginTop: 2 },
-  vehicleTypeBadge: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 8, alignSelf: "flex-start" },
+  vehicleCountLabel: {
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  vehicleTypeBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
   fleetVehicleBadge: { backgroundColor: "#DBEAFE" },
   schoolVehicleBadge: { backgroundColor: "#F3E8FF" },
   vehicleTypeBadgeText: { color: "#1D4ED8", fontSize: 8, fontWeight: "900" },
   vehicleOpenHint: { color: "#2563EB", fontSize: 9, fontWeight: "800" },
-  primaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, backgroundColor: "#2563EB", borderRadius: 11, paddingHorizontal: 13, paddingVertical: 11, marginTop: 6 },
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#2563EB",
+    borderRadius: 11,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    marginTop: 6,
+  },
   primaryButtonText: { color: "white", fontSize: 11, fontWeight: "800" },
-  secondaryButton: { alignItems: "center", borderColor: "#CBD5E1", borderWidth: 1, borderRadius: 11, padding: 11, marginTop: 3 },
+  secondaryButton: {
+    alignItems: "center",
+    borderColor: "#CBD5E1",
+    borderWidth: 1,
+    borderRadius: 11,
+    padding: 11,
+    marginTop: 3,
+  },
   secondaryButtonText: { color: "#334155", fontSize: 11, fontWeight: "800" },
-  formCard: { backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 14, padding: 14, gap: 9 },
-  fieldLabel: { color: "#334155", fontSize: 10, fontWeight: "800", marginTop: 4 },
-  input: { borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "white", borderRadius: 10, paddingHorizontal: 11, paddingVertical: 10, color: "#0F172A", fontSize: 12 },
+  formCard: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 14,
+    gap: 9,
+  },
+  fieldLabel: {
+    color: "#334155",
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "white",
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    color: "#0F172A",
+    fontSize: 12,
+  },
   disabledInput: { backgroundColor: "#F8FAFC", color: "#64748B" },
   formDivider: { height: 1, backgroundColor: "#E2E8F0", marginVertical: 6 },
   sectionHeading: { color: "#1E293B", fontSize: 13, fontWeight: "800" },
-  statusCard: { backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 14, padding: 14, gap: 7 },
-  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingVertical: 8 },
+  statusCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE7F2",
+    borderRadius: 18,
+    padding: 16,
+    gap: 14,
+    shadowColor: "#17365E",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  healthHeader: { flexDirection: "row", alignItems: "center", gap: 11 },
+  healthIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: "#E6F6F3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  healthHeadingCopy: { flex: 1, gap: 3 },
+  healthSubtitle: { color: "#64748B", fontSize: 11 },
+  healthLiveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  healthLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+  },
+  healthLiveText: {
+    color: "#047857",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  healthMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
+  healthMetric: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minWidth: 125,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E8EEF5",
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    gap: 7,
+  },
+  healthMetricLabel: { color: "#64748B", fontSize: 10, fontWeight: "600" },
+  healthMetricValueRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  healthMetricDot: { width: 7, height: 7, borderRadius: 4 },
+  healthMetricDotGood: { backgroundColor: "#10B981" },
+  healthMetricDotBad: { backgroundColor: "#EF4444" },
+  healthMetricDotNeutral: { backgroundColor: "#94A3B8" },
+  healthMetricValue: { fontSize: 13, fontWeight: "800" },
+  healthValueGood: { color: "#047857" },
+  healthValueBad: { color: "#B91C1C" },
+  healthValueNeutral: { color: "#334155" },
+  healthEmpty: {
+    color: "#64748B",
+    fontSize: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 12,
+    width: "100%",
+  },
+  healthFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#EEF2F7",
+    paddingTop: 11,
+  },
+  healthUpdated: { color: "#64748B", fontSize: 10 },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingVertical: 8,
+  },
   switchLabel: { color: "#334155", fontSize: 11, flex: 1 },
-  chatHeader: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "white", borderRadius: 12, padding: 10 },
+  chatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 10,
+  },
   backButton: { padding: 4 },
   chatTitle: { color: "#1E293B", fontSize: 13, fontWeight: "800" },
+  readOnlyNotice: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    color: "#35516B",
+    fontSize: 10,
+    fontWeight: "600",
+  },
   messageBubble: { maxWidth: "88%", padding: 11, borderRadius: 13, gap: 4 },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    alignSelf: "flex-start",
+    gap: 7,
+  },
+  ownMessageRow: { alignSelf: "flex-end" },
+  messageBubbleAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginBottom: 2,
+    backgroundColor: "#DBEAFE",
+  },
   ownMessage: { alignSelf: "flex-end", backgroundColor: "#DBEAFE" },
-  otherMessage: { alignSelf: "flex-start", backgroundColor: "white", borderWidth: 1, borderColor: "#E2E8F0" },
+  otherMessage: {
+    alignSelf: "flex-start",
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
   messageSender: { color: "#475569", fontSize: 9, fontWeight: "800" },
   messageText: { color: "#0F172A", fontSize: 12, lineHeight: 17 },
   messageTime: { color: "#64748B", fontSize: 8 },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, backgroundColor: "white", borderRadius: 13, padding: 7, borderWidth: 1, borderColor: "#E2E8F0" },
-  composerInput: { flex: 1, color: "#0F172A", fontSize: 12, maxHeight: 100, paddingHorizontal: 6, paddingVertical: 7 },
-  sendButton: { width: 36, height: 36, backgroundColor: "#2563EB", borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  detailRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  composer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    backgroundColor: "white",
+    borderRadius: 13,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  composerInput: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 12,
+    maxHeight: 100,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+  },
+  sendButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: "#2563EB",
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
   detailLabel: { color: "#64748B", fontSize: 10, fontWeight: "600", flex: 0.9 },
-  detailValue: { color: "#0F172A", fontSize: 10, fontWeight: "700", flex: 1.1, textAlign: "right" },
+  detailValue: {
+    color: "#0F172A",
+    fontSize: 10,
+    fontWeight: "700",
+    flex: 1.1,
+    textAlign: "right",
+  },
   vehicleDetailsContent: { gap: 10 },
-  driverProfileHeader: { flexDirection: "row", alignItems: "center", gap: 11, borderRadius: 13, borderWidth: 1, borderColor: "#DBEAFE", backgroundColor: "#EFF6FF", padding: 12 },
-  driverAvatar: { width: 52, height: 52, borderRadius: 17, backgroundColor: "#DBEAFE" },
-  driverAvatarFallback: { width: 52, height: 52, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#DBEAFE" },
-  vehicleDetailSection: { borderRadius: 13, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 10 },
-  vehicleDetailHeading: { color: "#1E293B", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginBottom: 4 },
-  vehicleTripCard: { backgroundColor: "#F8FAFC", borderRadius: 10, borderWidth: 1, borderColor: "#E2E8F0", padding: 10, marginTop: 8, gap: 4 },
+  driverProfileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    backgroundColor: "#EFF6FF",
+    padding: 12,
+  },
+  messageParticipantAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DBEAFE",
+  },
+  messageParticipantAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  driverAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: "#DBEAFE",
+  },
+  driverAvatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DBEAFE",
+  },
+  vehicleDetailSection: {
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  vehicleDetailHeading: {
+    color: "#1E293B",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  vehicleTripCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    marginTop: 8,
+    gap: 4,
+  },
   vehicleTripTitle: { color: "#1E293B", fontSize: 11, fontWeight: "800" },
   vehicleTripSub: { color: "#64748B", fontSize: 9, lineHeight: 14 },
   vehiclePhotoGallery: { gap: 9, paddingTop: 5, paddingBottom: 2 },
-  vehiclePhoto: { width: 220, height: 140, borderRadius: 11, backgroundColor: "#E2E8F0" },
-  vehiclePhotoFallback: { width: 220, height: 140, borderRadius: 11, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#F1F5F9" },
-  vehiclePhotoEmpty: { minHeight: 110, borderRadius: 11, alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#F1F5F9" },
-  vehiclePhotoFallbackText: { color: "#64748B", fontSize: 9, fontWeight: "600" },
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.45)", justifyContent: "center", padding: 18 },
-  modalCard: { backgroundColor: "#F8FAFC", borderRadius: 20, padding: 14, maxHeight: "92%", width: "100%", alignSelf: "center" },
-  modalTitle: { color: "#1E293B", fontSize: 16, fontWeight: "900", marginBottom: 10 },
-  vehicleModalHeader: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 15, padding: 12, backgroundColor: "#EFF6FF" },
-  vehicleModalIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#2563EB" },
+  vehiclePhoto: {
+    width: 220,
+    height: 140,
+    borderRadius: 11,
+    backgroundColor: "#E2E8F0",
+  },
+  vehiclePhotoFallback: {
+    width: 220,
+    height: 140,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  vehiclePhotoEmpty: {
+    minHeight: 110,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  vehiclePhotoFallbackText: {
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    justifyContent: "center",
+    padding: 18,
+  },
+  modalCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 20,
+    padding: 14,
+    maxHeight: "92%",
+    width: "100%",
+    alignSelf: "center",
+  },
+  modalTitle: {
+    color: "#1E293B",
+    fontSize: 16,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  vehicleModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 15,
+    padding: 12,
+    backgroundColor: "#EFF6FF",
+  },
+  vehicleModalIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2563EB",
+  },
   vehicleModalTitleWrap: { flex: 1 },
   vehicleModalTitle: { color: "#0F172A", fontSize: 15, fontWeight: "900" },
-  vehicleModalSubtitle: { color: "#64748B", fontSize: 10, fontWeight: "600", marginTop: 3 },
-  vehicleModalClose: { width: 32, height: 32, borderRadius: 10, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  vehicleModalBadges: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10 },
-  vehicleScopeBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  vehicleModalSubtitle: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 3,
+  },
+  vehicleModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  vehicleModalBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+  },
+  vehicleScopeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
   vehicleScopeBadgeText: { color: "#1D4ED8", fontSize: 8, fontWeight: "900" },
   vehicleModalStatus: { color: "#475569", fontSize: 9, fontWeight: "800" },
   vehicleDetailsScroll: { flexShrink: 1 },
   vehicleDetailsScrollContent: { gap: 10, paddingBottom: 4 },
-  vehicleModalCloseButton: { backgroundColor: "#2563EB", borderRadius: 11, paddingHorizontal: 15, paddingVertical: 10 },
+  vehicleModalCloseButton: {
+    backgroundColor: "#2563EB",
+    borderRadius: 11,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
   vehicleModalCloseText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
-  pickerWrap: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, overflow: "hidden" },
+  pickerWrap: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
   slaSection: { gap: 5, marginTop: 6 },
   slaRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   slaLevel: { color: "#334155", fontSize: 10, fontWeight: "700", width: 66 },
   slaInputGroup: { flex: 1, gap: 3 },
-  slaInput: { borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "white", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7, color: "#0F172A", fontSize: 11 },
+  slaInput: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "white",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    color: "#0F172A",
+    fontSize: 11,
+  },
   helperText: { color: "#64748B", fontSize: 9 },
   repliesList: { maxHeight: 340, marginBottom: 8 },
-  replyCard: { backgroundColor: "#F8FAFC", borderRadius: 10, padding: 10, marginBottom: 8 },
+  replyCard: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
   replyInput: { minHeight: 72, textAlignVertical: "top" },
-  modalActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 9, marginTop: 10 },
-  cancelButton: { borderRadius: 10, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: "#F1F5F9" },
+  modalActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 9,
+    marginTop: 10,
+  },
+  cancelButton: {
+    borderRadius: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    backgroundColor: "#F1F5F9",
+  },
   cancelText: { color: "#475569", fontSize: 11, fontWeight: "800" },
 });

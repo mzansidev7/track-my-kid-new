@@ -30,40 +30,88 @@ const formatCurrency = (cents = 0, currency = "zar") =>
     currency: currency.toUpperCase(),
   }).format(cents / 100);
 
-const PaymentHistory = ({ payments }: { payments: any[] }) => (
+const PaymentHistory = ({
+  payments,
+  onPayCashServiceFee,
+  payingPaymentId,
+}: {
+  payments: any[];
+  onPayCashServiceFee: (paymentId: string) => void;
+  payingPaymentId: string | null;
+}) => (
   <View style={styles.historyCard}>
     <Text style={styles.historyTitle}>Payment history</Text>
     {payments.length === 0 ? (
       <Text style={styles.historyEmpty}>No payments recorded yet.</Text>
     ) : (
       payments.map((payment) => (
-        <View key={payment.id} style={styles.historyRow}>
-          <View style={styles.historyCopy}>
-            <Text style={styles.historyStatus}>
-              {payment.payment_method === "cash" && payment.status === "pending"
-                ? "Cash payment awaiting owner confirmation"
-                : payment.status === "paid"
-                ? "Payment successful"
-                : payment.status === "failed"
-                  ? "Payment failed"
-                  : payment.status === "cancelled"
-                    ? "Payment cancelled"
-                    : "Payment pending"}
-            </Text>
-            <Text style={styles.historyDetails}>
-              {payment.payment_method === "cash" ? "Cash • " : "Card • "}
-              {payment.owners?.company_name ||
-                payment.owners?.users?.name ||
-                "Owner unavailable"}{" "}
-              • {payment.vehicles?.name || "Vehicle not recorded"} •{" "}
-              {payment.children_count} child(ren) •{" "}
-              {new Date(payment.created_at).toLocaleDateString("en-ZA")}
-            </Text>
-          </View>
-          <Text style={styles.historyAmount}>
-            {formatCurrency(payment.amount_cents, payment.currency)}
-          </Text>
-        </View>
+        (() => {
+          const fee = Array.isArray(payment.client_cash_service_fees)
+            ? payment.client_cash_service_fees[0]
+            : payment.client_cash_service_fees;
+          const needsFeePayment =
+            payment.payment_method === "cash" &&
+            payment.status === "pending" &&
+            fee?.status !== "paid" &&
+            fee?.status !== "waived";
+          const feeWasWaived =
+            fee?.status === "waived" ||
+            (payment.platform_fee_status === "waived" &&
+              Number(payment.platform_fee_cents) === 0);
+          return (
+            <View key={payment.id} style={styles.historyRow}>
+              <View style={styles.historyCopy}>
+                <Text style={styles.historyStatus}>
+                  {needsFeePayment
+                    ? "Cash reported — service fee payment required"
+                    : payment.payment_method === "cash" &&
+                        payment.status === "pending"
+                      ? "Cash payment awaiting owner confirmation"
+                      : payment.status === "paid"
+                        ? "Payment successful"
+                        : payment.status === "failed"
+                          ? "Payment failed"
+                          : payment.status === "cancelled"
+                            ? "Payment cancelled"
+                            : "Payment pending"}
+                </Text>
+                <Text style={styles.historyDetails}>
+                  {payment.payment_method === "cash" ? "Cash • " : "Card • "}
+                  {payment.owners?.company_name ||
+                    payment.owners?.users?.name ||
+                    "Owner unavailable"}{" "}
+                  • {payment.vehicles?.name || "Vehicle not recorded"} •{" "}
+                  {payment.children_count} child(ren) •{" "}
+                  {new Date(payment.created_at).toLocaleDateString("en-ZA")}
+                  {feeWasWaived
+                    ? " • Track My Kid service fee waived"
+                    : fee?.amount_cents || payment.platform_fee_cents
+                      ? ` • Service fee ${formatCurrency(
+                          fee?.amount_cents ?? payment.platform_fee_cents,
+                          payment.currency,
+                        )} (${fee?.status || payment.platform_fee_status})`
+                      : ""}
+                </Text>
+                {needsFeePayment && (
+                  <TouchableOpacity
+                    style={styles.resumeFeeButton}
+                    onPress={() => onPayCashServiceFee(payment.id)}
+                    disabled={payingPaymentId !== null}
+                  >
+                    <Text style={styles.resumeFeeText}>
+                      {payingPaymentId === payment.id
+                        ? "Opening checkout..."
+                        : `Pay ${formatCurrency(fee?.amount_cents ?? (payment.children_count || 0) * 500, payment.currency)} service fee`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.historyAmount}>
+                {formatCurrency(payment.amount_cents, payment.currency)}
+              </Text>
+            </View>
+          );
+        })()
       ))
     )}
   </View>
@@ -72,6 +120,7 @@ const PaymentHistory = ({ payments }: { payments: any[] }) => (
 const ClientPayments = () => {
   const router = useRouter();
   const { user } = useContext(AuthContext);
+  const token = user?.token;
   const [summary, setSummary] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,10 +130,13 @@ const ClientPayments = () => {
   const [reportingCashGroupId, setReportingCashGroupId] = useState<
     string | null
   >(null);
+  const [payingCashFeePaymentId, setPayingCashFeePaymentId] = useState<
+    string | null
+  >(null);
 
   const loadSummary = useCallback(
     async (isRefresh = false) => {
-      if (!user?.token) {
+      if (!token) {
         setError("Your session has expired. Please log in again.");
         setLoading(false);
         return;
@@ -97,10 +149,10 @@ const ClientPayments = () => {
         const baseUrl = await resolveWorkingBaseUrl();
         const [summaryResponse, historyResponse] = await Promise.all([
           fetch(`${baseUrl}/client/payments/summary`, {
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${baseUrl}/client/payments/history`, {
-            headers: { Authorization: `Bearer ${user.token}` },
+            headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
         const data = await summaryResponse.json();
@@ -134,7 +186,7 @@ const ClientPayments = () => {
         setRefreshing(false);
       }
     },
-    [user?.token],
+    [token],
   );
 
   React.useEffect(() => {
@@ -239,16 +291,20 @@ const ClientPayments = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${user.token}`,
         },
-        body: JSON.stringify({ group_id: groupId }),
+        body: JSON.stringify({
+          group_id: groupId,
+          return_url: ExpoLinking.createURL("pages/payments"),
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Unable to report cash payment.");
       }
+      if (data.checkout_url) await Linking.openURL(data.checkout_url);
       await loadSummary(true);
       Alert.alert(
         "Cash payment reported",
-        "Your fleet owner must confirm they received the cash. Tracking remains available while they confirm.",
+        "Pay the R5-per-child service fee online. Once it succeeds, your fleet owner can confirm the cash fare you paid them.",
       );
     } catch (reportError) {
       Alert.alert(
@@ -261,6 +317,45 @@ const ClientPayments = () => {
       setReportingCashGroupId(null);
     }
   };
+
+  const payCashServiceFee = async (paymentId: string) => {
+    if (!user?.token || payingCashFeePaymentId) return;
+    setPayingCashFeePaymentId(paymentId);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/client/payments/${paymentId}/cash-service-fee-checkout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.token}`,
+          },
+          body: JSON.stringify({
+            return_url: ExpoLinking.createURL("pages/payments"),
+          }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok || !data.checkout_url) {
+        throw new Error(data.error || "Unable to start service-fee payment.");
+      }
+      await Linking.openURL(data.checkout_url);
+    } catch (paymentError) {
+      Alert.alert(
+        "Unable to start service-fee payment",
+        paymentError instanceof Error
+          ? paymentError.message
+          : "Please try again.",
+      );
+    } finally {
+      setPayingCashFeePaymentId(null);
+    }
+  };
+
+  const hasRouteLinkedChildren =
+    Number(summary?.route_linked_children_count || 0) > 0;
+  const hasChildren = Number(summary?.client_children_count || 0) > 0;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -301,61 +396,121 @@ const ClientPayments = () => {
             >
               <Text style={styles.retryText}>Try again</Text>
             </TouchableOpacity>
-            {history.length > 0 && <PaymentHistory payments={history} />}
+            {history.length > 0 && (
+              <PaymentHistory
+                payments={history}
+                onPayCashServiceFee={payCashServiceFee}
+                payingPaymentId={payingCashFeePaymentId}
+              />
+            )}
           </View>
         ) : (
           <>
-            <View style={styles.summaryCard}>
-              <View style={styles.paymentIcon}>
-                <MaterialIcons name="payments" size={28} color="#159B3A" />
-              </View>
-              <Text style={styles.cardTitle}>Current transport amount</Text>
-              <Text style={styles.amount}>
-                {formatCurrency(summary?.total_amount_cents, summary?.currency)}
-              </Text>
-              <Text style={styles.mutedText}>
-                Based on {summary?.children_count || 0} linked child(ren)
-              </Text>
-            </View>
-
-            <View style={styles.detailCard}>
-              <Row
-                label="Children covered"
-                value={String(summary?.children_count || 0)}
-              />
-              <Row
-                label="Payment status"
-                value={
-                  summary?.total_amount_cents
-                    ? "Payment required"
-                    : summary?.pending_child_names?.length
-                      ? "Payment processing"
-                      : "All children paid"
-                }
-              />
-              <Row
-                label="Pay by"
-                value={summary?.payment_due_at || "5th of the month"}
-              />
-            </View>
-
-            {!!summary?.unpaid_child_names?.length && (
-              <View style={styles.paymentNotice}>
-                <MaterialIcons name="info-outline" size={20} color="#92400E" />
-                <Text style={styles.paymentNoticeText}>
-                  Payment is required for:{" "}
-                  {summary.unpaid_child_names.join(", ")}.
+            {hasRouteLinkedChildren && summary?.service_fee_trial && (
+              <View style={styles.trialNotice}>
+                <MaterialIcons
+                  name="card-giftcard"
+                  size={21}
+                  color="#087C2B"
+                />
+                <Text style={styles.trialNoticeText}>
+                  {summary.service_fee_trial.starts_after_first_payment
+                    ? "Your first two months of the R5-per-child Track My Kid service fee are free. The offer period starts when your first transport payment succeeds."
+                    : summary.service_fee_trial.is_free
+                      ? `Your R5-per-child service fee is free until ${new Date(
+                          summary.service_fee_trial.expires_at,
+                        ).toLocaleDateString("en-ZA")}.`
+                      : summary.service_fee_trial.expires_at
+                        ? `Your two-month service-fee offer ended on ${new Date(
+                            summary.service_fee_trial.expires_at,
+                          ).toLocaleDateString("en-ZA")}. The standard R5-per-child fee now applies.`
+                        : "Your two-month service-fee offer has ended. The standard R5-per-child fee now applies."}
                 </Text>
               </View>
             )}
 
-            {!!summary?.pending_child_names?.length && (
+            {hasRouteLinkedChildren ? (
+              <>
+                <View style={styles.summaryCard}>
+                  <View style={styles.paymentIcon}>
+                    <MaterialIcons name="payments" size={28} color="#159B3A" />
+                  </View>
+                  <Text style={styles.cardTitle}>
+                    Current transport amount (before service fees)
+                  </Text>
+                  <Text style={styles.amount}>
+                    {formatCurrency(
+                      summary?.total_amount_cents,
+                      summary?.currency,
+                    )}
+                  </Text>
+                  <Text style={styles.mutedText}>
+                    Based on {summary?.children_count || 0} child(ren) currently
+                    requiring payment
+                  </Text>
+                </View>
+
+                <View style={styles.detailCard}>
+                  <Row
+                    label="Children covered"
+                    value={String(summary?.route_linked_children_count || 0)}
+                  />
+                  <Row
+                    label="Payment status"
+                    value={
+                      summary?.unpaid_child_names?.length
+                        ? "Payment required"
+                        : summary?.pending_child_names?.length
+                          ? "Payment processing"
+                          : "All children paid"
+                    }
+                  />
+                  <Row
+                    label="Pay by"
+                    value={summary?.payment_due_at || "5th of the month"}
+                  />
+                </View>
+
+                {!!summary?.unpaid_child_names?.length && (
+                  <View style={styles.paymentNotice}>
+                    <MaterialIcons
+                      name="info-outline"
+                      size={20}
+                      color="#92400E"
+                    />
+                    <Text style={styles.paymentNoticeText}>
+                      Payment is required for:{" "}
+                      {summary.unpaid_child_names.join(", ")}.
+                    </Text>
+                  </View>
+                )}
+
+                {!!summary?.pending_child_names?.length && (
+                  <View style={styles.paymentNotice}>
+                    <MaterialIcons
+                      name="hourglass-top"
+                      size={20}
+                      color="#92400E"
+                    />
+                    <Text style={styles.paymentNoticeText}>
+                      Payment is processing for:{" "}
+                      {summary.pending_child_names.join(", ")}. You cannot make
+                      another payment for these children.
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
               <View style={styles.paymentNotice}>
-                <MaterialIcons name="hourglass-top" size={20} color="#92400E" />
+                <MaterialIcons
+                  name="info-outline"
+                  size={20}
+                  color="#1D4ED8"
+                />
                 <Text style={styles.paymentNoticeText}>
-                  Payment is processing for:{" "}
-                  {summary.pending_child_names.join(", ")}. You cannot make
-                  another payment for these children.
+                  {hasChildren
+                    ? "Payment details will appear once your child is linked to a transport route."
+                    : "Add a child and link them to a transport route to see payment details here."}
                 </Text>
               </View>
             )}
@@ -395,6 +550,32 @@ const ClientPayments = () => {
                     per child
                   </Text>
                 ))}
+                <View style={styles.feeBreakdown}>
+                  <Row
+                    label={
+                      group.service_fee_waived
+                        ? "Track My Kid service fee (two-month offer)"
+                        : `Track My Kid service fee (${group.children_count} × R5)`
+                    }
+                    value={
+                      group.service_fee_waived
+                        ? "Waived"
+                        : formatCurrency(
+                            group.service_fee_cents,
+                            summary?.currency,
+                          )
+                    }
+                  />
+                  <Row
+                    label="Total due by card"
+                    value={formatCurrency(group.total_due_cents, summary?.currency)}
+                  />
+                  <Text style={styles.routeDetails}>
+                    {group.service_fee_waived
+                      ? "This service fee is waived for the two-month offer for both card and cash payments."
+                      : "If you pay the transport fare in cash, pay this service fee online separately."}
+                  </Text>
+                </View>
                 <TouchableOpacity
                   style={[
                     styles.payButton,
@@ -408,7 +589,7 @@ const ClientPayments = () => {
                       ? "Owner unavailable"
                       : payingGroupId === group.group_id
                         ? "Opening checkout..."
-                        : `Pay ${formatCurrency(group.total_amount_cents, summary?.currency)}`}
+                        : `Pay ${formatCurrency(group.total_due_cents, summary?.currency)}`}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -432,11 +613,17 @@ const ClientPayments = () => {
               </View>
             ))}
 
-            <PaymentHistory payments={history} />
+            <PaymentHistory
+              payments={history}
+              onPayCashServiceFee={payCashServiceFee}
+              payingPaymentId={payingCashFeePaymentId}
+            />
 
-            <Text style={styles.note}>
-              Your total is calculated from the route assigned to each child.
-            </Text>
+            {hasRouteLinkedChildren ? (
+              <Text style={styles.note}>
+                Your total is calculated from the route assigned to each child.
+              </Text>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -516,6 +703,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  trialNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#E9F8EE",
+    borderColor: "#B8E4C4",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 13,
+    marginBottom: 12,
+  },
+  trialNoticeText: {
+    flex: 1,
+    color: "#176B32",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
   routeCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
@@ -588,6 +793,21 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginLeft: 12,
   },
+  feeBreakdown: {
+    borderTopWidth: 1,
+    borderTopColor: "#EDF7FF",
+    marginTop: 10,
+    paddingTop: 4,
+  },
+  resumeFeeButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#159B3A",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 8,
+  },
+  resumeFeeText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
   row: {
     minHeight: 54,
     flexDirection: "row",

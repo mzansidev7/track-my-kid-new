@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../context/authContext/auth-context";
-import { useOwnerPageHeader } from "./ownerHelpers/hooks/useOwnerPageHeader";
+import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 import { resolveWorkingBaseUrl } from "../../url";
 
 type WorkflowCategory =

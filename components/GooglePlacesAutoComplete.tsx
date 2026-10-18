@@ -41,6 +41,8 @@ type GooglePlacesAutoCompleteProps = {
   debounce?: number;
   minLength?: number;
   compact?: boolean;
+  suggestionsEnabled?: boolean;
+  suggestionsPlacement?: "above" | "below";
 };
 
 const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
@@ -51,6 +53,8 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   debounce = 400,
   minLength = 2,
   compact = false,
+  suggestionsEnabled = true,
+  suggestionsPlacement = "above",
 }) => {
   const [results, setResults] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,6 +114,12 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
 
+    if (!suggestionsEnabled) {
+      requestId.current += 1;
+      selectedValue.current = value.trim();
+      return;
+    }
+
     const search = value.trim();
     if (
       search.length < minLength ||
@@ -127,7 +137,7 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [value, debounce, minLength, fetchPredictions]);
+  }, [value, debounce, minLength, fetchPredictions, suggestionsEnabled]);
 
   /**
    * Select Google Place
@@ -214,17 +224,23 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
     onSelect("", null);
   };
 
+  const visibleResults = suggestionsEnabled ? results : [];
+
   return (
     <View style={styles.container}>
       {/* Suggestions */}
-      {results.length > 0 && (
+      {visibleResults.length > 0 && (
         <View
           style={[
             styles.resultsContainer,
             compact && styles.resultsContainerCompact,
+            suggestionsPlacement === "below" && styles.resultsContainerBelow,
+            compact &&
+              suggestionsPlacement === "below" &&
+              styles.resultsContainerCompactBelow,
           ]}
         >
-          {results.map((item, index) => {
+          {visibleResults.map((item, index) => {
             const mainText =
               item.structured_formatting?.main_text || item.description || "";
 
@@ -296,7 +312,7 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
           returnKeyType="search"
         />
 
-        {loading && (
+        {loading && suggestionsEnabled && (
           <ActivityIndicator
             size="small"
             color="#4A90E2"
@@ -304,7 +320,7 @@ const GooglePlacesAutoComplete: React.FC<GooglePlacesAutoCompleteProps> = ({
           />
         )}
 
-        {!loading && value.length > 0 && (
+        {(!loading || !suggestionsEnabled) && value.length > 0 && (
           <TouchableOpacity
             style={[styles.clearButton, compact && styles.clearButtonCompact]}
             onPress={handleClear}
@@ -439,6 +455,18 @@ const styles = StyleSheet.create({
     bottom: 50,
     maxHeight: 180,
     borderRadius: 8,
+  },
+  resultsContainerBelow: {
+    top: 56,
+    bottom: undefined,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+  resultsContainerCompactBelow: {
+    top: 50,
+    bottom: undefined,
   },
 
   resultItem: {

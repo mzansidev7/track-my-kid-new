@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "track-my-kid",
-    "slug": "track-my-kid",
+    "slug": "track-my-kid-",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo-light.png",
@@ -18,7 +18,7 @@
         }
       },
       "adaptiveIcon": {
-        "backgroundColor": "white",
+        "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/logo-light.png",
         "backgroundImage": "./assets/images/logo-light.png",
         "monochromeImage": "./assets/images/logo-light.png"
@@ -35,7 +35,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Track My Kid to use your location while you are driving a route."
+          "locationAlwaysAndWhenInUsePermission": "Allow Track My Kid to use your location while you are driving a route.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [

@@ -23,6 +23,16 @@ import {
   TimePreference,
 } from "../../store/asyncStorage/timePreferences.asyncStore";
 
+const OPERATING_DAY_OPTIONS = [
+  { day: 1, label: "Mon" },
+  { day: 2, label: "Tue" },
+  { day: 3, label: "Wed" },
+  { day: 4, label: "Thu" },
+  { day: 5, label: "Fri" },
+  { day: 6, label: "Sat" },
+  { day: 0, label: "Sun" },
+];
+
 interface RouteDetails {
   id: string;
   route_name: string;
@@ -37,6 +47,7 @@ interface RouteDetails {
   departure_time?: string | null;
   status?: "active" | "inactive";
   time_scope?: string | null;
+  operating_days?: number[];
   pickup_start_time?: string | null;
   pickup_end_time?: string | null;
   dropoff_start_time?: string | null;
@@ -348,6 +359,7 @@ const RouteDetailsScreen = () => {
   const [editDropoffStartTime, setEditDropoffStartTime] = useState("");
   const [editDropoffEndTime, setEditDropoffEndTime] = useState("");
   const [editRouteFare, setEditRouteFare] = useState("");
+  const [editOperatingDays, setEditOperatingDays] = useState([1, 2, 3, 4, 5]);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null,
@@ -1023,6 +1035,11 @@ const RouteDetailsScreen = () => {
         ? (route.per_child_amount_cents / 100).toFixed(2)
         : "",
     );
+    setEditOperatingDays(
+      Array.isArray(route.operating_days) && route.operating_days.length
+        ? route.operating_days
+        : [1, 2, 3, 4, 5],
+    );
     setRouteEditError(null);
     setShowRouteEditModal(true);
   };
@@ -1057,6 +1074,10 @@ const RouteDetailsScreen = () => {
       setRouteEditError("Enter a valid non-negative fare.");
       return;
     }
+    if (!editOperatingDays.length) {
+      setRouteEditError("Select at least one weekly service day.");
+      return;
+    }
 
     setSavingRoute(true);
     setRouteEditError(null);
@@ -1085,6 +1106,7 @@ const RouteDetailsScreen = () => {
             dropoff_start_time: editDropoffStartTime.trim(),
             dropoff_end_time: editDropoffEndTime.trim(),
             per_child_amount_cents: Math.round(fare * 100),
+            operating_days: editOperatingDays,
           }),
         },
       );
@@ -1783,6 +1805,14 @@ const RouteDetailsScreen = () => {
         route.dropoff_end_time ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Time Windows</Text>
+            <Text style={styles.sectionDescription}>
+              Weekly service:{" "}
+              {OPERATING_DAY_OPTIONS.filter((option) =>
+                (route.operating_days || [1, 2, 3, 4, 5]).includes(option.day),
+              )
+                .map((option) => option.label)
+                .join(", ")}
+            </Text>
 
             <View style={styles.timeGrid}>
               <View style={styles.timeItem}>
@@ -2124,6 +2154,45 @@ const RouteDetailsScreen = () => {
                   placeholder="05:00"
                   keyboardType="numbers-and-punctuation"
                 />
+                <Text style={styles.routeEditLabel}>Weekly service days</Text>
+                <View style={styles.routeEditOperatingDays}>
+                  {OPERATING_DAY_OPTIONS.map(({ day, label }) => {
+                    const selected = editOperatingDays.includes(day);
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[
+                          styles.routeEditOperatingDay,
+                          selected && styles.routeEditOperatingDaySelected,
+                        ]}
+                        onPress={() =>
+                          setEditOperatingDays((current) =>
+                            selected
+                              ? current.filter((value) => value !== day)
+                              : [...current, day].sort(
+                                  (first, second) => first - second,
+                                ),
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text
+                          style={[
+                            styles.routeEditOperatingDayText,
+                            selected && styles.routeEditOperatingDayTextSelected,
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.routeEditHint}>
+                  Weekend transport can also be scheduled per child from the
+                  child profile.
+                </Text>
                 <Text style={styles.routeEditLabel}>Pickup window</Text>
                 <View style={styles.routeEditTimeRow}>
                   <TextInput
@@ -3341,6 +3410,39 @@ const baseStyles = StyleSheet.create({
     color: "#526981",
     fontSize: 12,
     fontWeight: "600",
+  },
+  routeEditOperatingDays: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 3,
+  },
+  routeEditOperatingDay: {
+    minWidth: 42,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#C9D8E8",
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  routeEditOperatingDaySelected: {
+    borderColor: "#1769D2",
+    backgroundColor: "#1769D2",
+  },
+  routeEditOperatingDayText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  routeEditOperatingDayTextSelected: {
+    color: "#FFFFFF",
+  },
+  routeEditHint: {
+    marginTop: 6,
+    color: "#71869C",
+    fontSize: 11,
   },
   routeEditInput: {
     minHeight: 42,

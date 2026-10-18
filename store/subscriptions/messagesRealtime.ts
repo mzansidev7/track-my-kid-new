@@ -31,6 +31,12 @@ export interface MessageData {
   sent_at: string;
   is_read: boolean;
   sender_id: string;
+  deliveryError?: boolean;
+  reactions?: {
+    emoji: string;
+    count: number;
+    userIds: string[];
+  }[];
   users:
     | {
         name: string;
@@ -116,6 +122,7 @@ export const fetchConversationsWithCache = async (
         participant_1_id,
         participant_2_id,
         conversation_type,
+        group_name,
         created_at,
         last_message_at,
         messages(
@@ -139,8 +146,99 @@ export const fetchConversationsWithCache = async (
       return normalizedCached;
     }
 
+    const { data: memberships, error: membershipsError } = await client
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", userId);
+    if (membershipsError) {
+      console.error("❌ Error fetching group memberships:", membershipsError);
+      return normalizedCached;
+    }
+
+    const groupConversationIds = [
+      ...new Set(
+        (memberships || []).map((membership) => membership.conversation_id),
+      ),
+    ];
+    const { data: groupConversations, error: groupConversationsError } =
+      groupConversationIds.length
+        ? await client
+            .from("conversations")
+            .select(
+              `
+              id,
+              participant_1_id,
+              participant_2_id,
+              conversation_type,
+              group_name,
+              created_at,
+              last_message_at,
+              messages(
+                id,
+                content,
+                sent_at,
+                is_read,
+                sender_id,
+                users!sender_id(name, role)
+              )
+            `,
+            )
+            .eq("conversation_type", "admin_group")
+            .in("id", groupConversationIds)
+        : { data: [], error: null };
+    if (groupConversationsError) {
+      console.error(
+        "❌ Error fetching group conversations:",
+        groupConversationsError,
+      );
+      return normalizedCached;
+    }
+
+    const conversations = [
+      ...new Map(
+        [...(data || []), ...(groupConversations || [])].map((conversation) => [
+          conversation.id,
+          conversation,
+        ]),
+      ).values(),
+    ];
     const conversationsWithDetails = await Promise.all(
-      (data || []).map(async (conv: any) => {
+      conversations.map(async (conv: any) => {
+        const messages = Array.isArray(conv.messages) ? conv.messages : [];
+        const latestMessage =
+          messages.reduce(
+            (latest: any, message: any) =>
+              !latest ||
+              new Date(message.sent_at).getTime() >
+                new Date(latest.sent_at).getTime()
+                ? message
+                : latest,
+            null,
+          ) || null;
+        const unreadCount = messages.filter(
+          (message: any) =>
+            message.sender_id !== userId && message.is_read === false,
+        ).length;
+
+        if (conv.conversation_type === "admin_group") {
+          return {
+            id: conv.id,
+            conversation_type: conv.conversation_type,
+            other_participant: {
+              id: conv.id,
+              name: conv.group_name || "Group chat",
+              email: "",
+              role: "group",
+              profile: null,
+            },
+            last_message: supportTeamMessage(latestMessage),
+            unread_count: unreadCount,
+            message_count: messages.length,
+            created_at: conv.created_at,
+            last_message_at: latestMessage?.sent_at || conv.last_message_at,
+          };
+        }
+
         const otherParticipantId =
           conv.participant_1_id === userId
             ? conv.participant_2_id
@@ -181,17 +279,6 @@ export const fetchConversationsWithCache = async (
 
           profileData = data;
         }
-
-        const latestMessage =
-          conv.messages?.sort(
-            (a: any, b: any) =>
-              new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime(),
-          )[0] || null;
-        const messages = Array.isArray(conv.messages) ? conv.messages : [];
-        const unreadCount = messages.filter(
-          (message: any) =>
-            message.sender_id !== userId && message.is_read === false,
-        ).length;
 
         return {
           id: conv.id,
@@ -246,9 +333,20 @@ export const subscribeToConversations = (
     return null;
   }
 
+  let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+  const refreshConversations = () => {
+    if (refreshTimeout) clearTimeout(refreshTimeout);
+    refreshTimeout = setTimeout(() => {
+      void fetchConversationsWithCache(userId)
+        .then(onConversationsChange)
+        .catch((err) => {
+          console.error("❌ Error refreshing conversations:", err);
+        });
+    }, 150);
+  };
+
   const channel = client
     .channel(`conversations-${userId}-${Date.now()}`)
-
     .on(
       "postgres_changes",
       {
@@ -256,27 +354,17 @@ export const subscribeToConversations = (
         schema: "public",
         table: "conversations",
       },
-      async (payload: any) => {
-        console.log(`📨 Conversation realtime event for ${userId}:`, payload);
-
-        const conversation = payload.new || payload.old;
-
-        const isRelevant =
-          conversation?.participant_1_id === userId ||
-          conversation?.participant_2_id === userId;
-
-        if (!isRelevant) {
-          return;
-        }
-
-        try {
-          const updated = await fetchConversationsWithCache(userId);
-
-          onConversationsChange(updated);
-        } catch (err) {
-          console.error("❌ Error refreshing conversations:", err);
-        }
+      refreshConversations,
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "conversation_members",
+        filter: `user_id=eq.${userId}`,
       },
+      refreshConversations,
     )
 
     .subscribe((status: string) => {
@@ -316,6 +404,7 @@ export const fetchMessagesWithCache = async (
         sent_at,
         is_read,
         sender_id,
+        message_reactions(emoji, user_id),
         users!sender_id(name, role)
       `,
       )
@@ -331,9 +420,25 @@ export const fetchMessagesWithCache = async (
     }
 
     // Cache fresh messages
-    const normalizedMessages = (data || []).map((message) =>
-      supportTeamMessage(message),
-    );
+    const normalizedMessages = (data || []).map((message: any) => {
+      const grouped = new Map<string, { emoji: string; count: number; userIds: string[] }>();
+      for (const reaction of message.message_reactions || []) {
+        const entry: { emoji: string; count: number; userIds: string[] } =
+          grouped.get(reaction.emoji) || {
+          emoji: reaction.emoji,
+          count: 0,
+          userIds: [],
+          };
+        entry.count += 1;
+        entry.userIds.push(reaction.user_id);
+        grouped.set(reaction.emoji, entry);
+      }
+      const { message_reactions: _rawReactions, ...messageData } = message;
+      return supportTeamMessage({
+        ...messageData,
+        reactions: [...grouped.values()],
+      });
+    });
     await cacheMessages(conversationId, normalizedMessages);
 
     return normalizedMessages;
@@ -383,6 +488,24 @@ export const subscribeToMessages = (
           onMessagesChange(updated);
         } catch (err) {
           console.error("❌ Error refreshing messages:", err);
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "message_reactions",
+      },
+      async (payload: any) => {
+        const reaction = payload.new || payload.old;
+        if (!reaction?.message_id) return;
+        try {
+          const updated = await fetchMessagesWithCache(conversationId);
+          onMessagesChange(updated);
+        } catch (err) {
+          console.error("❌ Error refreshing message reactions:", err);
         }
       },
     )
