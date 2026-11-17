@@ -15,6 +15,10 @@ if (process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY) {
   extra.EXPO_PUBLIC_GEOAPIFY_API_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY;
 }
 
+if (process.env.EXPO_PUBLIC_API_URL) {
+  extra.EXPO_PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL;
+}
+
 if (process.env.EXPO_PUBLIC_GOOGLE_API_KEY) {
   extra.EXPO_PUBLIC_GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_API_KEY;
 }
@@ -29,6 +33,7 @@ module.exports = ({ config }) => {
 
   const android = { ...(merged.android || {}) };
   const ios = { ...(merged.ios || {}) };
+  const isProductionBuild = process.env.EAS_BUILD_PROFILE === "production";
 
   if (googleMapsApiKey) {
     android.config = {
@@ -53,6 +58,8 @@ module.exports = ({ config }) => {
     plugins: [
       ...(merged.plugins || []),
       "expo-asset",
+      "expo-video",
+      "expo-sharing",
       [
         "expo-audio",
         {
@@ -64,7 +71,7 @@ module.exports = ({ config }) => {
         "expo-build-properties",
         {
           android: {
-            usesCleartextTraffic: true,
+            usesCleartextTraffic: !isProductionBuild,
           },
         },
       ],

@@ -1,7 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { File as ExpoFile } from "expo-file-system";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,6 +21,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import { useTheme } from "../../../styles/theme";
 import { resolveWorkingBaseUrl } from "../../../url";
+import { useSchoolNotifications } from "@/app-support/school/schoolHelpers/hooks/useSchoolNotifications";
+import { updateUser } from "../../../store/asyncStorage/authStore";
 
 type SettingsSection =
   | "General"
@@ -33,14 +36,6 @@ type SettingsSection =
 
 type SchoolProfile = Record<string, any>;
 
-type SchoolNotification = {
-  id: string;
-  title?: string;
-  message?: string;
-  created_at?: string;
-  is_read?: boolean;
-};
-
 type SchoolAuditLog = {
   id: string;
   action: string;
@@ -49,6 +44,9 @@ type SchoolAuditLog = {
   metadata?: Record<string, unknown> | null;
   created_at?: string;
 };
+
+const adminProfileCacheKey = (userId: string) =>
+  `school-admin-profile-v1:${userId}`;
 
 const sections: {
   key: SettingsSection;
@@ -67,12 +65,6 @@ const sections: {
     title: "Account profile",
     description: "Your administrator photo",
     icon: "account-circle",
-  },
-  {
-    key: "Notifications",
-    title: "Notifications",
-    description: "Review and manage school alerts",
-    icon: "notifications-none",
   },
   {
     key: "Attendance",
@@ -108,16 +100,36 @@ const sections: {
 
 const Settings = () => {
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string | string[] }>();
+  const requestedSection = Array.isArray(params.section)
+    ? params.section[0]
+    : params.section;
   const { colors } = useTheme();
-  const { user } = useContext(AuthContext);
+  const { user, setUser } = useContext(AuthContext);
+  const isDriver = user?.userData?.admin_profile?.role === "driver";
+  const {
+    notifications,
+    error: notificationsError,
+    refresh: refreshNotifications,
+    markAsRead,
+  } = useSchoolNotifications();
   const token = user?.token;
-  const [section, setSection] = useState<SettingsSection>("General");
+  const [section, setSection] = useState<SettingsSection>(
+    isDriver
+      ? "Account"
+      : requestedSection === "Notifications"
+        ? "Notifications"
+        : "General",
+  );
   const [profile, setProfile] = useState<SchoolProfile | null>(null);
-  const [adminProfile, setAdminProfile] = useState<SchoolProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [adminProfile, setAdminProfile] = useState<SchoolProfile | null>(
+    () => user?.userData?.admin_profile || null,
+  );
+  const [loading, setLoading] = useState(
+    () => !user?.userData?.admin_profile,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [notifications, setNotifications] = useState<SchoolNotification[]>([]);
   const [auditLogs, setAuditLogs] = useState<SchoolAuditLog[]>([]);
   const [sectionLoading, setSectionLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -125,6 +137,47 @@ const Settings = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [visiblePasswords, setVisiblePasswords] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const profileUserId = user?.userData?.id || user?.userData?.user_id || "";
+
+  const persistAdminProfile = useCallback(
+    async (nextAdmin: SchoolProfile) => {
+      setAdminProfile(nextAdmin);
+      await updateUser({ admin_profile: nextAdmin });
+      setUser((current: typeof user) =>
+        current
+          ? {
+              ...current,
+              userData: {
+                ...current.userData,
+                admin_profile: nextAdmin,
+              },
+            }
+          : current,
+      );
+      if (!profileUserId) return;
+      try {
+        await AsyncStorage.setItem(
+          adminProfileCacheKey(profileUserId),
+          JSON.stringify(nextAdmin),
+        );
+      } catch (cacheError) {
+        console.error("Unable to cache school admin profile:", cacheError);
+      }
+    },
+    [profileUserId, setUser],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isDriver) {
+        setSection("Account");
+        return;
+      }
+      if (requestedSection === "Notifications") {
+        setSection("Notifications");
+      }
+    }, [isDriver, requestedSection]),
+  );
 
   const fetchJson = useCallback(
     async (path: string, init: RequestInit = {}) => {
@@ -151,12 +204,28 @@ const Settings = () => {
 
   const loadProfile = useCallback(async () => {
     try {
+      if (profileUserId) {
+        try {
+          const cached = await AsyncStorage.getItem(
+            adminProfileCacheKey(profileUserId),
+          );
+          if (cached) {
+            const parsed: unknown = JSON.parse(cached);
+            if (parsed && typeof parsed === "object") {
+              setAdminProfile(parsed as SchoolProfile);
+              setLoading(false);
+            }
+          }
+        } catch (cacheError) {
+          console.error("Unable to read cached school admin profile:", cacheError);
+        }
+      }
       const [next, nextAdmin] = await Promise.all([
-        fetchJson("/school/profile"),
+        isDriver ? Promise.resolve(null) : fetchJson("/school/profile"),
         fetchJson("/school/admin/profile"),
       ]);
-      setProfile(next);
-      setAdminProfile(nextAdmin);
+      if (next) setProfile(next);
+      await persistAdminProfile(nextAdmin);
     } catch (error) {
       Alert.alert(
         "Unable to load settings",
@@ -166,7 +235,7 @@ const Settings = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchJson]);
+  }, [fetchJson, isDriver, persistAdminProfile, profileUserId]);
 
   const pickAdminAvatar = async () => {
     if (uploadingAvatar) return;
@@ -208,7 +277,7 @@ const Settings = () => {
         method: "PUT",
         body: formData,
       });
-      setAdminProfile((current) => ({ ...current, avatar: updated.avatar }));
+      await persistAdminProfile({ ...adminProfile, avatar: updated.avatar });
       Alert.alert("Profile picture updated", "Your photo has been saved.");
     } catch (error) {
       Alert.alert(
@@ -231,8 +300,7 @@ const Settings = () => {
     setSectionLoading(true);
     try {
       if (section === "Notifications") {
-        const result = await fetchJson("/school/notifications?limit=50");
-        setNotifications(Array.isArray(result) ? result : []);
+        await refreshNotifications(true);
       } else {
         const result = await fetchJson("/school/audit-logs");
         setAuditLogs(Array.isArray(result) ? result : []);
@@ -245,7 +313,7 @@ const Settings = () => {
     } finally {
       setSectionLoading(false);
     }
-  }, [fetchJson, section]);
+  }, [fetchJson, refreshNotifications, section]);
 
   useFocusEffect(
     useCallback(() => {
@@ -291,17 +359,11 @@ const Settings = () => {
     }
   };
 
-  const markNotificationRead = async (notification: SchoolNotification) => {
-    if (notification.is_read) return;
+  const markNotificationRead = async (
+    notification: (typeof notifications)[number],
+  ) => {
     try {
-      await fetchJson(`/school/notifications/${notification.id}/read`, {
-        method: "PUT",
-      });
-      setNotifications((current) =>
-        current.map((item) =>
-          item.id === notification.id ? { ...item, is_read: true } : item,
-        ),
-      );
+      await markAsRead(notification);
     } catch (error) {
       Alert.alert(
         "Unable to update notification",
@@ -343,7 +405,9 @@ const Settings = () => {
   };
 
   const updateProfileField = (field: string, value: string) =>
-    setProfile((current) => (current ? { ...current, [field]: value } : current));
+    setProfile((current) =>
+      current ? { ...current, [field]: value } : current,
+    );
 
   const openRoute = (route: string) => router.push(route as never);
 
@@ -378,7 +442,9 @@ const Settings = () => {
         </View>
 
         <View style={styles.sectionList}>
-          {sections.map((item) => (
+          {sections
+            .filter((item) => !isDriver || item.key === "Account")
+            .map((item) => (
             <TouchableOpacity
               key={item.key}
               style={[
@@ -396,7 +462,9 @@ const Settings = () => {
               />
               <View style={styles.sectionCopy}>
                 <Text style={styles.sectionTitle}>{item.title}</Text>
-                <Text style={styles.sectionDescription}>{item.description}</Text>
+                <Text style={styles.sectionDescription}>
+                  {item.description}
+                </Text>
               </View>
               <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
             </TouchableOpacity>
@@ -414,7 +482,8 @@ const Settings = () => {
             {section === "Account" && (
               <>
                 <Text style={styles.panelDescription}>
-                  Add or update the profile picture shown for your school administrator account.
+                  Add or update the profile picture shown for your school
+                  administrator account.
                 </Text>
                 <View style={styles.adminAvatarRow}>
                   {adminProfile?.avatar ? (
@@ -424,7 +493,9 @@ const Settings = () => {
                       accessibilityLabel="School administrator profile picture"
                     />
                   ) : (
-                    <View style={[styles.adminAvatar, styles.adminAvatarFallback]}>
+                    <View
+                      style={[styles.adminAvatar, styles.adminAvatarFallback]}
+                    >
                       <MaterialIcons name="person" size={34} color="#64748B" />
                     </View>
                   )}
@@ -460,7 +531,9 @@ const Settings = () => {
                 <Field
                   label="School email"
                   value={profile.school_email || ""}
-                  onChangeText={(value) => updateProfileField("school_email", value)}
+                  onChangeText={(value) =>
+                    updateProfileField("school_email", value)
+                  }
                   keyboardType="email-address"
                 />
                 <Field
@@ -472,12 +545,16 @@ const Settings = () => {
                 <Field
                   label="Principal name"
                   value={profile.principal_name || ""}
-                  onChangeText={(value) => updateProfileField("principal_name", value)}
+                  onChangeText={(value) =>
+                    updateProfileField("principal_name", value)
+                  }
                 />
                 <Field
                   label="Contact person"
                   value={profile.contact_person || ""}
-                  onChangeText={(value) => updateProfileField("contact_person", value)}
+                  onChangeText={(value) =>
+                    updateProfileField("contact_person", value)
+                  }
                 />
                 <Field
                   label="School address"
@@ -505,6 +582,9 @@ const Settings = () => {
                 <Text style={styles.panelDescription}>
                   Review recent school alerts and mark items as read.
                 </Text>
+                {notificationsError ? (
+                  <Text style={styles.muted}>{notificationsError}</Text>
+                ) : null}
                 {notifications.length ? (
                   notifications.map((item) => (
                     <TouchableOpacity
@@ -545,20 +625,24 @@ const Settings = () => {
               <>
                 <Text style={styles.panelDescription}>
                   Set the school day hours used by attendance and parent absence
-                  reporting. After the start time, parents can report an
-                  absence from tomorrow onward.
+                  reporting. After the start time, parents can report an absence
+                  from tomorrow onward.
                 </Text>
                 <Field
                   label="School start time"
                   value={profile.start_time || ""}
-                  onChangeText={(value) => updateProfileField("start_time", value)}
+                  onChangeText={(value) =>
+                    updateProfileField("start_time", value)
+                  }
                   keyboardType="numbers-and-punctuation"
                   placeholder="07:30"
                 />
                 <Field
                   label="School end time"
                   value={profile.end_time || ""}
-                  onChangeText={(value) => updateProfileField("end_time", value)}
+                  onChangeText={(value) =>
+                    updateProfileField("end_time", value)
+                  }
                   keyboardType="numbers-and-punctuation"
                   placeholder="14:00"
                 />
@@ -697,7 +781,11 @@ const Field = ({
   value: string;
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "phone-pad" | "numbers-and-punctuation";
+  keyboardType?:
+    | "default"
+    | "email-address"
+    | "phone-pad"
+    | "numbers-and-punctuation";
   placeholder?: string;
 }) => (
   <View style={styles.field}>
@@ -817,7 +905,12 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
   field: { marginTop: 11 },
-  fieldLabel: { color: "#334155", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  fieldLabel: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
   input: {
     minHeight: 44,
     borderWidth: 1,
@@ -849,7 +942,12 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     borderRadius: 11,
   },
-  actionButtonText: { flex: 1, color: "#17365E", fontSize: 13, fontWeight: "700" },
+  actionButtonText: {
+    flex: 1,
+    color: "#17365E",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   notification: {
     flexDirection: "row",
     alignItems: "center",

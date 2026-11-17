@@ -242,7 +242,7 @@ const AddDriver = ({ setActiveButton }: any) => {
       <View style={styles.loadingContainer}>
         {renderHeader()}
         <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color="#1769D2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.loadingText}>Loading vehicles...</Text>
         </View>
       </View>
@@ -291,7 +291,7 @@ const AddDriver = ({ setActiveButton }: any) => {
               Full name <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.inputRow}>
-              <MaterialIcons name="person-outline" size={19} color="#71869C" />
+              <MaterialIcons name="person-outline" size={19} color="#B1C4BC" />
               <TextInput
                 style={styles.input}
                 placeholder="Enter full name"
@@ -309,7 +309,7 @@ const AddDriver = ({ setActiveButton }: any) => {
               Email address <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.inputRow}>
-              <MaterialIcons name="mail-outline" size={19} color="#71869C" />
+              <MaterialIcons name="mail-outline" size={19} color="#B1C4BC" />
               <TextInput
                 style={styles.input}
                 placeholder="Enter email address"
@@ -330,7 +330,7 @@ const AddDriver = ({ setActiveButton }: any) => {
               Phone number <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.inputRow}>
-              <MaterialIcons name="call" size={19} color="#71869C" />
+              <MaterialIcons name="call" size={19} color="#B1C4BC" />
               <TextInput
                 style={styles.input}
                 placeholder="Enter phone number"
@@ -351,7 +351,7 @@ const AddDriver = ({ setActiveButton }: any) => {
                 <MaterialIcons
                   name="directions-car"
                   size={19}
-                  color="#71869C"
+                  color="#B1C4BC"
                 />
                 <Text style={styles.readOnlyText}>
                   {selectedVehicle.license_plate || "Not provided"}
@@ -380,7 +380,7 @@ const AddDriver = ({ setActiveButton }: any) => {
                 <MaterialIcons
                   name="directions-car"
                   size={19}
-                  color="#71869C"
+                  color="#B1C4BC"
                 />
                 <Text
                   style={
@@ -399,7 +399,7 @@ const AddDriver = ({ setActiveButton }: any) => {
                   <MaterialIcons
                     name="keyboard-arrow-down"
                     size={21}
-                    color="#71869C"
+                    color="#B1C4BC"
                   />
                 )}
               </TouchableOpacity>
@@ -580,10 +580,10 @@ export default AddDriver;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 58,
@@ -621,19 +621,19 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   form: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
   },
   formTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 17,
     fontWeight: "700",
   },
   formSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     lineHeight: 18,
     marginTop: 5,
@@ -645,14 +645,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#465F78",
+    color: "#F4FBF8",
     marginBottom: 7,
   },
   required: {
     color: "#D94A57",
   },
   optional: {
-    color: "#8294A7",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "400",
   },
@@ -663,31 +663,31 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#D8E4EF",
+    borderColor: "#294238",
     borderRadius: 10,
-    backgroundColor: "#FBFDFF",
+    backgroundColor: "#13231D",
   },
   input: {
     flex: 1,
     minHeight: 44,
-    color: "#263B50",
+    color: "#F4FBF8",
     fontSize: 13,
     paddingVertical: 0,
   },
   readOnlyInput: {
-    backgroundColor: "#F2F6FA",
+    backgroundColor: "#13231D",
   },
   readOnlyText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 13,
     flex: 1,
   },
   inputDisabled: {
-    backgroundColor: "#E5E5E5",
-    color: "#666",
+    backgroundColor: "#13231D",
+    color: "#B1C4BC",
   },
   button: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     minHeight: 46,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -711,21 +711,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 10,
-    backgroundColor: "#FBFDFF",
+    backgroundColor: "#13231D",
     paddingHorizontal: 12,
     marginBottom: 4,
   },
   selectorButtonText: {
     flex: 1,
     fontSize: 15,
-    color: "#263B50",
+    color: "#F4FBF8",
   },
   selectorPlaceholderText: {
     flex: 1,
     fontSize: 13,
-    color: "#8294A7",
+    color: "#B1C4BC",
   },
   modalOverlay: {
     flex: 1,
@@ -733,18 +733,18 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "72%",
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 12,
   },
   optionsList: {
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#EAF0F6",
+    borderBottomColor: "#294238",
     gap: 12,
   },
   vehicleOptionDisabled: {
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
   sectionDivider: {
     paddingVertical: 8,
     paddingHorizontal: 4,
-    backgroundColor: "#EEF4FA",
+    backgroundColor: "#13231D",
     marginTop: 16,
     marginBottom: 8,
     borderRadius: 8,
@@ -772,24 +772,24 @@ const styles = StyleSheet.create({
   sectionDividerText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#526981",
+    color: "#B1C4BC",
   },
   assignedText: {
     fontSize: 13,
-    color: "#71869C",
+    color: "#B1C4BC",
     marginTop: 4,
   },
   vehicleOptionImage: {
     width: 52,
     height: 52,
     borderRadius: 10,
-    backgroundColor: "#EFEFEF",
+    backgroundColor: "#13231D",
   },
   vehicleOptionImagePlaceholder: {
     width: 52,
     height: 52,
     borderRadius: 10,
-    backgroundColor: "#EEF3FF",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -802,12 +802,12 @@ const styles = StyleSheet.create({
   vehicleOptionName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 2,
   },
   vehicleOptionPlate: {
     fontSize: 13,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   modalCloseBtn: {
     marginTop: 12,
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 15,
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "700",
   },
   noVehiclesContainer: {
@@ -828,19 +828,19 @@ const styles = StyleSheet.create({
   noVehiclesText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: "#F4FBF8",
     textAlign: "center",
     marginBottom: 8,
   },
   noVehiclesSubText: {
     fontSize: 16,
-    color: "#666",
+    color: "#B1C4BC",
     textAlign: "center",
     lineHeight: 24,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   loadingContent: {
     flex: 1,
@@ -849,37 +849,37 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: "#526981",
+    color: "#B1C4BC",
     marginTop: 16,
     textAlign: "center",
   },
   noVehiclesNote: {
-    backgroundColor: "#EEF4FA",
+    backgroundColor: "#13231D",
     borderLeftWidth: 3,
-    borderLeftColor: "#1769D2",
+    borderLeftColor: "#00B894",
     padding: 12,
     borderRadius: 9,
     marginVertical: 16,
   },
   noVehiclesNoteText: {
     fontSize: 12,
-    color: "#526981",
+    color: "#B1C4BC",
     lineHeight: 20,
   },
   selectorButtonDisabled: {
-    backgroundColor: "#F4F7FF",
-    borderColor: "#D6E4FF",
+    backgroundColor: "#13231D",
+    borderColor: "#294238",
   },
   lockedNoteContainer: {
     marginTop: 10,
     borderRadius: 9,
-    backgroundColor: "#EEF4FA",
+    backgroundColor: "#13231D",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     padding: 12,
   },
   lockedNoteText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 13,
     lineHeight: 19,
   },

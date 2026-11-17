@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Alert,
   ActivityIndicator,
   Animated,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import DriverMainHeader from "../components/DriverMainHeader";
@@ -17,43 +17,73 @@ import DriverQuickActions from "../components/DriverQuickActions";
 import DriverRouteCard from "../components/DriverRouteCard";
 import DriverStudentsCard from "../components/DriverStudentsCard";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AppNotification from "@/components/Notification";
 import { useDriverNotifications } from "@/app-support/driver/driverHelpers/hooks/useDriverNotifications";
 import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
 import useDriverRoutesQuery, {
   deriveDriverStudentStatus,
+  timeToMinutes,
 } from "@/app-support/driver/driverHelpers/hooks/useDriverRoutes";
 import { useDriverTracking } from "@/app-support/driver/driverHelpers/hooks/useDriverTracking";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 
-const timeToMinutes = (value?: string | null) => {
-  if (!value) return null;
-  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-  return hours * 60 + minutes;
-};
+type DashboardStudentStatus =
+  | "picked_up"
+  | "waiting"
+  | "dropped_off"
+  | "scheduled"
+  | "not_picked_up"
+  | "trip_incomplete"
+  | "at_stop"
+  | "schedule_unavailable"
+  | "not_included";
 
 type DashboardStudent = {
   id: string;
   name: string;
   school: string;
   routeName: string;
-  status: "picked_up" | "waiting" | "dropped_off";
+  status: DashboardStudentStatus;
 };
 
 const DriverHome = () => {
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
 
   const { driver, loading, error, refreshDriver } = useDriverProfile();
-  const {
-    routes,
-    routesLoading,
-    routesError,
-    refreshRoutes,
-  } = useDriverRoutesQuery();
+  const { routes, routesLoading, routesError, refreshRoutes } =
+    useDriverRoutesQuery();
   const router = useRouter();
-  const { unreadCount } = useDriverNotifications();
+  const { notifications, unreadCount } = useDriverNotifications();
   const [currentTime, setCurrentTime] = React.useState(() => Date.now());
+  const [sosSending, setSosSending] = React.useState(false);
+  const sosSendingRef = React.useRef(false);
+  const [sosNotification, setSosNotification] = React.useState({
+    visible: false,
+    message: "",
+    type: "success" as "success" | "error" | "warning",
+  });
+  const [sosReplyToast, setSosReplyToast] = React.useState("");
+  const handledSosNotification = React.useRef<string | null>(null);
   const blinkAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    const latestSosNotification = notifications.find((notification) =>
+      /sos/i.test(notification.title || ""),
+    );
+    if (
+      !latestSosNotification?.id ||
+      handledSosNotification.current === latestSosNotification.id
+    ) {
+      return;
+    }
+    handledSosNotification.current = latestSosNotification.id;
+    const createdAt = latestSosNotification.created_at
+      ? new Date(latestSosNotification.created_at).getTime()
+      : 0;
+    if (createdAt && Date.now() - createdAt < 5 * 60 * 1000) {
+      setTimeout(() => setSosReplyToast(latestSosNotification.title), 0);
+    }
+  }, [notifications]);
 
   const currentDate = new Date(currentTime);
   const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
@@ -97,7 +127,17 @@ const DriverHome = () => {
     currentMinutes >= dropoffStart &&
     currentMinutes <= dropoffEnd;
   const routeType = inDropoffWindow ? "dropoff" : "pickup";
-  const canStartTrip = inPickupWindow || inDropoffWindow;
+  const routeWindowActive = inPickupWindow || inDropoffWindow;
+  const activeWindowStops = (route?.route_stops || []).filter(
+    (stop) => stop.stop_type === routeType,
+  );
+  const activeWindowCompleted =
+    routeWindowActive &&
+    activeWindowStops.length > 0 &&
+    activeWindowStops.every((stop) =>
+      ["completed", "skipped"].includes(stop.status || ""),
+    );
+  const canStartTrip = routeWindowActive && !activeWindowCompleted;
   const {
     online,
     busy: trackingBusy,
@@ -133,7 +173,10 @@ const DriverHome = () => {
     }
   }, [shouldBlink, blinkAnim]);
   const studentRoutes = route
-    ? [route, ...routes.filter((assignedRoute) => assignedRoute.id !== route.id)]
+    ? [
+        route,
+        ...routes.filter((assignedRoute) => assignedRoute.id !== route.id),
+      ]
     : routes;
   const studentsById = new Map<string, DashboardStudent>();
   for (const assignedRoute of studentRoutes) {
@@ -144,7 +187,11 @@ const DriverHome = () => {
       const childStops = (assignedRoute.route_stops || []).filter(
         (routeStop: any) => routeStop.child_id === childId,
       );
-      const childStatus = deriveDriverStudentStatus(childStops);
+      const childStatus = deriveDriverStudentStatus(
+        childStops,
+        assignedRoute,
+        currentMinutes,
+      );
       const school = Array.isArray(child.schools)
         ? child.schools[0]
         : child.schools;
@@ -168,19 +215,60 @@ const DriverHome = () => {
         school: child.school_name || school?.name || "School not specified",
         routeName: assignedRoute.route_name || "Assigned route",
         status:
-          childStatus.status === "DROPPED OFF"
+          routeChild.transport_restricted
+            ? "not_included"
+            : childStatus.status === "DROPPED OFF"
             ? "dropped_off"
-            : childStatus.onboard
+            : childStatus.status === "ONBOARD"
               ? "picked_up"
-              : "waiting",
+              : childStatus.status === "CURRENT STOP"
+                ? "at_stop"
+                : childStatus.status === "SCHEDULED"
+                  ? "scheduled"
+                  : childStatus.status === "NOT PICKED UP"
+                    ? "not_picked_up"
+                    : childStatus.status === "TRIP INCOMPLETE"
+                      ? "trip_incomplete"
+                      : childStatus.status === "SCHEDULE UNAVAILABLE"
+                        ? "schedule_unavailable"
+                        : "waiting",
       });
     }
   }
   const students = [...studentsById.values()];
 
   const handleSubtitle = () => {
-    if (students.some((student) => student.status === "waiting")) {
-      return "You have students waiting for pickup.";
+    if (students.some((student) => student.status === "trip_incomplete")) {
+      return "A trip is incomplete. Review the route in Trips.";
+    }
+
+    if (
+      students.some(
+        (student) =>
+          student.status === "waiting" || student.status === "not_picked_up",
+      )
+    ) {
+      if (
+        students.some((student) => student.status === "waiting" && canStartTrip)
+      ) {
+        return "You have students waiting for pickup.";
+      }
+      return "Some students were not picked up during the scheduled window.";
+    }
+
+    if (students.some((student) => student.status === "scheduled")) {
+      return "Your students are scheduled for a later trip.";
+    }
+
+    if (
+      students.length > 0 &&
+      students.every((student) => student.status === "schedule_unavailable")
+    ) {
+      return "Trip schedule unavailable. Check Trips for route details.";
+    }
+
+    if (students.some((student) => student.status === "at_stop")) {
+      return "You are currently at a route stop.";
     }
 
     if (
@@ -198,6 +286,8 @@ const DriverHome = () => {
   };
 
   const handleStartTrip = () => {
+    if (activeWindowCompleted) return;
+
     if (online) {
       router.push("/(driver)/(tabs)/trips");
       return;
@@ -219,7 +309,29 @@ const DriverHome = () => {
     } as never);
   };
 
+  const tripActionLabel = activeWindowCompleted
+    ? "Completed"
+    : online
+      ? "Trip Active"
+      : canStartTrip
+        ? routeType === "pickup"
+          ? "Start Pickup"
+          : "Start Drop-off"
+        : "Trips";
+  const tripActionIcon = activeWindowCompleted
+    ? "task-alt"
+    : online
+      ? "navigation"
+      : canStartTrip
+        ? routeType === "pickup"
+          ? "directions-car"
+          : "near-me"
+        : "route";
+
   const handleEmergencyPress = async () => {
+    if (sosSendingRef.current) return;
+    sosSendingRef.current = true;
+    setSosSending(true);
     try {
       const result = await sendEmergencyAlert(
         "Driver activated emergency assistance from the mobile app.",
@@ -227,27 +339,35 @@ const DriverHome = () => {
       const warnings = Array.isArray(result.delivery_warnings)
         ? result.delivery_warnings
         : [];
-      Alert.alert(
-        result.support_notification_sent
-          ? "SOS sent to support"
-          : "SOS recorded",
-        warnings.length
-          ? `The emergency was recorded. Delivery needs attention: ${warnings.join(", ")}`
-          : "The support team has been notified.",
-      );
+      const supportNotified = result.support_notification_sent === true;
+      setSosNotification({
+        visible: true,
+        type: supportNotified ? "success" : "warning",
+        message: supportNotified
+          ? "SOS sent to support."
+          : `SOS recorded, but support was not notified${warnings.length ? `: ${warnings.join(", ")}` : "."}`,
+      });
     } catch (alertError) {
       console.error("Unable to send emergency alert", alertError);
-      Alert.alert(
-        "SOS could not be sent",
-        "The emergency alert could not be submitted. Please call your emergency contact or local emergency services.",
-      );
+      setSosNotification({
+        visible: true,
+        type: "error",
+        message:
+          "SOS could not be sent. Please call your emergency contact or local emergency services.",
+      });
+    } finally {
+      sosSendingRef.current = false;
+      setSosSending(false);
     }
   };
 
   if (error || routesError) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
+        style={[
+          styles.container,
+          { backgroundColor: DRIVER_COLORS.background },
+        ]}
       >
         <View style={styles.loadingContent}>
           <Text style={{ color: colors.error, textAlign: "center" }}>
@@ -271,8 +391,25 @@ const DriverHome = () => {
   if (loading || routesLoading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
+        style={[
+          styles.container,
+          { backgroundColor: DRIVER_COLORS.background },
+        ]}
       >
+        <AppNotification
+          visible={sosNotification.visible}
+          message={sosNotification.message}
+          type={sosNotification.type}
+          onHide={() =>
+            setSosNotification((current) => ({ ...current, visible: false }))
+          }
+        />
+        <AppNotification
+          visible={Boolean(sosReplyToast)}
+          message={sosReplyToast}
+          type="warning"
+          onHide={() => setSosReplyToast("")}
+        />
         <ScrollView
           contentContainerStyle={styles.loadingContent}
           showsVerticalScrollIndicator={false}
@@ -301,22 +438,32 @@ const DriverHome = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: DRIVER_COLORS.background }]}
     >
+      <AppNotification
+        visible={sosNotification.visible}
+        message={sosNotification.message}
+        type={sosNotification.type}
+        onHide={() =>
+          setSosNotification((current) => ({ ...current, visible: false }))
+        }
+      />
+      <AppNotification
+        visible={Boolean(sosReplyToast)}
+        message={sosReplyToast}
+        type="warning"
+        onHide={() => setSosReplyToast("")}
+      />
+      <DriverMainHeader
+        driverName={driver?.user?.name || "Driver"}
+        onNotificationPress={() => router.push("/(driver)/pages/notifications")}
+        notificationCount={unreadCount}
+        onProfilePress={() => router.push("/(driver)/(tabs)/profile")}
+        subtitle={handleSubtitle()}
+        avatarUrl={driver?.user?.avatar_url || undefined}
+      />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <DriverMainHeader
-          driverName={driver?.user?.name || "Driver"}
-          onNotificationPress={() =>
-            router.push("/(driver)/pages/notifications")
-          }
-          notificationCount={
-            unreadCount
-          }
-          onProfilePress={() => router.push("/(driver)/(tabs)/profile")}
-          subtitle={handleSubtitle()}
-        />
-
         <DriverStatusCard
           isOnline={online}
           vehicleName={route?.vehicle?.name || driver?.vehicle?.name}
@@ -328,11 +475,12 @@ const DriverHome = () => {
         <DriverQuickActions
           actions={[
             {
-              label: "Start Trip",
-              icon: "play-arrow",
+              label: tripActionLabel,
+              icon: tripActionIcon,
               onPress: handleStartTrip,
               blinking: shouldBlink,
               blinkAnim: shouldBlink ? blinkAnim : null,
+              disabled: activeWindowCompleted || trackingBusy,
             },
             {
               label: "Students",
@@ -348,6 +496,8 @@ const DriverHome = () => {
               label: "SOS",
               icon: "sos",
               onPress: handleEmergencyPress,
+              disabled: sosSending,
+              loading: sosSending,
             },
             // {
             //   label: "Map",
@@ -375,7 +525,9 @@ const DriverHome = () => {
             <DriverRouteCard
               key={assignedRoute.id}
               routeName={assignedRoute.route_name || "Assigned route"}
-              startLocation={assignedRoute.start_location || "Route start not set"}
+              startLocation={
+                assignedRoute.start_location || "Route start not set"
+              }
               endLocation={assignedRoute.end_location || "Route end not set"}
               students={assignedRoute.route_children?.length || 0}
               time={`${assignedRoute.pickup_start_time || "--:--"} - ${assignedRoute.pickup_end_time || "--:--"} | ${assignedRoute.dropoff_start_time || "--:--"} - ${assignedRoute.dropoff_end_time || "--:--"}`}
@@ -405,9 +557,55 @@ const DriverHome = () => {
         {trackingError ? (
           <Text style={styles.trackingError}>{trackingError}</Text>
         ) : !canStartTrip && !online ? (
-          <Text style={[styles.trackingHint, { color: colors.error }]}>
-            Start Trip is available during the pickup or drop-off time window.
-          </Text>
+          <View
+            style={[
+              styles.tripWindowNotice,
+              {
+                backgroundColor: `${colors.error}0D`,
+                borderColor: `${colors.error}33`,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.tripWindowNoticeIcon,
+                { backgroundColor: `${colors.error}1A` },
+              ]}
+            >
+              <MaterialIcons name="schedule" size={21} color={colors.error} />
+            </View>
+            <View style={styles.tripWindowNoticeContent}>
+              <Text
+                style={[styles.tripWindowNoticeTitle, { color: colors.error }]}
+              >
+                No active trip window
+              </Text>
+              <Text style={styles.tripWindowNoticeMessage}>
+                Your next route may be scheduled for later. Check your assigned
+                routes and trip times.
+              </Text>
+              <TouchableOpacity
+                style={styles.tripWindowNoticeAction}
+                onPress={() => router.push("/(driver)/(tabs)/trips")}
+                accessibilityRole="button"
+                accessibilityLabel="Open assigned trips"
+              >
+                <Text
+                  style={[
+                    styles.tripWindowNoticeActionText,
+                    { color: colors.error },
+                  ]}
+                >
+                  View assigned trips
+                </Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={17}
+                  color={colors.error}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : trackingBusy ? (
           <Text style={[styles.trackingHint, { color: colors.primary }]}>
             Starting route...
@@ -440,6 +638,55 @@ const styles = StyleSheet.create({
     color: "#065F46",
     paddingHorizontal: 4,
     marginBottom: 12,
+  },
+
+  tripWindowNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderRadius: 16,
+  },
+
+  tripWindowNoticeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  tripWindowNoticeContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  tripWindowNoticeTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+
+  tripWindowNoticeMessage: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  tripWindowNoticeAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    marginTop: 9,
+    paddingVertical: 2,
+  },
+
+  tripWindowNoticeActionText: {
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   routesHeading: {
@@ -478,7 +725,7 @@ const styles = StyleSheet.create({
   },
 
   loadingEyebrow: {
-    color: "#0F9D58",
+    color: DRIVER_COLORS.primary,
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 1.2,
@@ -487,7 +734,7 @@ const styles = StyleSheet.create({
   },
 
   loadingTitle: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.text,
     fontSize: 28,
     fontWeight: "800",
     textAlign: "center",
@@ -495,7 +742,7 @@ const styles = StyleSheet.create({
   },
 
   loadingSubtitle: {
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     fontSize: 14,
     textAlign: "center",
     lineHeight: 22,

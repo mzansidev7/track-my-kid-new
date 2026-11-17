@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useTheme } from "../../../styles/theme";
+import { useOwnerTheme } from "../../../styles/theme";
 import React, { useCallback, useContext, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,7 +23,7 @@ import { Vehicle } from "@/app-support/owner/ownerHelpers/interface/owner.interf
 export default function Vehicles({ setActiveButton }: any) {
   const { user } = useContext(AuthContext);
   const router = useRouter();
-  const { colors, getBrandColors } = useTheme();
+  const { colors, getBrandColors } = useOwnerTheme();
   const ownerColors = getBrandColors("owner");
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -134,16 +134,16 @@ export default function Vehicles({ setActiveButton }: any) {
     const statusIcon = getStatusIcon(normalizedStatus);
     const statusColor =
       normalizedStatus === "maintenance"
-        ? "#FFF4DC"
+        ? "#382D1B"
         : normalizedStatus === "inactive" || normalizedStatus === "offline"
-          ? "#EEF2F7"
-          : "#E5F8ED";
+          ? "#182527"
+          : "#12342F";
     const statusTextColor =
       normalizedStatus === "maintenance"
-        ? "#B7791F"
+        ? "#F2B84B"
         : normalizedStatus === "inactive" || normalizedStatus === "offline"
-          ? "#65758B"
-          : "#20864B";
+          ? "#9AB0B1"
+          : "#35D9B3";
     const statusLabel =
       normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
 
@@ -412,10 +412,10 @@ export default function Vehicles({ setActiveButton }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0D1713",
   },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 56,
@@ -454,9 +454,9 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#D8E9F9",
+    borderColor: "#294238",
     borderRadius: 12,
     height: 42,
     paddingHorizontal: 11,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 0,
-    color: "#1F3552",
+    color: "#F4FBF8",
     fontSize: 12,
   },
   filterList: {
@@ -477,16 +477,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    backgroundColor: "#EEF4FA",
+    backgroundColor: "#13231D",
     borderWidth: 1,
-    borderColor: "#E0EAF5",
+    borderColor: "#294238",
   },
   filterChipSelected: {
-    backgroundColor: "#1769D2",
-    borderColor: "#1769D2",
+    backgroundColor: "#00B894",
+    borderColor: "#00B894",
   },
   filterChipText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "600",
   },
@@ -511,13 +511,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   vehicleCard: {
-    backgroundColor: "white",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     marginBottom: 8,
     paddingHorizontal: 9,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
     shadowColor: "#4D7EA8",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 9,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
   vehicleImage: {
     width: "100%",
@@ -552,16 +552,16 @@ const styles = StyleSheet.create({
   vehicleName: {
     fontSize: 12,
     fontWeight: "bold",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
   vehicleModel: {
     fontSize: 10,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   vehicleLicensePlate: {
     fontSize: 10,
-    color: "#9CA3AF",
+    color: "#82968D",
     marginTop: 2,
   },
   statusBadge: {
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginTop: 12,
   },
   emptyState: {
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtext: {
     fontSize: 13,
-    color: "#9CA3AF",
+    color: "#82968D",
     marginTop: 8,
   },
 });

@@ -1,4 +1,4 @@
-import { useTheme } from "@/styles/theme";
+import { OWNER_COLORS, useOwnerTheme } from "@/styles/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -23,7 +23,7 @@ export const useOwnerPageHeader = ({
   headerColors,
 }: OwnerPageHeaderOptions) => {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors } = useOwnerTheme();
 
   const handleBack = () => {
     if (onBackPress) {
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     marginTop: 12,
-    backgroundColor: "#FFF",
+    backgroundColor: OWNER_COLORS.surface,
     borderRadius: 16,
     paddingVertical: 10,
     alignItems: "center",
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   addButtonText: {
-    color: "#8B5CF6",
+    color: OWNER_COLORS.primary,
     fontSize: 13,
     fontWeight: "700",
   },

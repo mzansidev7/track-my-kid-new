@@ -6,11 +6,14 @@ import React, {
   useState,
 } from "react";
 import {
+  Alert,
   ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -18,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { Picker } from "@react-native-picker/picker";
 import {
   MessageAttachment,
   getMessagePreview,
@@ -25,6 +29,10 @@ import {
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
 import MessageReactions from "../../../components/messages/MessageReactions";
+import GroupChatMenu from "../../../components/messages/GroupChatMenu";
+import GroupSenderAvatar from "../../../components/messages/GroupSenderAvatar";
+import PresenceDot from "../../../components/presence/PresenceDot";
+import PresenceStatus from "../../../components/presence/PresenceStatus";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "../../../context/authContext/auth-context";
 import {
@@ -44,6 +52,15 @@ import {
   getRoleLabel,
 } from "@/app-support/school/schoolHelpers/actionHelpers/actions";
 
+interface GroupCandidate {
+  id: string;
+  name: string;
+  email?: string | null;
+  role: string;
+  grades: string[];
+  isSupport: boolean;
+}
+
 export default function Messages() {
   const { user } = useContext(AuthContext);
   const userId = user?.userData?.id || user?.userData?.user_id || "";
@@ -56,6 +73,33 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState("");
+  const [showGroupComposer, setShowGroupComposer] = useState(false);
+  const [groupCandidates, setGroupCandidates] = useState<GroupCandidate[]>([]);
+  const [loadingGroupCandidates, setLoadingGroupCandidates] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
+  const [groupGradeFilter, setGroupGradeFilter] = useState("All");
+  const [includeSupport, setIncludeSupport] = useState(false);
+  const [selectedGroupMemberIds, setSelectedGroupMemberIds] = useState<string[]>(
+    [],
+  );
+  const supportUserIds = groupCandidates
+    .filter((candidate) => candidate.isSupport)
+    .map((candidate) => candidate.id);
+  const groupGrades = [
+    ...new Set(
+      groupCandidates.flatMap((candidate) =>
+        candidate.isSupport ? [] : candidate.grades || [],
+      ),
+    ),
+  ].sort((first, second) =>
+    first.localeCompare(second, undefined, { numeric: true }),
+  );
+  const selectedGroupCount =
+    selectedGroupMemberIds.length +
+    (includeSupport ? supportUserIds.length : 0);
 
   const loadConversations = useCallback(async () => {
     if (!userId) {
@@ -64,25 +108,128 @@ export default function Messages() {
     }
     setLoading(true);
     try {
-      const fresh = await fetchConversationsWithCache(userId, (cached) => {
-        setConversations(cached);
-        setLoading(false);
-      });
+      const fresh = await fetchConversationsWithCache(
+        userId,
+        (cached) => {
+          setConversations(cached);
+          setLoading(false);
+        },
+        user?.token,
+        "/school/conversations",
+      );
       setConversations(fresh);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [user?.token, userId]);
 
   useEffect(() => {
     loadConversations();
     const channel = userId
-      ? subscribeToConversations(userId, setConversations)
+      ? subscribeToConversations(
+          userId,
+          setConversations,
+          user?.token,
+          "/school/conversations",
+        )
       : null;
     return () => {
       if (channel) unsubscribeFromRealtime(channel);
     };
-  }, [loadConversations, userId]);
+  }, [loadConversations, user?.token, userId]);
+
+  const openGroupComposer = async () => {
+    if (!user?.token) return;
+    setGroupName("");
+    setGroupSearch("");
+    setGroupGradeFilter("All");
+    setIncludeSupport(false);
+    setSelectedGroupMemberIds([]);
+    setGroupCandidates([]);
+    setShowGroupComposer(true);
+    setLoadingGroupCandidates(true);
+    try {
+      const response = await fetch(
+        `${BASE_URL}/school/group-conversation-candidates`,
+        { headers: {         Authorization: "Bearer " + user.token, } },
+      );
+      const payload = await response.json();
+      if (!response.ok || !Array.isArray(payload)) {
+        throw new Error(payload?.error || "Unable to load school contacts.");
+      }
+      setGroupCandidates(payload);
+    } catch (error: any) {
+      setShowGroupComposer(false);
+      Alert.alert("Could not load contacts", error.message);
+    } finally {
+      setLoadingGroupCandidates(false);
+    }
+  };
+
+  const toggleGroupMember = (memberId: string) => {
+    setSelectedGroupMemberIds((current) =>
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId],
+    );
+  };
+
+  const createGroupConversation = async () => {
+    if (!user?.token) return;
+    if (selectedGroupCount < 2) {
+      Alert.alert("Select more people", "Choose at least two people for the group.");
+      return;
+    }
+    setCreatingGroup(true);
+    try {
+      const response = await fetch(`${BASE_URL}/school/group-conversations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify({
+          groupName: groupName.trim(),
+          memberUserIds: [
+            ...new Set([
+              ...selectedGroupMemberIds,
+              ...(includeSupport ? supportUserIds : []),
+            ]),
+          ],
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.conversation_id) {
+        throw new Error(payload?.error || "Could not create the group chat.");
+      }
+
+      const fresh = await fetchConversationsWithCache(
+        userId,
+        undefined,
+        user.token,
+        "/school/conversations",
+      );
+      setConversations(fresh);
+      const conversation = fresh.find(
+        (item) => item.id === payload.conversation_id,
+      );
+      setShowGroupComposer(false);
+      setGroupName("");
+      setGroupSearch("");
+      setGroupGradeFilter("All");
+      setIncludeSupport(false);
+      setSelectedGroupMemberIds([]);
+      if (conversation) {
+        await openConversation(conversation);
+      } else {
+        Alert.alert("Group created", "The new group is not available in your inbox yet.");
+      }
+    } catch (error: any) {
+      Alert.alert("Could not create group", error.message);
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
 
   const openConversation = async (conversation: ConversationData) => {
     setSelectedConversation(conversation);
@@ -180,13 +327,25 @@ export default function Messages() {
             <MaterialIcons name="arrow-back" size={22} color={colors.ink} />
           </TouchableOpacity>
           <View style={styles.chatIdentity}>
-            <Avatar
-              name={selectedConversation.other_participant?.name}
-              color={colors.purple}
-              isSupport={
-                selectedConversation.other_participant?.role === "admin"
-              }
-            />
+            <View style={{ position: "relative" }}>
+              <Avatar
+                name={selectedConversation.other_participant?.name}
+                color={colors.purple}
+                isSupport={
+                  selectedConversation.other_participant?.role === "admin"
+                }
+                avatar={
+                  selectedConversation.conversation_type === "school_group"
+                    ? selectedConversation.other_participant?.avatar
+                    : null
+                }
+              />
+              {selectedConversation.other_participant?.role !== "group" ? (
+                <PresenceDot
+                  userId={selectedConversation.other_participant?.id}
+                />
+              ) : null}
+            </View>
             <View>
               <Text style={styles.chatName}>
                 {selectedConversation.other_participant?.name || "Contact"}
@@ -194,12 +353,37 @@ export default function Messages() {
               <Text style={styles.chatRole}>
                 {getRoleLabel(selectedConversation.other_participant?.role)}
               </Text>
+              {selectedConversation.other_participant?.role !== "group" ? (
+                <PresenceStatus
+                  userId={selectedConversation.other_participant?.id}
+                />
+              ) : null}
             </View>
           </View>
-          <TouchableOpacity style={styles.headerIcon}>
-            <MaterialIcons name="more-vert" size={22} color={colors.muted} />
-          </TouchableOpacity>
+          {["admin_group", "school_group"].includes(
+            selectedConversation.conversation_type,
+          ) ? (
+            <GroupChatMenu
+              key={selectedConversation.id}
+              conversation={selectedConversation}
+              role="school"
+              token={user?.token || ""}
+              currentUserId={userId}
+              onRemoved={() => {
+                setSelectedConversation(null);
+                setMessages([]);
+                void loadConversations();
+              }}
+              onUpdated={() => void loadConversations()}
+              iconColor={colors.muted}
+            />
+          ) : null}
         </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
         {loadingMessages ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={colors.blue} />
@@ -210,6 +394,7 @@ export default function Messages() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <EmptyState
                 title="No messages yet"
@@ -219,76 +404,93 @@ export default function Messages() {
             }
             renderItem={({ item }) => {
               const own = item.sender_id === userId;
+              const isGroupChat = ["admin_group", "school_group"].includes(
+                selectedConversation.conversation_type,
+              );
               const attachment = parseMessageAttachment(item.content);
               return (
                 <View style={[styles.messageRow, own && styles.messageRowOwn]}>
+                  {!own && isGroupChat ? (
+                    <GroupSenderAvatar
+                      name={item.users?.name}
+                      avatar={item.users?.avatar}
+                      userId={item.sender_id}
+                    />
+                  ) : null}
                   <View
                     style={[
-                      styles.bubble,
-                      own ? styles.bubbleOwn : styles.bubbleOther,
+                      styles.messageGroup,
+                      own && styles.messageGroupOwn,
                     ]}
                   >
-                    {attachment ? (
-                      <MessageAttachment content={item.content} isOwn={own} />
-                    ) : (
-                      <Text
-                        style={
-                          own ? styles.messageTextOwn : styles.messageText
-                        }
-                      >
-                        {item.content}
-                      </Text>
-                    )}
                     <View
                       style={[
-                        styles.messageFooter,
-                        own && styles.messageFooterOwn,
+                        styles.bubble,
+                        own ? styles.bubbleOwn : styles.bubbleOther,
                       ]}
                     >
-                      <Text style={own ? styles.timeOwn : styles.time}>
-                        {formatTime(item.sent_at)}
-                      </Text>
-                      {!item.deliveryError && own && item.reactions?.length ? (
-                        <MessageReactions
-                          apiBaseUrl={BASE_URL}
-                          role="school"
-                          conversationId={selectedConversation.id}
-                          messageId={item.id}
-                          token={user?.token || ""}
-                          currentUserId={userId}
-                          accentColor="#159B3A"
-                          reactions={item.reactions}
-                          isOwn
-                        />
-                      ) : null}
-                      {!item.deliveryError && !own ? (
-                        <MessageReactions
-                          apiBaseUrl={BASE_URL}
-                          role="school"
-                          conversationId={selectedConversation.id}
-                          messageId={item.id}
-                          token={user?.token || ""}
-                          currentUserId={userId}
-                          accentColor="#159B3A"
-                          reactions={item.reactions}
+                    <Pressable
+                      onLongPress={() => {
+                        if (!own) setReactionPickerMessageId(item.id);
+                      }}
+                      delayLongPress={250}
+                    >
+                      {attachment ? (
+                        <MessageAttachment
+                          content={item.content}
                           isOwn={own}
                         />
+                      ) : (
+                        <Text
+                          style={
+                            own ? styles.messageTextOwn : styles.messageText
+                          }
+                        >
+                          {item.content}
+                        </Text>
+                      )}
+                      <View
+                        style={[
+                          styles.messageFooter,
+                          own && styles.messageFooterOwn,
+                        ]}
+                      >
+                        <Text style={own ? styles.timeOwn : styles.time}>
+                          {formatTime(item.sent_at)}
+                        </Text>
+                      </View>
+                      {item.deliveryError ? (
+                        <Text style={styles.messageDeliveryError}>
+                          Message not sent
+                        </Text>
                       ) : null}
-                    </View>
-                    {item.deliveryError ? (
-                      <Text style={styles.messageDeliveryError}>
-                        Message not sent
-                      </Text>
+                    </Pressable>
+                    {!item.deliveryError &&
+                    (!own || item.reactions?.length) ? (
+                      <MessageReactions
+                        apiBaseUrl={BASE_URL}
+                        role="school"
+                        conversationId={selectedConversation.id}
+                        messageId={item.id}
+                        token={user?.token || ""}
+                        currentUserId={userId}
+                        accentColor="#159B3A"
+                        reactions={item.reactions}
+                        isOwn={own}
+                        longPressToReact
+                        pickerOpen={reactionPickerMessageId === item.id}
+                        onPickerOpenChange={(open) =>
+                          setReactionPickerMessageId(open ? item.id : "")
+                        }
+                      />
                     ) : null}
+                    </View>
                   </View>
                 </View>
               );
             }}
           />
         )}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
           <MessageComposer
             apiBaseUrl={BASE_URL}
             role="school"
@@ -307,6 +509,7 @@ export default function Messages() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <>
       <FlatList
         data={filteredConversations}
         keyExtractor={(item) => item.id}
@@ -322,8 +525,17 @@ export default function Messages() {
                   Stay connected with your school network
                 </Text>
               </View>
-              <View style={styles.headerBadge}>
-                <MaterialIcons name="chat" size={22} color={colors.blue} />
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.groupButton}
+                  onPress={() => void openGroupComposer()}
+                  accessibilityLabel="Create group chat"
+                >
+                  <MaterialIcons name="group-add" size={22} color={colors.blue} />
+                </TouchableOpacity>
+                <View style={styles.headerBadge}>
+                  <MaterialIcons name="chat" size={22} color={colors.blue} />
+                </View>
               </View>
             </View>
             <View style={styles.searchBox}>
@@ -360,6 +572,147 @@ export default function Messages() {
           />
         )}
       />
+      <Modal
+        visible={showGroupComposer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGroupComposer(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.groupModal}>
+            <Text style={styles.groupModalTitle}>Create a group chat</Text>
+            <TextInput
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholder="Group name (optional)"
+              maxLength={80}
+              style={styles.groupNameInput}
+            />
+            <TextInput
+              value={groupSearch}
+              onChangeText={setGroupSearch}
+              placeholder="Search school contacts"
+              style={styles.groupNameInput}
+            />
+            <Text style={styles.groupFieldLabel}>Show by grade</Text>
+            <View style={styles.groupGradePicker}>
+              <Picker
+                selectedValue={groupGradeFilter}
+                onValueChange={(value) => setGroupGradeFilter(value)}
+                style={styles.groupGradePickerControl}
+              >
+                <Picker.Item label="All grades" value="All" />
+                {groupGrades.map((grade) => (
+                  <Picker.Item
+                    key={grade}
+                    label={grade}
+                    value={grade}
+                  />
+                ))}
+              </Picker>
+            </View>
+            <TouchableOpacity
+              style={styles.groupSupportOption}
+              onPress={() => setIncludeSupport((selected) => !selected)}
+              disabled={supportUserIds.length === 0}
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: includeSupport,
+                disabled: supportUserIds.length === 0,
+              }}
+            >
+              <MaterialIcons
+                name={
+                  includeSupport ? "check-box" : "check-box-outline-blank"
+                }
+                size={21}
+                color={includeSupport ? colors.blue : colors.muted}
+              />
+              <View style={styles.groupCandidateCopy}>
+                <Text style={styles.groupCandidateName}>Include support team</Text>
+                <Text style={styles.groupCandidateRole}>
+                  {supportUserIds.length
+                    ? `${supportUserIds.length} available`
+                    : "No support team members are available"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            {loadingGroupCandidates ? (
+              <ActivityIndicator style={styles.groupLoading} color={colors.blue} />
+            ) : (
+              <FlatList
+                data={groupCandidates.filter((candidate) => {
+                  if (candidate.isSupport) return false;
+                  const matchesSearch = `${candidate.name} ${candidate.role} ${candidate.email || ""}`
+                    .toLowerCase()
+                    .includes(groupSearch.trim().toLowerCase());
+                  const matchesGrade =
+                    groupGradeFilter === "All" ||
+                    candidate.grades?.length === 0 ||
+                    candidate.grades?.includes(groupGradeFilter);
+                  return matchesSearch && matchesGrade;
+                })}
+                keyExtractor={(item) => item.id}
+                style={styles.groupCandidateList}
+                ListEmptyComponent={
+                  <Text style={styles.groupEmpty}>
+                    No linked school contacts are available.
+                  </Text>
+                }
+                renderItem={({ item }) => {
+                  const selected = selectedGroupMemberIds.includes(item.id);
+                  return (
+                    <TouchableOpacity
+                      style={styles.groupCandidate}
+                      onPress={() => toggleGroupMember(item.id)}
+                    >
+                      <View style={styles.groupCandidateCopy}>
+                        <Text style={styles.groupCandidateName}>{item.name}</Text>
+                        <Text style={styles.groupCandidateRole}>
+                          {item.role || "Contact"}
+                          {item.grades?.length
+                            ? ` · ${item.grades.join(", ")}`
+                            : ""}
+                        </Text>
+                      </View>
+                      <MaterialIcons
+                        name={selected ? "check-box" : "check-box-outline-blank"}
+                        size={22}
+                        color={selected ? colors.blue : colors.muted}
+                      />
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+            <View style={styles.groupModalActions}>
+              <TouchableOpacity
+                style={styles.groupCancelButton}
+                onPress={() => setShowGroupComposer(false)}
+                disabled={creatingGroup}
+              >
+                <Text style={styles.groupCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.groupCreateButton,
+                  (creatingGroup || selectedGroupCount < 2) &&
+                    styles.groupCreateButtonDisabled,
+                ]}
+                onPress={() => void createGroupConversation()}
+                disabled={creatingGroup || selectedGroupCount < 2}
+              >
+                {creatingGroup ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.groupCreateText}>Create group</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      </>
     </SafeAreaView>
   );
 }
@@ -368,10 +721,12 @@ function Avatar({
   name,
   color,
   isSupport = false,
+  avatar,
 }: {
   name?: string;
   color: string;
   isSupport?: boolean;
+  avatar?: string | null;
 }) {
   return (
     <View style={[styles.avatar, { backgroundColor: `${color}18` }]}>
@@ -380,6 +735,12 @@ function Avatar({
           source={require("@/assets/images/logo.png")}
           style={styles.avatarImage}
           resizeMode="contain"
+        />
+      ) : avatar ? (
+        <Image
+          source={{ uri: avatar }}
+          style={styles.avatarImage}
+          resizeMode="cover"
         />
       ) : (
         <Text style={[styles.avatarText, { color }]}>{getInitials(name)}</Text>
@@ -408,11 +769,21 @@ function ConversationRow({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Avatar
-        name={item.other_participant?.name}
-        color={colors.blue}
-        isSupport={item.other_participant?.role === "admin"}
-      />
+      <View style={{ position: "relative" }}>
+        <Avatar
+          name={item.other_participant?.name}
+          color={colors.blue}
+          isSupport={item.other_participant?.role === "admin"}
+          avatar={
+            item.conversation_type === "school_group"
+              ? item.other_participant?.avatar
+              : null
+          }
+        />
+        {item.other_participant?.role !== "group" ? (
+          <PresenceDot userId={item.other_participant?.id} showOffline />
+        ) : null}
+      </View>
       <View style={styles.conversationCopy}>
         <View style={styles.conversationTop}>
           <Text style={styles.name} numberOfLines={1}>
@@ -477,6 +848,119 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  groupButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  groupModal: {
+    maxHeight: "85%",
+    borderRadius: 20,
+    padding: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  groupModalTitle: {
+    color: colors.ink,
+    fontSize: 19,
+    fontWeight: "800",
+    marginBottom: 14,
+  },
+  groupNameInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    color: colors.ink,
+    marginBottom: 10,
+  },
+  groupFieldLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 5,
+  },
+  groupGradePicker: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    justifyContent: "center",
+    marginBottom: 10,
+    overflow: "hidden",
+  },
+  groupGradePickerControl: { color: colors.ink },
+  groupSupportOption: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  groupCandidateList: { maxHeight: 320, marginTop: 2 },
+  groupLoading: { paddingVertical: 40 },
+  groupEmpty: {
+    color: colors.muted,
+    textAlign: "center",
+    paddingVertical: 24,
+    fontSize: 13,
+  },
+  groupCandidate: {
+    minHeight: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    gap: 10,
+  },
+  groupCandidateCopy: { flex: 1 },
+  groupCandidateName: { color: colors.ink, fontSize: 14, fontWeight: "700" },
+  groupCandidateRole: {
+    color: colors.muted,
+    fontSize: 11,
+    marginTop: 3,
+    textTransform: "capitalize",
+  },
+  groupModalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
+  },
+  groupCancelButton: {
+    minHeight: 42,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  groupCancelText: { color: colors.muted, fontSize: 13, fontWeight: "700" },
+  groupCreateButton: {
+    minWidth: 120,
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: colors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  groupCreateButtonDisabled: { opacity: 0.5 },
+  groupCreateText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   searchBox: {
     height: 48,
     borderRadius: 14,
@@ -517,9 +1001,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
   },
-  avatarImage: { width: "100%", height: "100%" },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 16 },
   avatarText: { fontSize: 15, fontWeight: "800" },
   conversationCopy: { flex: 1, marginLeft: 12 },
   conversationTop: {
@@ -602,8 +1085,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   messageRowOwn: { justifyContent: "flex-end" },
+  senderAvatar: { width: 28, height: 28, borderRadius: 14, marginRight: 7 },
+  senderAvatarContainer: { position: "relative", marginRight: 7 },
+  messageGroup: { maxWidth: "84%", alignItems: "flex-start" },
+  messageGroupOwn: { alignItems: "flex-end" },
   bubble: {
-    maxWidth: "78%",
+    maxWidth: "100%",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 17,

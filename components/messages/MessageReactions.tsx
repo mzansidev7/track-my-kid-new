@@ -3,11 +3,14 @@ import React, { useState } from "react";
 import {
   Alert,
   StyleSheet,
+  ScrollView,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { resolveWorkingBaseUrl } from "../../url";
+import EmojiPicker from "./EmojiPicker";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
 
@@ -20,14 +23,18 @@ export type MessageReaction = {
 
 type MessageReactionsProps = {
   apiBaseUrl: string;
-  role: "owner" | "driver" | "client" | "school";
+  role: "owner" | "driver" | "client" | "school" | "admin";
   conversationId: string;
   messageId: string;
   token: string;
   currentUserId: string;
   accentColor: string;
+  reactionEndpoint?: string;
   reactions?: MessageReaction[];
   isOwn?: boolean;
+  longPressToReact?: boolean;
+  pickerOpen?: boolean;
+  onPickerOpenChange?: (open: boolean) => void;
 };
 
 const EMPTY_REACTIONS: MessageReaction[] = [];
@@ -40,8 +47,12 @@ const MessageReactions = ({
   token,
   currentUserId,
   accentColor,
+  reactionEndpoint,
   reactions: initialReactions = EMPTY_REACTIONS,
   isOwn = false,
+  longPressToReact = false,
+  pickerOpen: controlledPickerOpen,
+  onPickerOpenChange,
 }: MessageReactionsProps) => {
   const { width: windowWidth } = useWindowDimensions();
   const [reactionOverride, setReactionOverride] = useState<{
@@ -54,60 +65,79 @@ const MessageReactions = ({
       : initialReactions;
   const updateReactions = (value: MessageReaction[]) =>
     setReactionOverride({ source: initialReactions, value });
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [localPickerOpen, setLocalPickerOpen] = useState(false);
+  const pickerOpen = controlledPickerOpen ?? localPickerOpen;
   const [busyEmoji, setBusyEmoji] = useState("");
+  const [fullPickerOpen, setFullPickerOpen] = useState(false);
+  const setPickerOpen = (open: boolean) => {
+    setLocalPickerOpen(open);
+    onPickerOpenChange?.(open);
+  };
 
   const toggleReaction = async (emoji: string) => {
     if (busyEmoji) return;
     const previous = reactions;
     setBusyEmoji(emoji);
     setPickerOpen(false);
+    setFullPickerOpen(false);
     const updatedReactions = (() => {
-      const selected = reactions.find((item) => item.emoji === emoji);
-      const userAlreadyReacted =
-        selected?.userIds?.includes(currentUserId) ||
-        selected?.reactedByMe;
-      if (userAlreadyReacted) {
-        return reactions
-          .map((item) =>
-            item.emoji === emoji
-              ? {
-                  ...item,
-                  count: item.count - 1,
-                  userIds: item.userIds?.filter((id) => id !== currentUserId),
-                  reactedByMe: false,
-                }
-              : item,
-          )
-          .filter((item) => item.count > 0);
-      }
-      if (selected) {
-        return reactions.map((item) =>
-          item.emoji === emoji
-            ? {
-                ...item,
-                count: item.count + 1,
-                userIds: [...(item.userIds || []), currentUserId],
-                reactedByMe: true,
-              }
-            : item,
-        );
-      }
-      return [
-        ...reactions,
-        {
+      const previousUserReaction = reactions.find(
+        (item) =>
+          item.userIds?.includes(currentUserId) || item.reactedByMe,
+      );
+      const removingReaction = previousUserReaction?.emoji === emoji;
+      let targetFound = false;
+      const updated = reactions
+        .map((item) => {
+          const userReacted =
+            item.userIds?.includes(currentUserId) || item.reactedByMe;
+          const isTarget = item.emoji === emoji;
+          if (isTarget) targetFound = true;
+          const userIds = userReacted
+            ? (item.userIds || []).filter((id) => id !== currentUserId)
+            : [...(item.userIds || [])];
+          const addingReaction = isTarget && !removingReaction && !userReacted;
+          if (addingReaction && !userIds.includes(currentUserId)) {
+            userIds.push(currentUserId);
+          }
+          return {
+            ...item,
+            count: item.count - (userReacted ? 1 : 0) + (addingReaction ? 1 : 0),
+            userIds,
+            reactedByMe:
+              (isTarget && !removingReaction) ||
+              (item.reactedByMe && !userReacted),
+          };
+        })
+        .filter((item) => item.count > 0);
+      if (!targetFound && !removingReaction) {
+        updated.push({
           emoji,
           count: 1,
           userIds: [currentUserId],
           reactedByMe: true,
-        },
-      ];
+        });
+      }
+      return updated;
     })();
     updateReactions(updatedReactions);
 
     try {
+      const baseUrl = reactionEndpoint
+        ? await resolveWorkingBaseUrl()
+        : apiBaseUrl;
+      const endpoint =
+        reactionEndpoint && !/^https?:\/\//i.test(reactionEndpoint)
+          ? `${baseUrl}${reactionEndpoint}`
+          : reactionEndpoint ||
+            (role === "admin"
+              ? ""
+              : `${baseUrl}/${role}/conversations/${conversationId}/messages/${messageId}/reactions`);
+      if (!endpoint) {
+        throw new Error("The Admin reaction endpoint is not configured.");
+      }
       const response = await fetch(
-        `${apiBaseUrl}/${role}/conversations/${conversationId}/messages/${messageId}/reactions`,
+        endpoint,
         {
           method: "POST",
           headers: {
@@ -137,11 +167,21 @@ const MessageReactions = ({
   };
 
   return (
-    <View
-      style={styles.container}
-    >
+    <View style={styles.container}>
+      <EmojiPicker
+        visible={!isOwn && fullPickerOpen}
+        accentColor={accentColor}
+        onSelect={(emoji) => void toggleReaction(emoji)}
+        onClose={() => setFullPickerOpen(false)}
+      />
       {reactions.length > 0 ? (
-        <View style={styles.reactionList}>
+        <ScrollView
+          horizontal
+          style={styles.reactionScroller}
+          contentContainerStyle={styles.reactionList}
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+        >
           {reactions.map((reaction) => {
             const selected =
               reaction.userIds?.includes(currentUserId) ||
@@ -151,24 +191,28 @@ const MessageReactions = ({
                 key={reaction.emoji}
                 style={[
                   styles.reactionChip,
+                  selected && styles.reactionChipSelected,
                 ]}
-                onPress={isOwn ? undefined : () => void toggleReaction(reaction.emoji)}
+                onPress={
+                  isOwn ? undefined : () => void toggleReaction(reaction.emoji)
+                }
                 disabled={isOwn || Boolean(busyEmoji)}
-                accessibilityLabel={`${reaction.emoji} reaction`}
+                accessibilityLabel={`${reaction.count} ${reaction.emoji} reaction${reaction.count === 1 ? "" : "s"}`}
                 accessibilityState={{ selected: Boolean(selected) }}
               >
                 <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                <Text style={styles.reactionCount}>{reaction.count}</Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       ) : null}
       {!isOwn && pickerOpen ? (
         <View
           style={[
             styles.picker,
             {
-              width: Math.max(0, Math.min(224, windowWidth - (isOwn ? 32 : 80))),
+              width: Math.max(0, Math.min(260, windowWidth - 80)),
             },
             isOwn ? styles.pickerOwn : styles.pickerOther,
           ]}
@@ -183,9 +227,19 @@ const MessageReactions = ({
               <Text style={styles.pickerEmoji}>{emoji}</Text>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() => {
+              setPickerOpen(false);
+              setFullPickerOpen(true);
+            }}
+            accessibilityLabel="More reactions"
+          >
+            <MaterialIcons name="add" size={22} color="#52657C" />
+          </TouchableOpacity>
         </View>
       ) : null}
-      {!isOwn && (
+      {!isOwn && !longPressToReact && (
         <>
           <TouchableOpacity
             style={styles.addButton}
@@ -197,7 +251,7 @@ const MessageReactions = ({
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => setPickerOpen((open) => !open)}
+            onPress={() => setPickerOpen(!pickerOpen)}
             disabled={Boolean(busyEmoji)}
             accessibilityLabel={pickerOpen ? "Close reactions" : "Add reaction"}
             accessibilityState={{ expanded: pickerOpen }}
@@ -218,28 +272,48 @@ const styles = StyleSheet.create({
   container: {
     position: "relative",
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 4,
+    gap: 3,
+    marginTop: 4,
     maxWidth: "100%",
+    alignSelf: "stretch",
     flexShrink: 1,
+  },
+  reactionScroller: {
+    flexGrow: 0,
+    flexShrink: 1,
+    maxWidth: "100%",
   },
   reactionList: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 2,
+    gap: 3,
+    paddingBottom: 1,
   },
   reactionChip: {
-    minWidth: 16,
-    height: 18,
+    flexShrink: 0,
+    minHeight: 18,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 1,
-    backgroundColor: "transparent",
+    gap: 1,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: "#F1F5F9",
+  },
+  reactionChipSelected: {
+    backgroundColor: "#E8F2FF",
+    borderWidth: 1,
+    borderColor: "#B8D4F5",
+  },
+  reactionCount: {
+    color: "#52657C",
+    fontSize: 9,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   reactionEmoji: {
-    fontSize: 10,
+    fontSize: 9,
   },
   addButton: {
     width: 20,
@@ -277,6 +351,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
+  },
+  moreButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
   },
   pickerEmoji: {
     fontSize: 20,

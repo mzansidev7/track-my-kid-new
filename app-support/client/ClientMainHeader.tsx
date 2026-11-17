@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/styles/theme";
+import { CLIENT_COLORS } from "@/styles/theme";
 
 interface ClientHeaderProps {
   onMenuPress?: () => void;
@@ -35,34 +35,32 @@ export const ClientMainHeader = ({
   containerStyle,
   isLoading = false,
 }: ClientHeaderProps) => {
-  const { colors } = useTheme();
-
   return (
     <View
       style={[
         styles.headerWrapper,
         {
-          backgroundColor: colors.background,
+          backgroundColor: CLIENT_COLORS.background,
         },
         containerStyle,
       ]}
     >
-      <Text style={[styles.greeting, { color: colors.text.primary }]}>
+      <Text style={[styles.greeting, { color: CLIENT_COLORS.textSecondary }]}>
         {greeting}
       </Text>
       <View style={styles.heroNameRow}>
-        <Text style={[styles.greetingName, { color: colors.text.primary }]}>
+        <Text style={[styles.greetingName, { color: CLIENT_COLORS.textPrimary }]}>
           {name}
         </Text>
         {!isLoading && (
-          <Text style={[styles.wave, { color: colors.text.primary }]}>👋</Text>
+          <Text style={[styles.wave, { color: CLIENT_COLORS.primaryBright }]}>👋</Text>
         )}
         {isLoading && (
-          <Text style={[styles.wave, { color: colors.text.primary }]}>⏳</Text>
+          <Text style={[styles.wave, { color: CLIENT_COLORS.primaryBright }]}>⏳</Text>
         )}
       </View>
       {!isLoading && (
-        <Text style={[styles.subtext, { color: colors.text.secondary }]}>
+        <Text style={[styles.subtext, { color: CLIENT_COLORS.textSecondary }]}>
           {subtitle}
         </Text>
       )}
@@ -120,7 +118,7 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
   },
   greeting: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
     marginBottom: 6,
   },
@@ -130,15 +128,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   greetingName: {
-    fontSize: 32,
+    fontSize: 29,
     fontWeight: "800",
   },
   wave: {
-    fontSize: 32,
+    fontSize: 29,
     marginLeft: 8,
   },
   subtext: {
-    fontSize: 15,
+    fontSize: 13,
     lineHeight: 22,
   },
   rightAccessory: {

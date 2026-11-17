@@ -8,24 +8,45 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment variables",
-  );
-}
+const getSupabaseClient = () => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment variables",
+    );
+  }
 
-// Regular client for user operations (uses anon key)
-export const client = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
+  const isBrowser = typeof window !== "undefined";
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: isBrowser ? AsyncStorage : undefined,
+      autoRefreshToken: true,
+      persistSession: isBrowser,
+      detectSessionInUrl: false,
     },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  });
+};
+
+let cachedClient: ReturnType<typeof createClient> | null = null;
+
+export const client = new Proxy({} as ReturnType<typeof createClient>, {
+  get: (_target, prop) => {
+    if (!cachedClient) {
+      cachedClient = getSupabaseClient();
+    }
+    return (cachedClient as any)[prop as keyof typeof cachedClient];
+  },
+  set: (_target, prop, value) => {
+    if (!cachedClient) {
+      cachedClient = getSupabaseClient();
+    }
+    (cachedClient as any)[prop as keyof typeof cachedClient] = value;
+    return true;
   },
 });
 

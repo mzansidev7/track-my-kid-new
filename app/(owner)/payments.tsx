@@ -1,6 +1,6 @@
-import * as FileSystem from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
@@ -9,10 +9,13 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { resolveWorkingBaseUrl } from "../../url";
@@ -33,15 +36,31 @@ const formatCurrency = (cents: number, currency = "zar") => {
   }).format(value);
 };
 
+const getTransferStatusLabel = (transfer: any) => {
+  switch (transfer?.status) {
+    case "paid":
+      return "Transferred to your bank account";
+    case "processing":
+      return "Bank transfer processing";
+    case "queued":
+      return "Bank transfer queued";
+    case "failed":
+      return "Bank transfer needs attention";
+    case "reversed":
+      return "Bank transfer reversed";
+    default:
+      return null;
+  }
+};
+
 export default function OwnerPayments() {
   const { user } = useContext(AuthContext);
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const fromOnboarding = searchParams.fromOnboarding === "true";
-  const stripeReturn = searchParams.stripe === "complete";
   const [loading, setLoading] = useState(true);
-  const [connectingStripe, setConnectingStripe] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [payoutHistory, setPayoutHistory] = useState<any[]>([]);
   const [childStatuses, setChildStatuses] = useState<any[]>([]);
   const [cashCommissionInvoices, setCashCommissionInvoices] = useState<any[]>([]);
   const [payingCommissionInvoiceId, setPayingCommissionInvoiceId] = useState<
@@ -50,29 +69,89 @@ export default function OwnerPayments() {
   const [confirmingCashPaymentId, setConfirmingCashPaymentId] = useState<
     string | null
   >(null);
+  const [retryingOwnerTransferId, setRetryingOwnerTransferId] = useState<
+    string | null
+  >(null);
   const [billingPeriod, setBillingPeriod] = useState<any>(null);
-  const [connectedAccountId, setConnectedAccountId] = useState("");
-  const [stripeStatus, setStripeStatus] = useState({
-    connected: false,
-    details_submitted: false,
-    charges_enabled: false,
-    payouts_enabled: false,
-    payment_provider: "stripe",
-    automatic_payouts_enabled: false,
+  const [payoutBankDetails, setPayoutBankDetails] = useState({
+    bank_name: "",
+    bank_account_number: "",
+    bank_branch_code: "",
   });
+  const [savedPayoutBankDetails, setSavedPayoutBankDetails] = useState({
+    bank_name: "",
+    bank_account_number: "",
+    bank_branch_code: "",
+  });
+  const [payoutAccountReady, setPayoutAccountReady] = useState(false);
+  const [savedPayoutAccountReady, setSavedPayoutAccountReady] = useState(false);
+  const [payoutTransfersEnabled, setPayoutTransfersEnabled] = useState(false);
+  const [cardPaymentsEnabled, setCardPaymentsEnabled] = useState(false);
+  const [cardPaymentsPreferenceAvailable, setCardPaymentsPreferenceAvailable] =
+    useState(false);
+  const [savingCardPaymentSetting, setSavingCardPaymentSetting] =
+    useState(false);
+  const [payoutBanks, setPayoutBanks] = useState<
+    { name: string; code: string }[]
+  >([]);
+  const [loadingPayoutBanks, setLoadingPayoutBanks] = useState(false);
+  const [payoutBanksError, setPayoutBanksError] = useState("");
+  const payoutBanksRequestRef = useRef(false);
+  const [editingPayoutDetails, setEditingPayoutDetails] = useState(false);
+  const [savingPayoutDetails, setSavingPayoutDetails] = useState(false);
   const [notification, setNotification] = useState<{
     visible: boolean;
     message: string;
     type: "success" | "error" | "warning";
   }>({ visible: false, message: "", type: "success" });
+  const hasPayoutBankDetails = Boolean(
+    payoutBankDetails.bank_name.trim() &&
+      payoutBankDetails.bank_account_number.trim() &&
+      payoutBankDetails.bank_branch_code.trim(),
+  );
+  const hasSavedPayoutBankDetails = Boolean(
+    savedPayoutBankDetails.bank_name.trim() &&
+      savedPayoutBankDetails.bank_account_number.trim() &&
+      savedPayoutBankDetails.bank_branch_code.trim(),
+  );
+  const maskedAccountNumber = payoutBankDetails.bank_account_number
+    ? `•••• ${payoutBankDetails.bank_account_number.slice(-4)}`
+    : "";
 
   const { renderHeader } = useOwnerPageHeader({
-    title: "Payments & Payouts",
-    subtitle: "Manage your payment methods and payouts",
+    title: "Payments",
+    subtitle: "Review client payments and payout availability",
     onBackPress: fromOnboarding
       ? () => router.push("/(owner)/onboarding")
       : () => router.push("/(owner)/(tabs)/profile"),
   });
+
+  const loadPayoutBanks = useCallback(async () => {
+    if (!user?.token || payoutBanksRequestRef.current) return;
+    payoutBanksRequestRef.current = true;
+    setLoadingPayoutBanks(true);
+    setPayoutBanksError("");
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/payout/banks`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data)) {
+        throw new Error(
+          data.error || "Unable to load Paystack's supported banks.",
+        );
+      }
+      setPayoutBanks(data);
+    } catch (error: any) {
+      setPayoutBanksError(
+        error?.message || "Unable to load Paystack's supported banks.",
+      );
+    } finally {
+      payoutBanksRequestRef.current = false;
+      setLoadingPayoutBanks(false);
+    }
+  }, [user]);
 
   const loadData = async () => {
     if (!user?.token) return;
@@ -80,7 +159,7 @@ export default function OwnerPayments() {
     try {
       const baseUrl = await resolveWorkingBaseUrl();
 
-      const [profileRes, historyRes, stripeStatusRes, paymentStatusRes] =
+      const [profileRes, historyRes, paymentStatusRes] =
         await Promise.all([
           fetch(`${baseUrl}/owner/profile`, {
             headers: { Authorization: "Bearer " + user.token },
@@ -88,22 +167,23 @@ export default function OwnerPayments() {
           fetch(`${baseUrl}/owner/payments/history`, {
             headers: { Authorization: `Bearer ${user.token}` },
           }),
-          fetch(`${baseUrl}/owner/payments/stripe-status`, {
-            headers: { Authorization: `Bearer ${user.token}` },
-          }),
           fetch(`${baseUrl}/owner/payments/status`, {
             headers: { Authorization: `Bearer ${user.token}` },
           }),
         ]);
 
+      const payoutHistoryRes = await fetch(
+        `${baseUrl}/owner/payments/payouts`,
+        { headers: { Authorization: "Bearer " + user.token } },
+      );
       const cashInvoicesRes = await fetch(
         `${baseUrl}/owner/payments/cash-commission-invoices`,
         { headers: { Authorization: `Bearer ${user.token}` } },
       );
       const profileData = await profileRes.json();
       const historyData = await historyRes.json();
-      const stripeStatusData = await stripeStatusRes.json();
       const paymentStatusData = await paymentStatusRes.json();
+      const payoutHistoryData = await payoutHistoryRes.json();
       const cashInvoicesData = await cashInvoicesRes.json();
 
       if (!profileRes.ok) {
@@ -112,14 +192,14 @@ export default function OwnerPayments() {
       if (!historyRes.ok) {
         throw new Error(historyData.error || "Failed to load payment history");
       }
-      if (!stripeStatusRes.ok) {
-        throw new Error(
-          stripeStatusData.error || "Failed to load payout status",
-        );
-      }
       if (!paymentStatusRes.ok) {
         throw new Error(
           paymentStatusData.error || "Failed to load child payment status",
+        );
+      }
+      if (!payoutHistoryRes.ok) {
+        throw new Error(
+          payoutHistoryData.error || "Failed to load payout statements",
         );
       }
       if (!cashInvoicesRes.ok) {
@@ -128,14 +208,36 @@ export default function OwnerPayments() {
         );
       }
 
-      setConnectedAccountId(profileData.stripe_connected_account_id || "");
-      setStripeStatus(stripeStatusData);
       setHistory(historyData || []);
+      setPayoutHistory(
+        Array.isArray(payoutHistoryData) ? payoutHistoryData : [],
+      );
       setChildStatuses(paymentStatusData.children || []);
       setCashCommissionInvoices(
         Array.isArray(cashInvoicesData) ? cashInvoicesData : [],
       );
       setBillingPeriod(paymentStatusData);
+      const bankDetails = {
+        bank_name: profileData.bank_name || "",
+        bank_account_number: profileData.bank_account_number || "",
+        bank_branch_code: profileData.bank_branch_code || "",
+      };
+      setPayoutBankDetails(bankDetails);
+      setSavedPayoutBankDetails(bankDetails);
+      setPayoutAccountReady(profileData.payout_account_ready === true);
+      setSavedPayoutAccountReady(profileData.payout_account_ready === true);
+      setPayoutTransfersEnabled(profileData.payout_transfers_enabled === true);
+      setCardPaymentsEnabled(profileData.card_payments_enabled === true);
+      setCardPaymentsPreferenceAvailable(
+        profileData.card_payments_preference_available === true,
+      );
+      if (
+        !bankDetails.bank_name.trim() ||
+        !bankDetails.bank_account_number.trim() ||
+        !bankDetails.bank_branch_code.trim()
+      ) {
+        void loadPayoutBanks();
+      }
       if (profileData.id) {
         await AsyncStorage.setItem(
           `owner-payment-history-${profileData.id}`,
@@ -150,6 +252,117 @@ export default function OwnerPayments() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const savePayoutBankDetails = async () => {
+    if (!user?.token || savingPayoutDetails) return;
+    if (
+      !payoutBankDetails.bank_name.trim() ||
+      !payoutBankDetails.bank_account_number.trim() ||
+      !payoutBankDetails.bank_branch_code.trim()
+    ) {
+      setNotification({
+        visible: true,
+        message:
+          "Select a supported bank and enter the bank account number before saving.",
+        type: "warning",
+      });
+      return;
+    }
+    setSavingPayoutDetails(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify(payoutBankDetails),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const payoutErrorMessages: Record<string, string> = {
+          OWNER_PAYOUT_ACCOUNT_VERIFICATION_FAILED:
+            "Paystack could not verify this account. Confirm the account number and selected bank.",
+          OWNER_PAYOUT_BANK_INVALID:
+            "Paystack rejected the selected bank. Reload the bank list and choose the matching bank.",
+        };
+        throw new Error(
+          payoutErrorMessages[data.error] ||
+            data.error ||
+            "Unable to save payout bank details.",
+        );
+      }
+      setEditingPayoutDetails(false);
+      setNotification({
+        visible: true,
+        message:
+          "Payout bank details saved. Client card-payment availability will update automatically.",
+        type: "success",
+      });
+      await loadData();
+    } catch (error: any) {
+      setNotification({
+        visible: true,
+        message: error?.message || "Unable to save payout bank details.",
+        type: "error",
+      });
+    } finally {
+      setSavingPayoutDetails(false);
+    }
+  };
+
+  const updateCardPaymentsEnabled = async (enabled: boolean) => {
+    if (!user?.token || savingCardPaymentSetting) return;
+    setSavingCardPaymentSetting(true);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/owner/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + user.token,
+        },
+        body: JSON.stringify({ card_payments_enabled: enabled }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const messages: Record<string, string> = {
+          OWNER_PAYOUTS_NOT_ENABLED:
+            "The platform has not enabled automatic owner transfers yet. Clients cannot pay by card until this is enabled.",
+          OWNER_PAYOUT_ACCOUNT_REQUIRED:
+            "Add complete bank details before accepting card payments.",
+          OWNER_PAYOUT_ACCOUNT_VERIFICATION_FAILED:
+            "Paystack could not verify this account. Confirm the account number and select the correct bank from the list.",
+          OWNER_PAYOUT_BANK_INVALID:
+            "Paystack rejected the selected bank. Reload the bank list and choose the matching bank.",
+        };
+        throw new Error(
+          messages[data.error] || data.error || "Unable to update card payment settings.",
+        );
+      }
+      setCardPaymentsEnabled(enabled);
+      if (enabled) {
+        setPayoutAccountReady(true);
+        setSavedPayoutAccountReady(true);
+      }
+      setNotification({
+        visible: true,
+        message: enabled
+          ? "Card payments are on. Clients can pay by card."
+          : "Card payments are off. Clients cannot make card payments.",
+        type: "success",
+      });
+    } catch (error: any) {
+      setNotification({
+        visible: true,
+        message: error?.message || "Unable to update card payment settings.",
+        type: "error",
+      });
+    } finally {
+      setSavingCardPaymentSetting(false);
     }
   };
 
@@ -186,32 +399,63 @@ export default function OwnerPayments() {
     }
   };
 
+  const retryOwnerTransfer = async (paymentId: string) => {
+    if (!user?.token || retryingOwnerTransferId) return;
+    setRetryingOwnerTransferId(paymentId);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/owner/payments/${paymentId}/transfer/retry`,
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer " + user.token },
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to retry the bank transfer.");
+      }
+      setNotification({
+        visible: true,
+        message: "Bank transfer queued for retry.",
+        type: "success",
+      });
+      await loadData();
+    } catch (error: any) {
+      setNotification({
+        visible: true,
+        message: error?.message || "Unable to retry the bank transfer.",
+        type: "error",
+      });
+    } finally {
+      setRetryingOwnerTransferId(null);
+    }
+  };
+
   const openCashCommissionInvoice = async (invoice: any) => {
     try {
-      let paymentUrl = invoice.hosted_invoice_url;
-      if (invoice.payment_provider === "paystack") {
-        if (!user?.token) throw new Error("Please sign in again to pay this invoice.");
-        setPayingCommissionInvoiceId(invoice.id);
-        const baseUrl = await resolveWorkingBaseUrl();
-        const response = await fetch(
-          `${baseUrl}/owner/payments/cash-commission-invoices/${invoice.id}/checkout`,
-          {
-            method: "POST",
-            headers: { Authorization: "Bearer " + user.token },
-          },
+      if (invoice.payment_provider !== "paystack") {
+        throw new Error(
+          "This legacy invoice needs manual reconciliation. Please contact support.",
         );
-        const data = await response.json();
-        if (!response.ok || !data.checkout_url) {
-          throw new Error(
-            data.error || "Unable to initialize commission invoice checkout.",
-          );
-        }
-        paymentUrl = data.checkout_url;
       }
-      if (!paymentUrl) {
-        throw new Error("This invoice does not have a payment link yet.");
+      if (!user?.token) throw new Error("Please sign in again to pay this invoice.");
+      setPayingCommissionInvoiceId(invoice.id);
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/owner/payments/cash-commission-invoices/${invoice.id}/checkout`,
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer " + user.token },
+        },
+      );
+      const data = await response.json();
+      if (!response.ok || !data.checkout_url) {
+        throw new Error(
+          data.error || "Unable to initialize commission invoice checkout.",
+        );
       }
-      await Linking.openURL(paymentUrl);
+      await Linking.openURL(data.checkout_url);
     } catch (error: any) {
       setNotification({
         visible: true,
@@ -245,7 +489,6 @@ export default function OwnerPayments() {
           `owner-payment-history-${ownerId}`,
         );
         if (!cancelled && cached) setHistory(JSON.parse(cached));
-
         const channel = subscribeToPaymentUpdates("owner_id", ownerId, () => {
           loadData();
         });
@@ -286,73 +529,6 @@ export default function OwnerPayments() {
     }
   };
 
-  useEffect(() => {
-    const payoutSetupComplete =
-      stripeStatus.payment_provider === "paystack" || stripeStatus.payouts_enabled;
-    if (!(fromOnboarding || stripeReturn) || !payoutSetupComplete) {
-      return;
-    }
-
-    const finalizeOnboarding = async () => {
-      try {
-        await AsyncStorage.setItem("owner_onboarding_complete", "true");
-      } catch (error) {
-        console.warn("Unable to persist owner onboarding completion:", error);
-      }
-
-      router.replace("/(owner)/(tabs)" as never);
-    };
-
-    finalizeOnboarding();
-  }, [
-    fromOnboarding,
-    router,
-    stripeReturn,
-    stripeStatus.payment_provider,
-    stripeStatus.payouts_enabled,
-  ]);
-
-  const connectStripeAccount = async () => {
-    if (!user?.token) return;
-    setConnectingStripe(true);
-    try {
-      const baseUrl = await resolveWorkingBaseUrl();
-      const res = await fetch(`${baseUrl}/owner/payments/stripe-onboarding`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        throw new Error(
-          data.message || data.error || "Unable to open Stripe onboarding.",
-        );
-      }
-      await Linking.openURL(data.url);
-      setConnectedAccountId(data.stripe_connected_account_id || "connected");
-      setStripeStatus({
-        connected: true,
-        details_submitted: Boolean(data.details_submitted),
-        charges_enabled: Boolean(data.charges_enabled),
-        payouts_enabled: Boolean(data.payouts_enabled),
-        payment_provider: "stripe",
-        automatic_payouts_enabled: Boolean(data.payouts_enabled),
-      });
-      setNotification({
-        visible: true,
-        message: "Continue in Stripe to finish setting up payouts.",
-        type: "success",
-      });
-    } catch (err: any) {
-      setNotification({
-        visible: true,
-        message: err.message || "Unable to connect your payout account.",
-        type: "error",
-      });
-    } finally {
-      setConnectingStripe(false);
-    }
-  };
-
   const downloadHistory = async () => {
     if (!history.length) {
       setNotification({
@@ -380,15 +556,20 @@ export default function OwnerPayments() {
         const ownerFeeOwed =
           item.payment_method === "cash" &&
           ["owed", "invoiced"].includes(item.platform_fee_status);
+        const transfer = Array.isArray(item.owner_payment_transfers)
+          ? item.owner_payment_transfers[0]
+          : item.owner_payment_transfers;
+        const transferStatusLabel = getTransferStatusLabel(transfer);
         const payout =
-          item.payment_provider === "paystack"
-            ? "Not automated"
+          transferStatusLabel ||
+          (item.payment_provider === "paystack"
+            ? "Reconciled through monthly payout statement"
             : formatCurrency(
                 item.payment_method === "cash"
                   ? item.amount_cents || 0
                   : (item.amount_cents || 0) - fee,
                 item.currency,
-              );
+              ));
         const date = item.created_at || item.processed_at || "";
         return [
           item.clients?.users?.name || "Client",
@@ -407,15 +588,7 @@ export default function OwnerPayments() {
           .join(",");
       });
       const csv = [headers.join(","), ...rows].join("\n");
-      const cacheDir =
-        (FileSystem as any).cacheDirectory ||
-        (FileSystem as any).documentDirectory;
-      if (!cacheDir) {
-        throw new Error("Unable to determine storage path.");
-      }
-
       const filename = `payment_history_${Date.now()}.csv`;
-      const fileUri = `${cacheDir}${filename}`;
 
       if (Platform.OS === "web") {
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -433,12 +606,11 @@ export default function OwnerPayments() {
         return;
       }
 
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
-        encoding: "utf8",
-      });
+      const file = new File(Paths.cache, filename);
+      await file.write(csv);
       setNotification({
         visible: true,
-        message: `Payment history saved to ${fileUri}`,
+        message: `Payment history saved to ${file.uri}`,
         type: "success",
       });
     } catch (err: any) {
@@ -461,65 +633,234 @@ export default function OwnerPayments() {
       {renderHeader()}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
-            <Text style={styles.title}>Client / Parent Payment Setup</Text>
+            <Text style={styles.title}>Client and parent payments</Text>
             <View style={styles.payoutCard}>
               <View style={styles.payoutHeader}>
                 <View style={styles.payoutIcon}>
                   <MaterialIcons
-                    name={
-                      stripeStatus.payouts_enabled
-                        ? "check"
-                        : "account-balance-wallet"
-                    }
+                    name="account-balance-wallet"
                     size={22}
-                    color={stripeStatus.payouts_enabled ? "#15803D" : "#B45309"}
+                    color="#B45309"
                   />
                 </View>
                 <View style={styles.payoutCopy}>
-                  <Text style={styles.stripeStatusLabel}>Payout account</Text>
-                  <Text style={styles.stripeStatusValue}>
-                    {stripeStatus.payment_provider === "paystack"
-                      ? "Automatic payouts are disabled"
-                      : stripeStatus.payouts_enabled
-                      ? "Ready to receive money"
-                      : stripeStatus.connected
-                        ? "Finish Stripe setup"
-                        : "Not connected"}
-                  </Text>
+                  <Text style={styles.payoutStatusLabel}>Payment provider</Text>
+                  <Text style={styles.payoutStatusValue}>Paystack</Text>
                 </View>
               </View>
               <Text style={styles.payoutDescription}>
-                {stripeStatus.payment_provider === "paystack"
-                  ? "Paystack client charges are collected by the platform. Owner transfers are not automated yet."
-                  : stripeStatus.payouts_enabled
-                  ? "Client payments will be transferred to your Stripe account."
-                  : "Connect Stripe to verify your identity and add payout details."}
+                Client card fares are collected by Paystack and transferred to
+                your bank account. Add and verify your bank details before
+                clients can pay by card. Transfers are only available when
+                automatic owner payouts are enabled by the platform.
               </Text>
+              <View style={{ marginTop: 16, gap: 10 }}>
+                {hasPayoutBankDetails && !editingPayoutDetails ? (
+                  <>
+                    <View style={styles.bankCard}>
+                      <View style={styles.bankCardHeader}>
+                        <MaterialIcons
+                          name="account-balance"
+                          size={23}
+                          color="#D1FAE5"
+                        />
+                        <Text style={styles.bankCardBrand}>BANK ACCOUNT</Text>
+                        <MaterialIcons
+                          name="verified-user"
+                          size={19}
+                          color={payoutAccountReady ? "#6EE7B7" : "#FCD34D"}
+                        />
+                      </View>
+                      <Text style={styles.bankCardName}>
+                        {payoutBankDetails.bank_name}
+                      </Text>
+                      <Text style={styles.bankCardNumber}>
+                        {maskedAccountNumber}
+                      </Text>
+                      <Text style={styles.bankCardCode}>
+                        Paystack bank code · {payoutBankDetails.bank_branch_code}
+                      </Text>
+                      <Text style={styles.bankCardStatus}>
+                        {payoutAccountReady
+                          ? "Verified for card-payment transfers"
+                          : payoutTransfersEnabled
+                            ? "Saved; Paystack verification is required"
+                            : "Saved; automatic transfers are not enabled yet"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.editPayoutButton}
+                      onPress={() => {
+                        setEditingPayoutDetails(true);
+                        loadPayoutBanks();
+                      }}
+                    >
+                      <MaterialIcons name="edit" size={17} color="#A7F3D0" />
+                      <Text style={styles.editPayoutButtonText}>
+                        Edit bank details
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.rowTitle}>
+                      {hasPayoutBankDetails
+                        ? "Edit payout bank account"
+                        : "Set up your payout bank account"}
+                    </Text>
+                    <Text style={styles.payoutFieldLabel}>Bank</Text>
+                    <View style={styles.bankPicker}>
+                      {loadingPayoutBanks ? (
+                        <ActivityIndicator color="#35D9B3" />
+                      ) : (
+                        <Picker
+                          accessibilityLabel="Select bank"
+                          selectedValue={
+                            payoutBanks.some(
+                              (bank) =>
+                                bank.code ===
+                                payoutBankDetails.bank_branch_code,
+                            )
+                              ? payoutBankDetails.bank_branch_code
+                              : ""
+                          }
+                          onValueChange={(bankCode: string) => {
+                            const selectedBank = payoutBanks.find(
+                              (bank) => bank.code === bankCode,
+                            );
+                            setPayoutAccountReady(false);
+                            setPayoutBankDetails((current) => ({
+                              ...current,
+                              bank_name: selectedBank?.name || "",
+                              bank_branch_code: selectedBank?.code || "",
+                            }));
+                          }}
+                          style={styles.bankPickerControl}
+                          dropdownIconColor="#F4FBF8"
+                        >
+                          <Picker.Item label="Select your bank" value="" />
+                          {payoutBanks.map((bank) => (
+                            <Picker.Item
+                              key={bank.code}
+                              label={bank.name}
+                              value={bank.code}
+                            />
+                          ))}
+                        </Picker>
+                      )}
+                    </View>
+                    <Text style={styles.rowSub}>
+                      Select your bank from Paystack’s supported list. A branch
+                      code is not accepted here.
+                    </Text>
+                    {!!payoutBanksError && (
+                      <View>
+                        <Text style={styles.bankListError}>
+                          {payoutBanksError}
+                        </Text>
+                        <TouchableOpacity onPress={loadPayoutBanks}>
+                          <Text style={styles.editPayoutButtonText}>
+                            Retry loading banks
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    <TextInput
+                      accessibilityLabel="Bank account number"
+                      placeholder="Bank account number"
+                      value={payoutBankDetails.bank_account_number}
+                      onChangeText={(bank_account_number) => {
+                        setPayoutAccountReady(false);
+                        setPayoutBankDetails((current) => ({
+                          ...current,
+                          bank_account_number,
+                        }));
+                      }}
+                      keyboardType="number-pad"
+                      style={styles.payoutInput}
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.button,
+                        styles.continueButton,
+                        savingPayoutDetails && { opacity: 0.6 },
+                      ]}
+                      disabled={savingPayoutDetails}
+                      onPress={savePayoutBankDetails}
+                    >
+                      <Text style={styles.buttonText}>
+                        {savingPayoutDetails
+                          ? "Verifying bank details..."
+                          : "Save and verify bank account"}
+                      </Text>
+                    </TouchableOpacity>
+                    {hasSavedPayoutBankDetails && (
+                      <TouchableOpacity
+                        style={styles.cancelEditButton}
+                        onPress={() => {
+                          setPayoutBankDetails(savedPayoutBankDetails);
+                          setPayoutAccountReady(savedPayoutAccountReady);
+                          setEditingPayoutDetails(false);
+                        }}
+                      >
+                        <Text style={styles.cancelEditButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    )}
+                    <Text style={styles.rowSub}>
+                      {payoutAccountReady
+                        ? "Your account is ready to receive enabled card-payment transfers."
+                        : payoutTransfersEnabled
+                          ? "Saving will ask Paystack to validate the payout recipient."
+                          : "Automatic transfers are not enabled yet; client card payments stay unavailable until payouts are enabled."}
+                    </Text>
+                  </>
+                )}
+                <View style={styles.cardPaymentSetting}>
+                  <View style={styles.cardPaymentSettingCopy}>
+                    <Text style={styles.rowTitle}>Accept card payments</Text>
+                    <Text style={styles.rowSub}>
+                      {cardPaymentsEnabled
+                        ? payoutTransfersEnabled
+                          ? "Card payments are on. Clients can pay by card."
+                          : "Your card-payment preference is on, but the platform has disabled transfers. Clients still cannot pay by card."
+                        : !cardPaymentsPreferenceAvailable
+                          ? "Apply the owner card-payment migration before changing this setting."
+                          : !payoutTransfersEnabled
+                            ? "Card payments are off. Clients cannot pay by card until the platform enables automatic transfers."
+                            : !hasPayoutBankDetails
+                              ? "Add complete bank details before clients can pay by card."
+                              : "Card payments are off. Clients cannot make card payments."}
+                    </Text>
+                  </View>
+                  <View style={styles.cardPaymentSettingControl}>
+                    {savingCardPaymentSetting ? (
+                      <ActivityIndicator size="small" color="#35D9B3" />
+                    ) : (
+                      <Switch
+                        accessibilityLabel="Accept card payments"
+                        value={cardPaymentsEnabled}
+                        onValueChange={updateCardPaymentsEnabled}
+                        disabled={
+                          !cardPaymentsPreferenceAvailable ||
+                          ((!payoutTransfersEnabled || !hasPayoutBankDetails) &&
+                            !cardPaymentsEnabled)
+                        }
+                        trackColor={{ false: "#294238", true: "#087F5B" }}
+                        thumbColor={
+                          cardPaymentsEnabled ? "#A7F3D0" : "#B1C4BC"
+                        }
+                      />
+                    )}
+                  </View>
+                </View>
+              </View>
             </View>
-            {stripeStatus.payment_provider !== "paystack" && (
-              <TouchableOpacity
-                style={[styles.button, connectingStripe && styles.buttonDisabled]}
-                onPress={connectStripeAccount}
-                disabled={connectingStripe}
-              >
-                <Text style={styles.buttonText}>
-                  {connectingStripe
-                    ? "Opening Stripe..."
-                    : connectedAccountId
-                      ? "Update payout details"
-                      : "Connect payout account"}
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {(fromOnboarding || stripeReturn) &&
-              (stripeStatus.payment_provider === "paystack" ||
-                stripeStatus.payouts_enabled) && (
+            {fromOnboarding && (
                 <TouchableOpacity
                   style={[styles.button, styles.continueButton]}
                   onPress={completeOnboarding}
@@ -527,41 +868,64 @@ export default function OwnerPayments() {
                   <Text style={styles.buttonText}>Continue to dashboard</Text>
                 </TouchableOpacity>
               )}
+          </View>
 
-            {stripeStatus.payment_provider !== "paystack" && (
-              <>
-                <Text style={[styles.noteText, { marginTop: 12 }]}>
-                  Stripe securely manages legacy payout banking details. Track My Kids
-                  does not store this information.
-                </Text>
-                <View style={{ marginTop: 10 }}>
-                  <Text style={styles.noteText}>
-                    If you have any issues with Stripe, please contact their support
-                    at{" "}
-                    <Text
-                      style={{ color: "#4A90E2" }}
-                      onPress={() => Linking.openURL("mailto:support@stripe.com")}
-                    >
-                      support@stripe.com
+          <View style={styles.card}>
+              <Text style={styles.title}>Historical monthly payout statements</Text>
+              <Text style={styles.rowSub}>
+                These statements cover reconciled monthly payouts. Client card
+                fares appear in payment history with their individual Paystack
+                bank-transfer status.
+              </Text>
+              <FlatList
+                data={payoutHistory}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                ListEmptyComponent={
+                  <Text style={styles.emptyText}>
+                    No monthly payout statements are available yet.
+                  </Text>
+                }
+                renderItem={({ item }) => (
+                  <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle}>
+                        {item.period_start} – {item.period_end}
+                      </Text>
+                      <Text style={styles.rowSub}>
+                        {item.status === "paid"
+                          ? `Paid ${item.paid_at ? new Date(item.paid_at).toLocaleDateString("en-ZA") : ""}`
+                          : "Prepared; bank transfer pending"}
+                      </Text>
+                      {item.destination_label ? (
+                        <Text style={styles.rowSub}>
+                          {item.destination_label}
+                          {item.transfer_reference
+                            ? ` · Reference ${item.transfer_reference}`
+                            : ""}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.rowSub}>
+                        Transport fares{" "}
+                        {formatCurrency(
+                          item.gross_fare_receipts_cents,
+                          item.currency,
+                        )}{" "}
+                        · Client service fees (not deducted){" "}
+                        {formatCurrency(
+                          item.client_service_fees_cents,
+                          item.currency,
+                        )}{" "}
+                        · Deductions{" "}
+                        {formatCurrency(item.adjustments_cents, item.currency)}
+                      </Text>
+                    </View>
+                    <Text style={styles.amount}>
+                      {formatCurrency(item.net_payout_cents, item.currency)}
                     </Text>
-                  </Text>
-                </View>
-                <View style={{ marginTop: 10 }}>
-                  <Text style={styles.noteText}>
-                    For more information about how Stripe handles your data.
-                  </Text>
-                  <Text style={styles.noteText}>
-                    Visit the Stripe Privacy Policy at{" "}
-                    <Text
-                      style={{ color: "#4A90E2" }}
-                      onPress={() => Linking.openURL("https://stripe.com/privacy")}
-                    >
-                      stripe.com/privacy
-                    </Text>
-                  </Text>
-                </View>
-              </>
-            )}
+                  </View>
+                )}
+              />
           </View>
 
           <View style={styles.card}>
@@ -674,15 +1038,20 @@ export default function OwnerPayments() {
                 const serviceFeeReady = ["collected", "waived"].includes(
                   item.platform_fee_status,
                 );
+                const transfer = Array.isArray(item.owner_payment_transfers)
+                  ? item.owner_payment_transfers[0]
+                  : item.owner_payment_transfers;
+                const transferStatusLabel = getTransferStatusLabel(transfer);
                 const payout =
-                  item.payment_provider === "paystack"
-                    ? "Owner payout not automated"
+                  transferStatusLabel ||
+                  (item.payment_provider === "paystack"
+                    ? "See monthly payout statement"
                     : `Owner received: ${formatCurrency(
                         item.payment_method === "cash"
                           ? item.amount_cents || 0
                           : (item.amount_cents || 0) - fee,
                         item.currency,
-                      )}`;
+                      )}`);
                 return (
                   <View style={styles.row}>
                     <View style={{ flex: 1 }}>
@@ -703,6 +1072,23 @@ export default function OwnerPayments() {
                           : `Client-paid service fee: ${formatCurrency(fee, item.currency)}`}{" "}
                         • {payout}
                       </Text>
+                      {transfer?.status === "failed" && (
+                        <TouchableOpacity
+                          style={[
+                            styles.confirmCashButton,
+                            retryingOwnerTransferId !== null &&
+                              styles.buttonDisabled,
+                          ]}
+                          disabled={retryingOwnerTransferId !== null}
+                          onPress={() => retryOwnerTransfer(item.id)}
+                        >
+                          <Text style={styles.confirmCashButtonText}>
+                            {retryingOwnerTransferId === item.id
+                              ? "Retrying transfer..."
+                              : "Retry bank transfer"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                       {item.payment_method === "cash" &&
                       item.status === "pending" ? (
                         <>
@@ -748,11 +1134,11 @@ export default function OwnerPayments() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  container: { flex: 1, backgroundColor: "#0D1713" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   content: { padding: 20, gap: 14 },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 16,
     shadowColor: "#000",
@@ -761,9 +1147,9 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  title: { fontSize: 17, fontWeight: "700", color: "#333", marginBottom: 10 },
+  title: { fontSize: 17, fontWeight: "700", color: "#F4FBF8", marginBottom: 10 },
   button: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     borderRadius: 8,
     alignItems: "center",
     paddingVertical: 12,
@@ -772,12 +1158,12 @@ const styles = StyleSheet.create({
   continueButton: { marginTop: 10, backgroundColor: "#16A34A" },
   buttonText: { color: "#FFF", fontWeight: "700" },
   noteText: {
-    color: "#555",
+    color: "#B1C4BC",
     fontSize: 13,
     marginBottom: 12,
   },
   payoutCard: {
-    backgroundColor: "#F0FDF4",
+    backgroundColor: "#13231D",
     borderWidth: 1,
     borderColor: "#BBF7D0",
     borderRadius: 8,
@@ -789,22 +1175,111 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
   },
   payoutCopy: { flex: 1 },
-  stripeStatusLabel: { color: "#64748B", fontSize: 12 },
-  stripeStatusValue: { color: "#1F2937", fontWeight: "700", marginTop: 3 },
+  payoutStatusLabel: { color: "#B1C4BC", fontSize: 12 },
+  payoutStatusValue: { color: "#F4FBF8", fontWeight: "700", marginTop: 3 },
   payoutDescription: {
-    color: "#166534",
+    color: "#35D9B3",
     fontSize: 12,
     lineHeight: 17,
     marginTop: 10,
   },
+  bankCard: {
+    backgroundColor: "#17382D",
+    borderWidth: 1,
+    borderColor: "#2F6B55",
+    borderRadius: 16,
+    padding: 18,
+  },
+  bankCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  bankCardBrand: {
+    flex: 1,
+    color: "#A7F3D0",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  bankCardName: {
+    color: "#F4FBF8",
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 22,
+  },
+  bankCardNumber: {
+    color: "#D1FAE5",
+    fontSize: 16,
+    letterSpacing: 2,
+    marginTop: 10,
+  },
+  bankCardCode: {
+    color: "#B1C4BC",
+    fontSize: 12,
+    marginTop: 8,
+  },
+  bankCardStatus: {
+    color: "#A7F3D0",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 14,
+  },
+  editPayoutButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+  },
+  editPayoutButtonText: { color: "#A7F3D0", fontWeight: "600" },
+  cancelEditButton: { alignSelf: "center", paddingVertical: 8 },
+  cancelEditButtonText: { color: "#B1C4BC", fontWeight: "600" },
+  payoutInput: {
+    borderWidth: 1,
+    borderColor: "#294238",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#F4FBF8",
+    backgroundColor: "#0D1713",
+  },
+  payoutFieldLabel: { color: "#D1FAE5", fontSize: 13, fontWeight: "600" },
+  bankPicker: {
+    borderWidth: 1,
+    borderColor: "#294238",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#0D1713",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  bankPickerControl: { color: "#F4FBF8" },
+  bankListError: { color: "#FCA5A5", fontSize: 12, marginBottom: 4 },
+  cardPaymentSetting: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#294238",
+    paddingTop: 14,
+    marginTop: 4,
+  },
+  cardPaymentSettingCopy: { flex: 1, gap: 3 },
+  cardPaymentSettingControl: {
+    minWidth: 52,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   downloadButton: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
@@ -825,17 +1300,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#EEE",
+    borderTopColor: "#294238",
     paddingVertical: 10,
   },
-  rowTitle: { fontWeight: "600", color: "#333" },
-  rowSub: { color: "#777", fontSize: 12, marginTop: 2 },
-  amount: { fontWeight: "700", color: "#111", marginLeft: 10 },
+  rowTitle: { fontWeight: "600", color: "#F4FBF8" },
+  rowSub: { color: "#B1C4BC", fontSize: 12, marginTop: 2 },
+  amount: { fontWeight: "700", color: "#F4FBF8", marginLeft: 10 },
   confirmCashButton: {
     alignSelf: "flex-start",
     marginTop: 7,
     borderRadius: 8,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#13231D",
     paddingHorizontal: 11,
     paddingVertical: 7,
   },

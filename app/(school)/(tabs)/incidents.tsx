@@ -1,6 +1,7 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -237,19 +238,33 @@ export default function SchoolIncidents() {
 
   const updateStatus = async () => {
     if (!selected || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      await request(`/school/incidents/${selected.source_id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: statusDraft }),
-      });
-      await loadIncidents();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to update incident status.");
-    } finally {
-      setBusy(false);
+    const saveStatus = async () => {
+      setBusy(true);
+      setError("");
+      try {
+        await request(`/school/incidents/${selected.source_id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: statusDraft }),
+        });
+        await loadIncidents();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : "Unable to update incident status.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    if (statusDraft === "resolved" && selected.status !== "Resolved") {
+      Alert.alert(
+        "Close this incident?",
+        `Incident #${selected.source_id} will be automatically removed 48 hours after closing.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Close incident", onPress: () => void saveStatus() },
+        ],
+      );
+      return;
     }
+    await saveStatus();
   };
 
   const sendReply = async () => {

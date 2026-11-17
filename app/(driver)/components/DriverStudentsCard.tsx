@@ -8,7 +8,16 @@ type Student = {
   name: string;
   school?: string;
   routeName?: string;
-  status?: "picked_up" | "waiting" | "dropped_off";
+  status?:
+    | "picked_up"
+    | "waiting"
+    | "dropped_off"
+    | "scheduled"
+    | "not_picked_up"
+    | "trip_incomplete"
+    | "at_stop"
+    | "schedule_unavailable"
+    | "not_included";
 };
 
 type Props = {
@@ -79,8 +88,17 @@ const DriverStudentsCard = ({
           <View
             style={[
               styles.status,
-              student.status === "picked_up" && styles.statusGreen,
-              student.status === "dropped_off" && styles.statusBlue,
+              (student.status === "picked_up" ||
+                student.status === "dropped_off") &&
+                styles.statusGreen,
+              student.status === "at_stop" && styles.statusBlue,
+              (student.status === "not_picked_up" ||
+                student.status === "trip_incomplete") &&
+                styles.statusRed,
+              (student.status === "scheduled" ||
+                student.status === "schedule_unavailable" ||
+                student.status === "not_included") &&
+                styles.statusNeutral,
             ]}
           >
             <Text style={[styles.statusText, { color: DRIVER_COLORS.text }]}>
@@ -88,7 +106,19 @@ const DriverStudentsCard = ({
                 ? "Picked up"
                 : student.status === "dropped_off"
                   ? "Dropped off"
-                  : "Waiting"}
+                  : student.status === "scheduled"
+                    ? "Scheduled"
+                    : student.status === "not_picked_up"
+                      ? "Not picked up"
+                      : student.status === "trip_incomplete"
+                        ? "Trip incomplete"
+                        : student.status === "at_stop"
+                          ? "At stop"
+                          : student.status === "schedule_unavailable"
+                            ? "No schedule"
+                              : student.status === "not_included"
+                                ? "Not included in route"
+                                : "Waiting"}
             </Text>
           </View>
         </View>
@@ -137,14 +167,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: DRIVER_COLORS.cardBorder,
   },
 
   avatar: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.successSurface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -155,13 +185,13 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    color: "#0F172A",
+    color: DRIVER_COLORS.text,
     fontSize: 13,
     fontWeight: "600",
   },
 
   school: {
-    color: "#64748B",
+    color: DRIVER_COLORS.muted,
     fontSize: 10,
     marginTop: 3,
   },
@@ -170,15 +200,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: "#F2E8D6",
+    backgroundColor: DRIVER_COLORS.warningSurface,
   },
 
   statusGreen: {
-    backgroundColor: "#E2F2E9",
+    backgroundColor: DRIVER_COLORS.successSurface,
   },
 
   statusBlue: {
-    backgroundColor: "#E7EEF7",
+    backgroundColor: DRIVER_COLORS.infoSurface,
+  },
+
+  statusRed: {
+    backgroundColor: DRIVER_COLORS.dangerSurface,
+  },
+
+  statusNeutral: {
+    backgroundColor: DRIVER_COLORS.neutralSurface,
   },
 
   statusText: {

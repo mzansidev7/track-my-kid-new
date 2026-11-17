@@ -17,18 +17,22 @@ import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
 import { useNotifications } from "@/app-support/owner/ownerHelpers/hooks/useNotifications";
 import { useOwnerProfile } from "@/app-support/owner/ownerHelpers/hooks/useOwnerProfile";
 import { useOwnerVehicles } from "@/app-support/owner/ownerHelpers/hooks/useOwnerVehicles";
-import { useActiveRoutes, useRoutes } from "@/app-support/owner/ownerHelpers/hooks/useRoutes";
+import {
+  useActiveRoutes,
+  useRoutes,
+} from "@/app-support/owner/ownerHelpers/hooks/useRoutes";
 import { getRouteStatus } from "@/app-support/owner/ownerHelpers/actionHelpers/actions";
 import { ForceProfileUpdate } from "@/app-support/owner/ownerHelpers/components/Modals";
 import {
   subscribeToPaymentUpdates,
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/clientRealtime";
+import { OWNER_COLORS } from "@/styles/theme";
 
 const homeDashboardStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F5FAFF",
+    backgroundColor: "#050907",
   },
   brandHeader: {
     minHeight: 72,
@@ -36,7 +40,7 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 18,
     paddingVertical: 10,
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
   },
@@ -46,7 +50,7 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 13,
-    backgroundColor: "#1683F8",
+    backgroundColor: "#00B894",
   },
   brandCopy: {
     flex: 1,
@@ -79,7 +83,7 @@ const homeDashboardStyles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 3,
     borderRadius: 8,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
   notificationBadgeText: {
     color: "#FFFFFF",
@@ -95,14 +99,14 @@ const homeDashboardStyles = StyleSheet.create({
   },
   liveMapScreen: {
     flex: 1,
-    backgroundColor: "#F0F6FB",
+    backgroundColor: "#050907",
   },
   liveMapHeader: {
     minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
   },
   liveMapHeaderButton: {
     width: 36,
@@ -123,13 +127,13 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: "#294238",
     borderRadius: 16,
     elevation: 4,
   },
   liveMapRetry: {
     marginTop: 9,
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -149,7 +153,7 @@ const homeDashboardStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 9,
     borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    backgroundColor: "rgba(13,23,19,0.96)",
     elevation: 3,
   },
   liveMapLegendRow: {
@@ -163,7 +167,7 @@ const homeDashboardStyles = StyleSheet.create({
     borderRadius: 4,
   },
   liveMapLegendText: {
-    color: "#35516B",
+    color: "#F4FBF8",
     fontSize: 9,
     fontWeight: "600",
   },
@@ -173,7 +177,7 @@ const homeDashboardStyles = StyleSheet.create({
     top: "35%",
     overflow: "hidden",
     borderRadius: 9,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     elevation: 3,
   },
   liveMapControlButton: {
@@ -184,7 +188,7 @@ const homeDashboardStyles = StyleSheet.create({
   },
   liveMapControlDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "#D8E2EC",
+    backgroundColor: "#13231D",
   },
   liveFleetSummary: {
     position: "absolute",
@@ -196,9 +200,9 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#E0EAF2",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.97)",
+    backgroundColor: "rgba(13,23,19,0.97)",
     elevation: 4,
   },
   liveFleetSummaryIcon: {
@@ -208,19 +212,19 @@ const homeDashboardStyles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 9,
     borderRadius: 16,
-    backgroundColor: "#E8F8EF",
+    backgroundColor: "#13231D",
   },
   liveFleetSummaryCopy: {
     flex: 1,
   },
   liveFleetSummaryTitle: {
-    color: "#174574",
+    color: "#F4FBF8",
     fontSize: 11,
     fontWeight: "800",
   },
   liveFleetSummarySubtitle: {
     marginTop: 2,
-    color: "#68829A",
+    color: "#B1C4BC",
     fontSize: 9,
   },
   liveMapEmpty: {
@@ -231,11 +235,11 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     padding: 14,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.94)",
+    backgroundColor: "rgba(13,23,19,0.94)",
   },
   liveMapEmptyText: {
     marginTop: 5,
-    color: "#5A7188",
+    color: "#B1C4BC",
     fontSize: 11,
     textAlign: "center",
   },
@@ -246,7 +250,7 @@ const homeDashboardStyles = StyleSheet.create({
     minWidth: 135,
     padding: 5,
     borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     elevation: 5,
   },
   liveMapFilterOption: {
@@ -259,7 +263,7 @@ const homeDashboardStyles = StyleSheet.create({
   },
   liveMapFilterOptionText: {
     flex: 1,
-    color: "#35516B",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "600",
   },
@@ -297,7 +301,7 @@ const homeDashboardStyles = StyleSheet.create({
     marginLeft: 11,
   },
   greetingTitle: {
-    color: "#164A86",
+    color: "#F4FBF8",
     fontSize: 14,
     lineHeight: 19,
     fontWeight: "800",
@@ -316,9 +320,9 @@ const homeDashboardStyles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#FDE68A",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: "#382D1B",
   },
   pendingPaymentIcon: {
     width: 34,
@@ -327,7 +331,7 @@ const homeDashboardStyles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 9,
     borderRadius: 17,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#382D1B",
   },
   pendingPaymentCopy: {
     flex: 1,
@@ -356,9 +360,9 @@ const homeDashboardStyles = StyleSheet.create({
     minHeight: 103,
     padding: 8,
     borderWidth: 1,
-    borderColor: "#D8EAF9",
+    borderColor: "#294238",
     borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   metricIcon: {
     width: 27,
@@ -369,13 +373,13 @@ const homeDashboardStyles = StyleSheet.create({
     borderRadius: 14,
   },
   metricLabel: {
-    color: "#20517F",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "700",
   },
   metricValue: {
     marginTop: 1,
-    color: "#174574",
+    color: "#F4FBF8",
     fontSize: 19,
     lineHeight: 23,
     fontWeight: "800",
@@ -388,7 +392,7 @@ const homeDashboardStyles = StyleSheet.create({
   },
   metricSubtext: {
     flexShrink: 1,
-    color: "#159B5A",
+    color: "#35D9B3",
     fontSize: 8,
     fontWeight: "600",
   },
@@ -398,7 +402,7 @@ const homeDashboardStyles = StyleSheet.create({
   sectionTitle: {
     marginTop: 1,
     marginBottom: 7,
-    color: "#174574",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -415,9 +419,9 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: "#D8EAF9",
+    borderColor: "#294238",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   actionIcon: {
     width: 26,
@@ -425,12 +429,12 @@ const homeDashboardStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#EDF6FF",
+    backgroundColor: "#13231D",
   },
   actionLabel: {
     flex: 1,
     marginLeft: 7,
-    color: "#20517F",
+    color: "#F4FBF8",
     fontSize: 9,
     fontWeight: "700",
   },
@@ -524,7 +528,10 @@ export default function Home({ user }: any) {
     try {
       const routesToTrack = allRoutes.filter((route: any) => {
         const hasDirectAssignment =
-          route.vehicle_id && route.driver_id && route.vehicles && route.drivers;
+          route.vehicle_id &&
+          route.driver_id &&
+          route.vehicles &&
+          route.drivers;
         const hasRouteAssignment = route.route_assignments?.some(
           (assignment: any) =>
             assignment.vehicle_id &&
@@ -538,19 +545,14 @@ export default function Home({ user }: any) {
       routesToTrack.forEach((route: any) => {
         const assignment = route.route_assignments?.find(
           (item: any) =>
-            item.vehicle_id &&
-            item.driver_id &&
-            item.vehicles &&
-            item.drivers,
+            item.vehicle_id && item.driver_id && item.vehicles && item.drivers,
         );
         const driverId = route.driver_id || assignment?.driver_id;
         if (driverId && !uniqueRoutes.has(String(driverId))) {
           uniqueRoutes.set(String(driverId), {
             ...route,
-            trackingDriver:
-              route.drivers || assignment?.drivers || null,
-            trackingVehicle:
-              route.vehicles || assignment?.vehicles || null,
+            trackingDriver: route.drivers || assignment?.drivers || null,
+            trackingVehicle: route.vehicles || assignment?.vehicles || null,
           });
         }
       });
@@ -628,7 +630,8 @@ export default function Home({ user }: any) {
                 status: "offline",
               } as const;
             }
-        }),
+          },
+        ),
       );
 
       setLiveLocations(locations);
@@ -657,7 +660,9 @@ export default function Home({ user }: any) {
   const mappableLiveLocations = useMemo(
     () =>
       visibleLiveLocations.filter(
-        (location): location is typeof location & {
+        (
+          location,
+        ): location is typeof location & {
           latitude: number;
           longitude: number;
         } => location.latitude != null && location.longitude != null,
@@ -673,10 +678,7 @@ export default function Home({ user }: any) {
       hasAutoFitLiveMap.current = false;
       return;
     }
-    if (
-      hasAutoFitLiveMap.current ||
-      mappableLiveLocations.length === 0
-    ) {
+    if (hasAutoFitLiveMap.current || mappableLiveLocations.length === 0) {
       return;
     }
     const coordinates = mappableLiveLocations.map((location) => ({
@@ -726,8 +728,14 @@ export default function Home({ user }: any) {
     const factor = direction === "in" ? 0.6 : 1.7;
     const nextRegion = {
       ...mapRegion,
-      latitudeDelta: Math.min(80, Math.max(0.005, mapRegion.latitudeDelta * factor)),
-      longitudeDelta: Math.min(80, Math.max(0.005, mapRegion.longitudeDelta * factor)),
+      latitudeDelta: Math.min(
+        80,
+        Math.max(0.005, mapRegion.latitudeDelta * factor),
+      ),
+      longitudeDelta: Math.min(
+        80,
+        Math.max(0.005, mapRegion.longitudeDelta * factor),
+      ),
     };
     setMapRegion(nextRegion);
     mapRef.current?.animateToRegion(nextRegion, 250);
@@ -866,21 +874,21 @@ export default function Home({ user }: any) {
       value: totalVehicles,
       subtext: `${vehicles.length} in your fleet`,
       icon: "directions-car",
-      color: "#1683F8",
+      color: "#35D9B3",
     },
     {
       label: "Active Drivers",
       value: totalDrivers,
       subtext: `${new Set(activeRoutes.map((route: any) => route.driver_id || route.drivers?.id).filter(Boolean)).size} on route`,
       icon: "person",
-      color: "#159B5A",
+      color: "#35D9B3",
     },
     {
       label: "Active Routes",
       value: activeRoutes.length,
       subtext: `${readyRoutes} ready to go`,
       icon: "alt-route",
-      color: "#7C3AED",
+      color: "#00B894",
     },
     {
       label: "Issues / Alerts",
@@ -894,25 +902,25 @@ export default function Home({ user }: any) {
     {
       label: "View Fleet",
       icon: "directions-car",
-      color: "#1683F8",
+      color: "#35D9B3",
       onPress: () => router.push("/(owner)/(tabs)/vehicles"),
     },
     {
       label: "Create Route",
       icon: "place",
-      color: "#1677F8",
+      color: "#35D9B3",
       onPress: () => router.push("/(owner)/createRoutes"),
     },
     {
       label: "View Messages",
       icon: "message",
-      color: "#1677F8",
+      color: "#35D9B3",
       onPress: () => router.push("/(owner)/(tabs)/messages"),
     },
     {
       label: "Reports",
       icon: "analytics",
-      color: "#1677F8",
+      color: "#35D9B3",
       onPress: () => router.push("/(owner)/incident-report"),
     },
   ];
@@ -931,8 +939,8 @@ export default function Home({ user }: any) {
 
   if (showLiveMap) {
     const filterOptions = [
-      { key: "all", label: "All vehicles", color: "#1683F8" },
-      { key: "on_route", label: "On Route", color: "#16A66A" },
+      { key: "all", label: "All vehicles", color: "#35D9B3" },
+      { key: "on_route", label: "On Route", color: "#35D9B3" },
       { key: "stopped", label: "Stopped", color: "#F59E0B" },
       { key: "offline", label: "Offline", color: "#EF4444" },
     ] as const;
@@ -967,8 +975,8 @@ export default function Home({ user }: any) {
             initialRegion={mapRegion}
             mapType="standard"
             loadingEnabled
-            loadingBackgroundColor="#F0F6FB"
-            loadingIndicatorColor="#1769D2"
+            loadingBackgroundColor="#050907"
+            loadingIndicatorColor="#35D9B3"
             showsCompass={false}
             showsTraffic={false}
             toolbarEnabled={false}
@@ -976,7 +984,7 @@ export default function Home({ user }: any) {
             {mappableLiveLocations.map((location) => {
               const color =
                 location.status === "on_route"
-                  ? "#1683F8"
+                  ? "#35D9B3"
                   : location.status === "stopped"
                     ? "#F59E0B"
                     : "#EF4444";
@@ -1029,11 +1037,7 @@ export default function Home({ user }: any) {
                     {option.label}
                   </Text>
                   {mapStatusFilter === option.key ? (
-                    <MaterialIcons
-                      name="check"
-                      size={15}
-                      color="#1683F8"
-                    />
+                    <MaterialIcons name="check" size={15} color="#35D9B3" />
                   ) : null}
                 </TouchableOpacity>
               ))}
@@ -1065,7 +1069,7 @@ export default function Home({ user }: any) {
               onPress={() => zoomLiveMap("in")}
               accessibilityLabel="Zoom in"
             >
-              <MaterialIcons name="add" size={21} color="#24415D" />
+              <MaterialIcons name="add" size={21} color="#F4FBF8" />
             </TouchableOpacity>
             <View style={homeDashboardStyles.liveMapControlDivider} />
             <TouchableOpacity
@@ -1073,7 +1077,7 @@ export default function Home({ user }: any) {
               onPress={() => zoomLiveMap("out")}
               accessibilityLabel="Zoom out"
             >
-              <MaterialIcons name="remove" size={21} color="#24415D" />
+              <MaterialIcons name="remove" size={21} color="#F4FBF8" />
             </TouchableOpacity>
             <View style={homeDashboardStyles.liveMapControlDivider} />
             <TouchableOpacity
@@ -1096,7 +1100,12 @@ export default function Home({ user }: any) {
                       longitude: location.longitude,
                     })),
                     {
-                      edgePadding: { top: 80, right: 55, bottom: 100, left: 45 },
+                      edgePadding: {
+                        top: 80,
+                        right: 55,
+                        bottom: 100,
+                        left: 45,
+                      },
                       animated: true,
                     },
                   );
@@ -1104,7 +1113,7 @@ export default function Home({ user }: any) {
               }}
               accessibilityLabel="Center on fleet"
             >
-              <MaterialIcons name="my-location" size={18} color="#24415D" />
+              <MaterialIcons name="my-location" size={18} color="#F4FBF8" />
             </TouchableOpacity>
           </View>
 
@@ -1133,7 +1142,7 @@ export default function Home({ user }: any) {
 
           <View style={homeDashboardStyles.liveFleetSummary}>
             <View style={homeDashboardStyles.liveFleetSummaryIcon}>
-              <MaterialIcons name="wifi" size={19} color="#16A66A" />
+              <MaterialIcons name="wifi" size={19} color="#35D9B3" />
             </View>
             <View style={homeDashboardStyles.liveFleetSummaryCopy}>
               <Text style={homeDashboardStyles.liveFleetSummaryTitle}>
@@ -1161,7 +1170,12 @@ export default function Home({ user }: any) {
 
   return (
     <SafeAreaView style={homeDashboardStyles.screen} edges={["top", "bottom"]}>
-      <View style={homeDashboardStyles.brandHeader}>
+      <View
+        style={[
+          homeDashboardStyles.brandHeader,
+          { backgroundColor: OWNER_COLORS.background },
+        ]}
+      >
         <View style={homeDashboardStyles.brandIcon}>
           <MaterialIcons name="directions-car" size={22} color="#FFFFFF" />
         </View>
@@ -1184,11 +1198,7 @@ export default function Home({ user }: any) {
           onPress={() => router.push("/(owner)/notifications")}
           accessibilityLabel={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
         >
-          <MaterialIcons
-            name="notifications-none"
-            size={22}
-            color="#FFFFFF"
-          />
+          <MaterialIcons name="notifications-none" size={22} color="#FFFFFF" />
           {unreadCount > 0 && (
             <View style={homeDashboardStyles.notificationBadge}>
               <Text style={homeDashboardStyles.notificationBadgeText}>
@@ -1235,11 +1245,7 @@ export default function Home({ user }: any) {
             accessibilityLabel={`${pendingCashApprovalCount} cash payment${pendingCashApprovalCount === 1 ? "" : "s"} waiting for approval. Open payment history.`}
           >
             <View style={homeDashboardStyles.pendingPaymentIcon}>
-              <MaterialIcons
-                name="hourglass-top"
-                size={18}
-                color="#B45309"
-              />
+              <MaterialIcons name="hourglass-top" size={18} color="#B45309" />
             </View>
             <View style={homeDashboardStyles.pendingPaymentCopy}>
               <Text style={homeDashboardStyles.pendingPaymentTitle}>
@@ -1247,7 +1253,8 @@ export default function Home({ user }: any) {
                 {pendingCashApprovalCount === 1 ? "" : "s"} waiting for approval
               </Text>
               <Text style={homeDashboardStyles.pendingPaymentSubtitle}>
-                Review reported cash and confirm receipt to update the child&apos;s payment status.
+                Review reported cash and confirm receipt to update the
+                child&apos;s payment status.
               </Text>
             </View>
             <MaterialIcons name="chevron-right" size={21} color="#92400E" />
@@ -1256,10 +1263,7 @@ export default function Home({ user }: any) {
 
         <View style={homeDashboardStyles.metricsGrid}>
           {dashboardMetrics.map((metric) => (
-            <View
-              key={metric.label}
-              style={homeDashboardStyles.metricCard}
-            >
+            <View key={metric.label} style={homeDashboardStyles.metricCard}>
               <View
                 style={[
                   homeDashboardStyles.metricIcon,
@@ -1319,10 +1323,7 @@ export default function Home({ user }: any) {
                   color={action.color}
                 />
               </View>
-              <Text
-                style={homeDashboardStyles.actionLabel}
-                numberOfLines={1}
-              >
+              <Text style={homeDashboardStyles.actionLabel} numberOfLines={1}>
                 {action.label}
               </Text>
             </TouchableOpacity>
@@ -1338,5 +1339,4 @@ export default function Home({ user }: any) {
       />
     </SafeAreaView>
   );
-
 }

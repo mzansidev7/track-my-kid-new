@@ -11,7 +11,9 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,7 +29,11 @@ import {
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
 import MessageReactions from "../../../components/messages/MessageReactions";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import GroupChatMenu from "../../../components/messages/GroupChatMenu";
+import GroupSenderAvatar from "../../../components/messages/GroupSenderAvatar";
+import PresenceDot from "../../../components/presence/PresenceDot";
+import PresenceStatus from "../../../components/presence/PresenceStatus";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import {
   SafeAreaView,
@@ -87,13 +93,15 @@ const getConversationCategory = (
 };
 
 const Messages = () => {
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const { user } = useContext(AuthContext);
   const insets = useSafeAreaInsets();
-  const userId = user?.userData?.id || user?.userData?.user_id || user?.id || "";
+  const userId =
+    user?.userData?.id || user?.userData?.user_id || user?.id || "";
   const [activeTab, setActiveTab] = useState<
     "all" | "parents" | "school" | "owner"
   >("all");
+  const [filterMenuVisible, setFilterMenuVisible] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [linkedContacts, setLinkedContacts] = useState<any[]>([]);
@@ -101,8 +109,10 @@ const Messages = () => {
     useState<ConversationData | null>(null);
   const [messages, setMessages] = useState<MessageData[]>([]);
   const [draft, setDraft] = useState("");
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingLinkedContacts, setLoadingLinkedContacts] = useState(false);
   const [sending, setSending] = useState(false);
   const [linkedContactsError, setLinkedContactsError] = useState<string | null>(
     null,
@@ -143,6 +153,7 @@ const Messages = () => {
       return;
     }
 
+    setLoadingLinkedContacts(true);
     try {
       setLinkedContactsError(null);
       const baseUrl = await resolveWorkingBaseUrl();
@@ -158,43 +169,70 @@ const Messages = () => {
         }),
       ]);
 
-      const responses = [clientsRes, ownersRes, schoolsRes];
-      const failedResponse = responses.find((response) => !response.ok);
-      if (failedResponse) {
-        const error = await failedResponse.json().catch(() => ({}));
-        throw new Error(error.error || "Unable to load linked contacts.");
-      }
-      const [clientsData, ownersData, schoolsData] = await Promise.all(
-        responses.map((response) => response.json()),
+      const endpoints = [
+        ["clients", clientsRes],
+        ["owners", ownersRes],
+        ["schools", schoolsRes],
+      ] as const;
+      const results = await Promise.allSettled(
+        endpoints.map(async ([category, response]) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(
+              data.error ||
+                data.message ||
+                `Unable to load linked ${category} (HTTP ${response.status}).`,
+            );
+          }
+          return Array.isArray(data) ? data : [];
+        }),
       );
-
+      const [clientsResult, ownersResult, schoolsResult] = results;
+      const clientsData =
+        clientsResult.status === "fulfilled" ? clientsResult.value : [];
+      const ownersData =
+        ownersResult.status === "fulfilled" ? ownersResult.value : [];
+      const schoolsData =
+        schoolsResult.status === "fulfilled" ? schoolsResult.value : [];
+      const resultEntries = [
+        ["clients", "client", clientsResult],
+        ["owners", "owner", ownersResult],
+        ["schools", "school", schoolsResult],
+      ] as const;
+      const failedEndpoints = resultEntries.filter(
+        ([, , result]) => result.status === "rejected",
+      );
       const merged = [
         ...(Array.isArray(clientsData) ? clientsData : [])
-          .filter((contact) => contact?.clients?.user_id || contact?.clients?.users?.id)
+          .filter(
+            (contact) =>
+              contact?.clients?.user_id || contact?.clients?.users?.id,
+          )
           .map((contact) => ({
-          id: contact?.clients?.user_id || contact?.clients?.users?.id,
-          userId: contact?.clients?.user_id || contact?.clients?.users?.id,
-          name: contact?.clients?.users?.name || "Parent",
-          role: "client",
-          type: "client_driver",
-          subtitle: "Parent",
-          avatar:
-            contact?.clients?.users?.name ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent("Parent")}&background=0A84FF&color=fff`,
+            id: contact?.clients?.user_id || contact?.clients?.users?.id,
+            userId: contact?.clients?.user_id || contact?.clients?.users?.id,
+            name: contact?.clients?.users?.name || "Parent",
+            role: "client",
+            type: "client_driver",
+            subtitle: "Parent",
+            avatar:
+              contact?.clients?.users?.name ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent("Parent")}&background=0A84FF&color=fff`,
           })),
         ...(Array.isArray(ownersData) ? ownersData : [])
           .filter((contact) => contact?.users?.id)
           .map((contact) => ({
-          id: contact.users.id,
-          userId: contact.users.id,
-          name: contact?.company_name || contact?.users?.name || "Fleet owner",
-          role: "owner",
-          type: "driver_owner",
-          subtitle: "Fleet owner",
-          avatar:
-            contact?.users?.name ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent("Fleet owner")}&background=0A84FF&color=fff`,
-        })),
+            id: contact.users.id,
+            userId: contact.users.id,
+            name:
+              contact?.company_name || contact?.users?.name || "Fleet owner",
+            role: "owner",
+            type: "driver_owner",
+            subtitle: "Fleet owner",
+            avatar:
+              contact?.users?.name ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent("Fleet owner")}&background=0A84FF&color=fff`,
+          })),
         ...(Array.isArray(schoolsData) ? schoolsData : [])
           .filter((contact) => contact?.userId)
           .map((contact) => ({
@@ -221,13 +259,43 @@ const Messages = () => {
           ),
       );
 
-      setLinkedContacts(deduped);
-    } catch (error) {
-      console.error("Error loading linked contacts:", error);
-      setLinkedContactsError(
-        error instanceof Error ? error.message : "Unable to load linked contacts.",
+      const updatedRoles = new Set(
+        resultEntries
+          .filter(([, , result]) => result.status === "fulfilled")
+          .map(([, role]) => role),
       );
-      setLinkedContacts([]);
+      setLinkedContacts((current) => {
+        const retainedContacts = current.filter(
+          (contact) => !updatedRoles.has(contact.role),
+        );
+        const combinedContacts = [...retainedContacts, ...deduped];
+        return combinedContacts.filter(
+          (contact, index, array) =>
+            index ===
+            array.findIndex(
+              (item) =>
+                item.userId === contact.userId && item.type === contact.type,
+            ),
+        );
+      });
+      setLinkedContactsError(
+        failedEndpoints.length
+          ? `Couldn't load some contacts (${failedEndpoints
+              .map(([category]) => category)
+              .map((category) => {
+                if (category === "clients") return "parents";
+                if (category === "owners") return "fleet owners";
+                return "schools";
+              })
+              .join(", ")}). Existing conversations are still available.`
+          : null,
+      );
+    } catch {
+      setLinkedContactsError(
+        "Linked contacts couldn't load. Check your connection and try again.",
+      );
+    } finally {
+      setLoadingLinkedContacts(false);
     }
   }, [user?.token]);
 
@@ -424,30 +492,19 @@ const Messages = () => {
 
   const conversationHeaderName =
     selectedConversation?.other_participant?.name || "Contact";
-  const schoolPrimaryAdmin = (
-    selectedConversation?.other_participant as {
-      primary_admin?: { name?: string };
-    } | null
-  )?.primary_admin;
   const conversationHeaderSubtitle =
     selectedConversation?.other_participant?.role === "school"
-      ? schoolPrimaryAdmin?.name
-        ? `Primary admin: ${schoolPrimaryAdmin.name}`
-        : "School group"
+      ? selectedConversation.other_participant.school_name || "School"
       : getConversationRoleLabel(selectedConversation?.other_participant?.role);
 
   if (selectedConversation) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
+        style={[
+          localStyles.container,
+          { backgroundColor: DRIVER_COLORS.background },
+        ]}
       >
-        {linkedContactsError ? (
-          <Text
-            style={{ color: colors.error, marginHorizontal: 16, marginTop: 8 }}
-          >
-            {linkedContactsError}
-          </Text>
-        ) : null}
         <View
           style={[
             localStyles.chatHeader,
@@ -475,11 +532,25 @@ const Messages = () => {
                   style={localStyles.avatarImage}
                   resizeMode="contain"
                 />
+              ) : selectedConversation?.conversation_type === "school_group" &&
+                selectedConversation.other_participant?.avatar ? (
+                <Image
+                  source={{
+                    uri: selectedConversation.other_participant.avatar,
+                  }}
+                  style={localStyles.avatarImage}
+                  resizeMode="cover"
+                />
               ) : (
                 <Text style={localStyles.avatarText}>
                   {getInitials(conversationHeaderName)}
                 </Text>
               )}
+              {selectedConversation.other_participant?.role !== "group" ? (
+                <PresenceDot
+                  userId={selectedConversation.other_participant?.id}
+                />
+              ) : null}
             </View>
 
             <View>
@@ -493,121 +564,218 @@ const Messages = () => {
               >
                 {conversationHeaderSubtitle}
               </Text>
+              {selectedConversation.other_participant?.role !== "group" ? (
+                <PresenceStatus
+                  userId={selectedConversation.other_participant?.id}
+                />
+              ) : null}
             </View>
           </View>
 
-          <TouchableOpacity style={localStyles.headerIcon}>
-            <MaterialIcons
-              name="more-vert"
-              size={22}
-              color={colors.text.secondary}
+          {["admin_group", "school_group"].includes(
+            selectedConversation.conversation_type,
+          ) ? (
+            <GroupChatMenu
+              key={selectedConversation.id}
+              conversation={selectedConversation}
+              role="driver"
+              token={user?.token || ""}
+              currentUserId={userId}
+              onRemoved={() => {
+                setSelectedConversation(null);
+                setMessages([]);
+                void loadConversations();
+              }}
+              onUpdated={() => void loadConversations()}
+              iconColor={colors.text.secondary}
             />
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={localStyles.headerIcon}>
+              <MaterialIcons
+                name="more-vert"
+                size={22}
+                color={colors.text.secondary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {loadingMessages ? (
-          <View style={localStyles.centeredMessage}>
-            <ActivityIndicator size="large" color="#0F9D58" />
-          </View>
-        ) : (
-          <FlatList
-            data={messages}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={localStyles.messageList}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={localStyles.emptyState}>
-                <MaterialIcons
-                  name="chat-bubble-outline"
-                  size={42}
-                  color={colors.text.secondary}
-                />
-                <Text
-                  style={[
-                    localStyles.emptyText,
-                    { color: colors.text.secondary },
-                  ]}
-                >
-                  No messages yet
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              const isOwn = item.sender_id === userId;
-              const attachment = parseMessageAttachment(item.content);
-
-              return (
-                <View
-                  style={[
-                    localStyles.messageRow,
-                    isOwn && localStyles.messageRowOwn,
-                  ]}
-                >
-                  <View
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          {loadingMessages ? (
+            <View style={localStyles.centeredMessage}>
+              <ActivityIndicator size="large" color={DRIVER_COLORS.primary} />
+            </View>
+          ) : (
+            <FlatList
+              data={messages}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={localStyles.messageList}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <View style={localStyles.emptyState}>
+                  <MaterialIcons
+                    name="chat-bubble-outline"
+                    size={42}
+                    color={colors.text.secondary}
+                  />
+                  <Text
                     style={[
-                      localStyles.bubble,
-                      isOwn ? localStyles.bubbleOwn : localStyles.bubbleOther,
+                      localStyles.emptyText,
+                      { color: colors.text.secondary },
                     ]}
                   >
-                    {attachment ? (
-                      <MessageAttachment
-                        content={item.content}
-                        isOwn={isOwn}
+                    No messages yet
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isOwn = item.sender_id === userId;
+                const isGroupChat = ["admin_group", "school_group"].includes(
+                  selectedConversation?.conversation_type || "",
+                );
+                const attachment = parseMessageAttachment(item.content);
+
+                return (
+                  <View
+                    style={[
+                      localStyles.messageRow,
+                      isOwn && localStyles.messageRowOwn,
+                    ]}
+                  >
+                    {!isOwn &&
+                    (isGroupChat ||
+                      (selectedConversation?.other_participant.role ===
+                        "school" &&
+                        item.sender_id ===
+                          selectedConversation?.other_participant.id)) ? (
+                      <GroupSenderAvatar
+                        name={item.users?.name}
+                        avatar={item.users?.avatar}
+                        userId={item.sender_id}
                       />
-                    ) : (
-                      <Text
-                        style={
-                          isOwn
-                            ? localStyles.messageTextOwn
-                            : localStyles.messageText
-                        }
-                      >
-                        {item.content}
-                      </Text>
-                    )}
+                    ) : null}
                     <View
                       style={[
-                        localStyles.messageFooter,
-                        isOwn && localStyles.messageFooterOwn,
+                        localStyles.messageGroup,
+                        isOwn && localStyles.messageGroupOwn,
                       ]}
                     >
-                      <Text
-                        style={isOwn ? localStyles.timeOwn : localStyles.time}
-                      >
-                        {formatMessageTime(item.sent_at)}
-                        {isOwn ? (item.is_read ? "  ✓✓" : "  ✓") : ""}
-                      </Text>
-                      {!item.deliveryError &&
-                      (!isOwn || item.reactions?.length) ? (
-                        <MessageReactions
-                          apiBaseUrl={BASE_URL}
-                          role="driver"
-                          conversationId={selectedConversation.id}
-                          messageId={item.id}
-                          token={user?.token || ""}
-                          currentUserId={userId}
-                          accentColor={DRIVER_COLORS.primary}
-                          reactions={item.reactions}
-                          isOwn={isOwn}
-                        />
+                      {!isOwn &&
+                      !isGroupChat &&
+                      selectedConversation?.other_participant.role ===
+                        "school" &&
+                      item.sender_id ===
+                        selectedConversation.other_participant.id ? (
+                        <View style={{ marginBottom: 4, paddingHorizontal: 3 }}>
+                          <Text
+                            style={{
+                              color: DRIVER_COLORS.text,
+                              fontSize: 11,
+                              fontWeight: "700",
+                            }}
+                          >
+                            {item.users?.name ||
+                              selectedConversation.other_participant.name}
+                          </Text>
+                          {selectedConversation.other_participant
+                            .school_name ? (
+                            <Text
+                              style={{
+                                color: DRIVER_COLORS.muted,
+                                fontSize: 10,
+                              }}
+                            >
+                              {
+                                selectedConversation.other_participant
+                                  .school_name
+                              }
+                            </Text>
+                          ) : null}
+                        </View>
                       ) : null}
+                      <View
+                        style={[
+                          localStyles.bubble,
+                          isOwn
+                            ? localStyles.bubbleOwn
+                            : localStyles.bubbleOther,
+                        ]}
+                      >
+                        <Pressable
+                          onLongPress={() => {
+                            if (!isOwn) setReactionPickerMessageId(item.id);
+                          }}
+                          delayLongPress={250}
+                        >
+                          {attachment ? (
+                            <MessageAttachment
+                              content={item.content}
+                              isOwn={isOwn}
+                            />
+                          ) : (
+                            <Text
+                              style={
+                                isOwn
+                                  ? localStyles.messageTextOwn
+                                  : localStyles.messageText
+                              }
+                            >
+                              {item.content}
+                            </Text>
+                          )}
+                          <View
+                            style={[
+                              localStyles.messageFooter,
+                              isOwn && localStyles.messageFooterOwn,
+                            ]}
+                          >
+                            <Text
+                              style={
+                                isOwn ? localStyles.timeOwn : localStyles.time
+                              }
+                            >
+                              {formatMessageTime(item.sent_at)}
+                              {isOwn ? (item.is_read ? "  ✓✓" : "  ✓") : ""}
+                            </Text>
+                          </View>
+                          {item.deliveryError ? (
+                            <Text style={localStyles.messageDeliveryError}>
+                              Message not sent
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        {!item.deliveryError &&
+                        (!isOwn || item.reactions?.length) ? (
+                          <MessageReactions
+                            apiBaseUrl={BASE_URL}
+                            role="driver"
+                            conversationId={selectedConversation.id}
+                            messageId={item.id}
+                            token={user?.token || ""}
+                            currentUserId={userId}
+                            accentColor={DRIVER_COLORS.primary}
+                            reactions={item.reactions}
+                            isOwn={isOwn}
+                            longPressToReact
+                            pickerOpen={reactionPickerMessageId === item.id}
+                            onPickerOpenChange={(open) =>
+                              setReactionPickerMessageId(open ? item.id : "")
+                            }
+                          />
+                        ) : null}
+                      </View>
                     </View>
-                    {item.deliveryError ? (
-                      <Text style={localStyles.messageDeliveryError}>
-                        Message not sent
-                      </Text>
-                    ) : null}
                   </View>
-                </View>
-              );
-            }}
-          />
-        )}
+                );
+              }}
+            />
+          )}
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-        >
           <View
             style={[
               localStyles.composer,
@@ -622,11 +790,21 @@ const Messages = () => {
               role="driver"
               conversationId={selectedConversation.id}
               token={user?.token || ""}
-              accentColor="#0F9D58"
+              accentColor={DRIVER_COLORS.primary}
+              layout="whatsapp"
               onSendText={sendMessage}
               onSent={async () =>
-                setMessages(await fetchMessagesWithCache(selectedConversation.id))
+                setMessages(
+                  await fetchMessagesWithCache(selectedConversation.id),
+                )
               }
+              containerStyle={{
+                backgroundColor: DRIVER_COLORS.background,
+                borderTopColor: DRIVER_COLORS.cardBorder,
+              }}
+              inputStyle={{
+                color: DRIVER_COLORS.text,
+              }}
             />
           </View>
         </KeyboardAvoidingView>
@@ -636,12 +814,14 @@ const Messages = () => {
 
   return (
     <SafeAreaView
-      style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
+      style={[
+        localStyles.container,
+        { backgroundColor: DRIVER_COLORS.background },
+      ]}
     >
       <DriverHeader
         title="Messages"
         subtitle="Stay connected with parents, school and fleet owner"
-        showBackButton={true}
         showNotifications={true}
         notificationCount={unreadCount}
       />
@@ -666,36 +846,99 @@ const Messages = () => {
           />
         </View>
 
-        <View style={localStyles.tabsContainer}>
-          {tabs.map((tab) => (
+        <TouchableOpacity
+          style={localStyles.filterDropdown}
+          activeOpacity={0.8}
+          onPress={() => setFilterMenuVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Filter conversations: ${tabs.find((item) => item.id === activeTab)?.label || "All"}`}
+        >
+          <MaterialIcons
+            name="filter-list"
+            size={20}
+            color={DRIVER_COLORS.primary}
+          />
+          <Text style={localStyles.filterDropdownLabel}>
+            {tabs.find((item) => item.id === activeTab)?.label || "All"}
+          </Text>
+          <MaterialIcons
+            name="keyboard-arrow-down"
+            size={22}
+            color={DRIVER_COLORS.muted}
+          />
+        </TouchableOpacity>
+
+        <Modal
+          transparent
+          visible={filterMenuVisible}
+          animationType="fade"
+          onRequestClose={() => setFilterMenuVisible(false)}
+        >
+          <Pressable
+            style={localStyles.filterModalOverlay}
+            onPress={() => setFilterMenuVisible(false)}
+          >
+            <View style={localStyles.filterMenu}>
+              <Text style={localStyles.filterMenuTitle}>
+                Show conversations
+              </Text>
+              {tabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[
+                    localStyles.filterOption,
+                    activeTab === tab.id && localStyles.filterOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setActiveTab(tab.id);
+                    setFilterMenuVisible(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeTab === tab.id }}
+                >
+                  <Text
+                    style={[
+                      localStyles.filterOptionText,
+                      activeTab === tab.id &&
+                        localStyles.filterOptionTextSelected,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                  {activeTab === tab.id ? (
+                    <MaterialIcons
+                      name="check"
+                      size={20}
+                      color={DRIVER_COLORS.primary}
+                    />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
+        {linkedContactsError ? (
+          <View
+            accessibilityRole="alert"
+            style={localStyles.linkedContactsNotice}
+          >
+            <Text style={localStyles.linkedContactsNoticeText}>
+              {linkedContactsError}
+            </Text>
             <TouchableOpacity
-              key={tab.id}
-              onPress={() => setActiveTab(tab.id)}
-              style={[
-                localStyles.tab,
-                activeTab === tab.id && [
-                  localStyles.tabActive,
-                  { borderBottomColor: colors.primary },
-                ],
-              ]}
+              onPress={() => void loadLinkedContacts()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: loadingLinkedContacts }}
+              disabled={loadingLinkedContacts}
+              style={localStyles.linkedContactsRetryButton}
             >
-              <Text
-                style={[
-                  localStyles.tabLabel,
-                  {
-                    color:
-                      activeTab === tab.id
-                        ? colors.primary
-                        : colors.text.secondary,
-                    fontWeight: activeTab === tab.id ? "700" : "500",
-                  },
-                ]}
-              >
-                {tab.label}
+              <Text style={localStyles.linkedContactsRetry}>
+                {loadingLinkedContacts ? "Retrying..." : "Retry"}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={localStyles.loadingState}>
@@ -761,7 +1004,11 @@ const Messages = () => {
                     </View>
 
                     <View style={localStyles.messageAction}>
-                      <MaterialIcons name="message" size={18} color="#0F9D58" />
+                      <MaterialIcons
+                        name="message"
+                        size={18}
+                        color={DRIVER_COLORS.primary}
+                      />
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -772,9 +1019,14 @@ const Messages = () => {
               filteredConversations.map((item) => {
                 const name = item.other_participant?.name || "Unknown contact";
                 const previewMessage =
-                  getMessagePreview(item.last_message?.content) || "No messages yet";
+                  getMessagePreview(item.last_message?.content) ||
+                  "No messages yet";
                 const unreadCount = item.unread_count || 0;
                 const avatarUri =
+                  (item.conversation_type === "school_group"
+                    ? item.other_participant?.avatar
+                    : null) ||
+                  item.other_participant?.avatar ||
                   item.other_participant?.profile?.avatar ||
                   `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0A84FF&color=fff`;
                 const isSupport = item.other_participant?.role === "admin";
@@ -802,6 +1054,12 @@ const Messages = () => {
                           style={localStyles.avatar}
                         />
                       )}
+                      {item.other_participant?.role !== "group" ? (
+                        <PresenceDot
+                          userId={item.other_participant?.id}
+                          showOffline
+                        />
+                      ) : null}
                     </View>
 
                     <View style={localStyles.conversationInfo}>
@@ -813,6 +1071,18 @@ const Messages = () => {
                       >
                         {name}
                       </Text>
+                      {item.other_participant?.role === "school" &&
+                      item.other_participant.school_name ? (
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            localStyles.conversationMessage,
+                            { color: colors.text.secondary, fontWeight: "600" },
+                          ]}
+                        >
+                          {item.other_participant.school_name}
+                        </Text>
+                      ) : null}
                       <Text
                         numberOfLines={1}
                         style={[
@@ -903,7 +1173,7 @@ const localStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.successSurface,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -939,25 +1209,100 @@ const localStyles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
   },
-  tabsContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: DRIVER_COLORS.cardBorder,
+  filterDropdown: {
+    minHeight: 46,
+    marginHorizontal: 16,
     marginBottom: 8,
+    paddingHorizontal: 13,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
+    backgroundColor: DRIVER_COLORS.card,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 3,
-    borderBottomColor: "transparent",
-    marginRight: 12,
-  },
-  tabActive: {
-    borderBottomWidth: 3,
-  },
-  tabLabel: {
+  filterDropdownLabel: {
+    flex: 1,
+    color: DRIVER_COLORS.text,
     fontSize: 14,
+    fontWeight: "700",
+  },
+  filterModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  filterMenu: {
+    padding: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
+    backgroundColor: DRIVER_COLORS.card,
+  },
+  filterMenuTitle: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    color: DRIVER_COLORS.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  filterOption: {
+    minHeight: 46,
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  filterOptionSelected: {
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
+  },
+  filterOptionText: {
+    color: DRIVER_COLORS.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  filterOptionTextSelected: {
+    color: DRIVER_COLORS.cyan,
+    fontWeight: "800",
+  },
+  linkedContactsNotice: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.warning,
+    backgroundColor: DRIVER_COLORS.warningSurface,
+    gap: 12,
+  },
+  linkedContactsNoticeText: {
+    color: DRIVER_COLORS.text,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  linkedContactsRetryButton: {
+    alignSelf: "flex-end",
+    minWidth: 84,
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
+  },
+  linkedContactsRetry: {
+    color: DRIVER_COLORS.cyan,
+    fontSize: 13,
+    fontWeight: "800",
   },
   conversationsList: {
     marginTop: 8,
@@ -986,18 +1331,21 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    backgroundColor: "rgba(20, 90, 69, 0.035)",
+    backgroundColor: "rgba(0, 185, 167, 0.06)",
   },
   avatarContainer: {
     position: "relative",
+    width: 48,
+    height: 48,
     marginRight: 12,
+    flexShrink: 0,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
   },
-  avatarImage: { width: "100%", height: "100%" },
+  avatarImage: { width: "100%", height: "100%", borderRadius: 24 },
   onlineIndicator: {
     position: "absolute",
     bottom: 0,
@@ -1045,7 +1393,7 @@ const localStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 12,
@@ -1105,7 +1453,7 @@ const localStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1116,6 +1464,7 @@ const localStyles = StyleSheet.create({
     marginHorizontal: 12,
   },
   avatarBubble: {
+    position: "relative",
     width: 42,
     height: 42,
     borderRadius: 21,
@@ -1160,8 +1509,26 @@ const localStyles = StyleSheet.create({
   messageRowOwn: {
     alignItems: "flex-end",
   },
+  senderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 7,
+    marginBottom: 2,
+  },
+  senderAvatarContainer: {
+    position: "relative",
+    marginRight: 7,
+  },
+  messageGroup: {
+    maxWidth: "84%",
+    alignItems: "flex-start",
+  },
+  messageGroupOwn: {
+    alignItems: "flex-end",
+  },
   bubble: {
-    maxWidth: "80%",
+    maxWidth: "100%",
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -1170,10 +1537,10 @@ const localStyles = StyleSheet.create({
     backgroundColor: DRIVER_COLORS.primary,
   },
   bubbleOther: {
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.card,
   },
   messageText: {
-    color: "#1F2937",
+    color: DRIVER_COLORS.text,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1184,7 +1551,7 @@ const localStyles = StyleSheet.create({
   },
   time: {
     fontSize: 11,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
   },
   timeOwn: {
     fontSize: 11,
@@ -1211,23 +1578,23 @@ const localStyles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+    width: "100%",
+    alignItems: "stretch",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: DRIVER_COLORS.cardBorder,
   },
   input: {
     flex: 1,
     maxHeight: 120,
     minHeight: 44,
-    backgroundColor: "#F3F7F4",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     marginRight: 10,
   },
   sendButton: {

@@ -16,7 +16,7 @@ import { useRouter } from "expo-router";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { File as ExpoFile } from "expo-file-system";
-import { useTheme } from "../../../../styles/theme";
+import { useClientTheme } from "../../../../styles/theme";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import LocationPicker from "../../../../components/LocationPicker.native";
 import GooglePlacesAutoComplete from "../../../../components/GooglePlacesAutoComplete";
@@ -43,13 +43,6 @@ type SelectedLocation = {
   longitude: number | null;
 };
 
-type SchoolChildMatch = {
-  id: string;
-  name: string;
-  lastname: string | null;
-  grade: string | null;
-};
-
 const toCoordinate = (value: unknown, minimum: number, maximum: number) => {
   if (value === null || value === undefined || value === "") return null;
   const coordinate = Number(value);
@@ -62,23 +55,7 @@ const toCoordinate = (value: unknown, minimum: number, maximum: number) => {
 
 const AddChildScreen = () => {
   const router = useRouter();
-  const { colors: themeColors } = useTheme();
-  const colors = {
-    ...themeColors,
-    primary: "#159B3A",
-    primaryDark: "#087C2B",
-    background: "#F4F9FF",
-    surface: "#FFFFFF",
-    surfaceHover: "#EDF7FF",
-    border: "#DCEAF8",
-    divider: "#DCEAF8",
-    text: {
-      ...themeColors.text,
-      primary: "#17365E",
-      secondary: "#607A98",
-      tertiary: "#607A98",
-    },
-  };
+  const { colors } = useClientTheme();
   const { user } = useContext(AuthContext);
   const {
     schools,
@@ -112,22 +89,14 @@ const AddChildScreen = () => {
     school_longitude: null,
     vehicle_id: "",
   });
-
+  const selectedSchool = schools.find(
+    (school) => school.id === formValues.school_id,
+  );
   const [avatar, setAvatar] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [schoolQuery, setSchoolQuery] = useState("");
   const [showSchoolSuggestions, setShowSchoolSuggestions] = useState(false);
   const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false);
-  const [childNameQuery, setChildNameQuery] = useState("");
-  const [showChildSuggestions, setShowChildSuggestions] = useState(false);
-  const [schoolChildMatches, setSchoolChildMatches] = useState<
-    SchoolChildMatch[]
-  >([]);
-  const [schoolChildrenLoading, setSchoolChildrenLoading] = useState(false);
-  const [schoolChildrenError, setSchoolChildrenError] = useState("");
-  const [matchedSchoolChildId, setMatchedSchoolChildId] = useState<
-    string | null
-  >(null);
   const [locationPickerResetKey, setLocationPickerResetKey] = useState(0);
   const [pickupLocation, setPickupLocation] = useState<SelectedLocation>({
     address: "",
@@ -175,57 +144,6 @@ const AddChildScreen = () => {
         toCoordinate(client.home_longitude, -180, 180),
     }));
   }, [client]);
-
-  useEffect(() => {
-    const firstName = childNameQuery.trim();
-    if (
-      !showChildSuggestions ||
-      !formValues.school_id ||
-      firstName.length < 2 ||
-      !user?.token
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      setSchoolChildrenLoading(true);
-      try {
-        const baseUrl = await resolveWorkingBaseUrl();
-        const response = await fetch(
-          `${baseUrl}/client/schools/${encodeURIComponent(formValues.school_id)}/children?name=${encodeURIComponent(firstName)}`,
-          { headers: { Authorization: ["Bearer", user.token].join(" ") } },
-        );
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "School student lookup failed.");
-        }
-        if (!cancelled) {
-          setSchoolChildMatches(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("School student lookup failed:", error);
-          setSchoolChildrenError(
-            "Unable to search this school's student records. Please try again.",
-          );
-          setSchoolChildMatches([]);
-        }
-      } finally {
-        if (!cancelled) setSchoolChildrenLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [
-    childNameQuery,
-    formValues.school_id,
-    showChildSuggestions,
-    user?.token,
-  ]);
 
   const handlePickImage = async () => {
     try {
@@ -309,12 +227,6 @@ const AddChildScreen = () => {
     setAvatar(null);
     setSchoolQuery("");
     setShowSchoolSuggestions(false);
-    setChildNameQuery("");
-    setShowChildSuggestions(false);
-    setSchoolChildMatches([]);
-    setSchoolChildrenError("");
-    setSchoolChildrenLoading(false);
-    setMatchedSchoolChildId(null);
     setPickupLocation({
       address: client?.home_address || "",
       latitude: toCoordinate(client?.home_latitude, -90, 90),
@@ -410,7 +322,6 @@ const AddChildScreen = () => {
           dropoff_longitude: selectedSchoolLongitude,
           vehicle_id: formValues.vehicle_id || null,
           avatar: avatarUrl || null,
-          existing_child_id: matchedSchoolChildId,
         }),
       });
 
@@ -423,7 +334,13 @@ const AddChildScreen = () => {
         throw new Error(message);
       }
 
-      showNotification("Your child was added successfully.", "success");
+      showNotification(
+        data.school_review_status &&
+          !["approved", "active"].includes(data.school_review_status)
+          ? "Your child was added. This school has been sent for admin approval; school-based services will be available after approval."
+          : "Your child was added successfully.",
+        "success",
+      );
       resetChildForm();
       router.replace("/(client)/(tabs)/children");
     } catch (error: unknown) {
@@ -488,9 +405,7 @@ const AddChildScreen = () => {
   const shouldShowSchoolAutocomplete =
     showSchoolSuggestions && normalizedSchoolQuery.length >= 1;
 
-  const isKnownSchoolSelected =
-    Boolean(formValues.school_id) &&
-    schools.some((school) => school?.id === formValues.school_id);
+  const isKnownSchoolSelected = Boolean(formValues.school_id);
 
   const matchingExistingChildren =
     existingChildren.length > 0 ? existingChildren : [];
@@ -551,20 +466,20 @@ const AddChildScreen = () => {
           </View>
 
           {/* Safety Banner */}
-          <View style={[styles.banner, { backgroundColor: "#E9F8EE" }]}>
+          <View style={[styles.banner, { backgroundColor: "#1C1026" }]}>
             <View style={styles.bannerContent}>
-              <MaterialCommunityIcons name="shield" size={32} color="#159B3A" />
+              <MaterialCommunityIcons name="shield" size={32} color="#C14BFF" />
               <View style={styles.bannerText}>
-                <Text style={[styles.bannerTitle, { color: "#17365E" }]}>
+                <Text style={[styles.bannerTitle, { color: "#FBF8FF" }]}>
                   Your child&apos;s safety is our priority
                 </Text>
-                <Text style={[styles.bannerDesc, { color: "#607A98" }]}>
+                <Text style={[styles.bannerDesc, { color: "#B9AFC4" }]}>
                   Provide accurate information to ensure a smooth and safe trip.
                 </Text>
               </View>
             </View>
             <View style={styles.bannerIllustration}>
-              <MaterialCommunityIcons name="school" size={50} color="#087C2B" />
+              <MaterialCommunityIcons name="school" size={50} color="#C14BFF" />
             </View>
           </View>
 
@@ -634,10 +549,6 @@ const AddChildScreen = () => {
                         180,
                       );
 
-                      setMatchedSchoolChildId(null);
-                      setSchoolChildMatches([]);
-                      setSchoolChildrenError("");
-                      setSchoolChildrenLoading(false);
                       setFormValues((prev) => ({
                         ...prev,
                         lastname: child.lastname || prev.lastname,
@@ -708,11 +619,6 @@ const AddChildScreen = () => {
                     school_latitude: null,
                     school_longitude: null,
                   }));
-                  setMatchedSchoolChildId(null);
-                  setSchoolChildMatches([]);
-                  setSchoolChildrenError("");
-                  setSchoolChildrenLoading(false);
-
                   if (!nextValue.trim()) {
                     setDropoffLocation({
                       address: "",
@@ -756,14 +662,31 @@ const AddChildScreen = () => {
                   });
 
                   setShowSchoolSuggestions(false);
-                  setChildNameQuery("");
-                  setShowChildSuggestions(false);
-                  setMatchedSchoolChildId(null);
-                  setSchoolChildMatches([]);
-                  setSchoolChildrenError("");
-                  setSchoolChildrenLoading(false);
                 }}
               />
+              <Text
+                style={[
+                  styles.schoolItemSubtext,
+                  { color: colors.text.secondary, marginTop: 6 },
+                ]}
+              >
+                New schools are sent to the admin team for approval. School
+                access stays inactive until approved.
+              </Text>
+              {formValues.school_id && selectedSchool?.is_active !== true ? (
+                <Text
+                  style={[
+                    styles.schoolItemSubtext,
+                    { color: colors.text.secondary, marginTop: 6 },
+                  ]}
+                >
+                  {selectedSchool?.status === "rejected"
+                    ? "This school was previously rejected and will be resubmitted for review when you add your child."
+                    : selectedSchool?.status === "needs_info"
+                      ? "This school is awaiting more information. Check your notifications for the admin's request."
+                      : "This school is awaiting admin approval. You can add your child now; school services will remain unavailable until approval."}
+                </Text>
+              ) : null}
 
               {schoolsLoading ? (
                 <View style={styles.schoolLoadingRow}>
@@ -837,20 +760,12 @@ const AddChildScreen = () => {
                               school_latitude: school.latitude ?? null,
                               school_longitude: school.longitude ?? null,
                             }));
-                            setMatchedSchoolChildId(null);
-                            setSchoolChildMatches([]);
-                            setSchoolChildrenError("");
-                            setSchoolChildrenLoading(false);
                             setDropoffLocation({
                               address: school.name || "",
                               latitude: school.latitude ?? null,
                               longitude: school.longitude ?? null,
                             });
                             setShowSchoolSuggestions(false);
-                            setChildNameQuery(formValues.name);
-                            setShowChildSuggestions(
-                              formValues.name.trim().length >= 2,
-                            );
                           }}
                         >
                           <Text
@@ -869,6 +784,20 @@ const AddChildScreen = () => {
                               ]}
                             >
                               {school.address}
+                            </Text>
+                          ) : null}
+                          {school.is_active !== true ? (
+                            <Text
+                              style={[
+                                styles.schoolItemSubtext,
+                                { color: colors.text.secondary },
+                              ]}
+                            >
+                              {school.status === "needs_info"
+                                ? "More information requested"
+                                : school.status === "rejected"
+                                  ? "Previously rejected — will be resubmitted"
+                                  : "Pending admin approval"}
                             </Text>
                           ) : null}
                         </TouchableOpacity>
@@ -910,139 +839,26 @@ const AddChildScreen = () => {
                     />
                     <TextInput
                       value={formValues.name || ""}
-                      onChangeText={(value) => {
-                        setFormValues((prev) => ({ ...prev, name: value }));
-                        setChildNameQuery(value);
-                        setMatchedSchoolChildId(null);
-                        setSchoolChildMatches([]);
-                        setSchoolChildrenError("");
-                        setSchoolChildrenLoading(false);
-                        setShowChildSuggestions(
-                          value.trim().length >= 2 &&
-                            Boolean(formValues.school_id),
-                        );
-                      }}
-                      onFocus={() => {
-                        if (formValues.school_id) {
-                          setShowChildSuggestions(
-                            childNameQuery.trim().length >= 2,
-                          );
-                        }
-                      }}
-                      placeholder={
-                        isKnownSchoolSelected
-                          ? "Search existing child"
-                          : "Enter child's name"
+                      onChangeText={(value) =>
+                        setFormValues((prev) => ({ ...prev, name: value }))
                       }
+                      placeholder="Enter child's name"
                       placeholderTextColor={colors.text.secondary}
                       style={[styles.input, { color: colors.text.primary }]}
                     />
                   </View>
-                  {schoolChildrenLoading ? (
-                    <View style={styles.schoolLoadingRow}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <Text
-                        style={[
-                          styles.schoolLoadingText,
-                          { color: colors.text.secondary },
-                        ]}
-                      >
-                        Searching this school…
-                      </Text>
-                    </View>
-                  ) : null}
-                  {matchedSchoolChildId ? (
+                  {isKnownSchoolSelected ? (
                     <Text
                       style={[
                         styles.schoolItemSubtext,
-                        { color: colors.primary, marginTop: 6 },
+                        { color: colors.text.secondary, marginTop: 6 },
                       ]}
                     >
-                      Existing school record selected. Your updates will be
-                      saved and linked to your account.
+                      Existing student records cannot be matched or claimed by
+                      name. Contact the school to link a child who is already
+                      registered.
                     </Text>
                   ) : null}
-                  {showChildSuggestions && (
-                    <View
-                      style={[
-                        styles.schoolList,
-                        {
-                          backgroundColor: colors.surface,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      {schoolChildrenError ? (
-                        <Text
-                          style={[
-                            styles.schoolItemText,
-                            { color: colors.text.secondary },
-                          ]}
-                        >
-                          {schoolChildrenError}
-                        </Text>
-                      ) : schoolChildrenLoading ? (
-                        <Text
-                          style={[
-                            styles.schoolItemText,
-                            { color: colors.text.secondary },
-                          ]}
-                        >
-                          Searching this school&apos;s student records…
-                        </Text>
-                      ) : schoolChildMatches.length > 0 ? (
-                        schoolChildMatches.map((child) => (
-                          <TouchableOpacity
-                            key={child.id}
-                            style={styles.schoolItem}
-                            onPress={() => {
-                              setMatchedSchoolChildId(child.id);
-                              setFormValues((prev) => ({
-                                ...prev,
-                                name: child.name || "",
-                                lastname: child.lastname || "",
-                                grade: child.grade || "",
-                              }));
-                              setChildNameQuery(child.name || "");
-                              setShowChildSuggestions(false);
-                              setSchoolChildrenLoading(false);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.schoolItemText,
-                                { color: colors.text.primary },
-                              ]}
-                            >
-                              {`${child.name || ""} ${child.lastname || ""}`.trim() ||
-                                "Unnamed child"}
-                            </Text>
-                            {child.grade ? (
-                              <Text
-                                style={[
-                                  styles.schoolItemSubtext,
-                                  { color: colors.text.secondary },
-                                ]}
-                              >
-                                Grade {child.grade}
-                              </Text>
-                            ) : null}
-                          </TouchableOpacity>
-                        ))
-                      ) : (
-                        <Text
-                          style={[
-                            styles.schoolItemText,
-                            { color: colors.text.secondary },
-                          ]}
-                        >
-                          {childNameQuery.trim().length < 2
-                            ? "Enter at least 2 letters to search school records."
-                            : "No unlinked students found for this name."}
-                        </Text>
-                      )}
-                    </View>
-                  )}
                 </View>
               </View>
               <View style={styles.halfColumn}>
@@ -1118,9 +934,9 @@ const AddChildScreen = () => {
                   <MaterialCommunityIcons
                     name="map-marker"
                     size={18}
-                    color="#159B3A"
+                    color="#C14BFF"
                   />
-                  <Text style={[styles.locationTitle, { color: "#159B3A" }]}>
+                  <Text style={[styles.locationTitle, { color: "#C14BFF" }]}>
                     Pickup Location
                   </Text>
                 </View>
@@ -1167,9 +983,9 @@ const AddChildScreen = () => {
                   <MaterialCommunityIcons
                     name="map-marker"
                     size={18}
-                    color="#087C2B"
+                    color="#C14BFF"
                   />
-                  <Text style={[styles.locationTitle, { color: "#087C2B" }]}>
+                  <Text style={[styles.locationTitle, { color: "#C14BFF" }]}>
                     Drop-off Location
                   </Text>
                 </View>
@@ -1408,13 +1224,13 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
 
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 10,
     marginTop: 3,
   },
 
@@ -1441,13 +1257,13 @@ const styles = StyleSheet.create({
   },
 
   bannerTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 4,
   },
 
   bannerDesc: {
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
   },
 
@@ -1455,7 +1271,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1468,20 +1284,20 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: "800",
     letterSpacing: -0.2,
     marginBottom: 14,
   },
 
   sectionDesc: {
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
     marginBottom: 14,
   },
 
   optional: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
     opacity: 0.6,
   },
@@ -1502,7 +1318,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     marginBottom: 7,
   },
@@ -1528,13 +1344,13 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 54,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
   },
 
   selectPlaceholder: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
   },
 
@@ -1548,7 +1364,7 @@ const styles = StyleSheet.create({
   },
 
   schoolLoadingText: {
-    fontSize: 12,
+    fontSize: 11,
     marginLeft: 8,
   },
 
@@ -1572,16 +1388,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
   },
 
   schoolItemText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
 
   schoolItemSubtext: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 3,
   },
 
@@ -1604,13 +1420,13 @@ const styles = StyleSheet.create({
   },
 
   photoText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     marginTop: 10,
   },
 
   photoSubtext: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 4,
   },
 
@@ -1629,7 +1445,7 @@ const styles = StyleSheet.create({
   },
 
   locationTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     marginLeft: 6,
   },
@@ -1647,7 +1463,7 @@ const styles = StyleSheet.create({
 
   mapPinHintText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11,
   },
 
   locationsRow: {
@@ -1684,16 +1500,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
   },
 
   vehicleOptionText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
 
   vehicleOptionSubtext: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 3,
   },
 
@@ -1712,7 +1528,7 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
   },
 
@@ -1726,7 +1542,7 @@ const styles = StyleSheet.create({
   },
 
   secondaryButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
 });

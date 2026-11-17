@@ -60,11 +60,72 @@ const getProfileValue = (...values: unknown[]) => {
   return typeof value === "string" ? value : "";
 };
 
+type ProfileSource = {
+  first_name?: string | null;
+  firstName?: string | null;
+  last_name?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  alternate_phone?: string | null;
+  alternatePhone?: string | null;
+  home_address?: string | null;
+  homeAddress?: string | null;
+  home_latitude?: number | null;
+  homeLatitude?: number | null;
+  home_longitude?: number | null;
+  homeLongitude?: number | null;
+  relationship?: string | null;
+  relationship_other?: string | null;
+  relationshipOther?: string | null;
+  name?: string | null;
+  email?: string | null;
+};
+
+type ClientProfileSource = ProfileSource & { client?: ProfileSource };
+type UserSource = ProfileSource & { userData?: ProfileSource };
+
+const getFormFromProfile = (
+  client: ClientProfileSource | null,
+  user: UserSource | null,
+) => {
+  const profile = client?.client || client || {};
+  const userData = user?.userData || user || {};
+  return {
+    first_name: getProfileValue(
+      profile.first_name,
+      profile.firstName,
+      userData.first_name,
+      userData.firstName,
+      profile.name,
+    ),
+    last_name: getProfileValue(
+      profile.last_name,
+      profile.lastName,
+      userData.last_name,
+      userData.lastName,
+    ),
+    phone: getProfileValue(profile.phone, userData.phone),
+    alternate_phone: getProfileValue(
+      profile.alternate_phone,
+      profile.alternatePhone,
+    ),
+    home_address: getProfileValue(profile.home_address, profile.homeAddress),
+    home_latitude: profile.home_latitude ?? profile.homeLatitude ?? null,
+    home_longitude: profile.home_longitude ?? profile.homeLongitude ?? null,
+    relationship: profile.relationship || "parent",
+    relationship_other: getProfileValue(
+      profile.relationship_other,
+      profile.relationshipOther,
+    ),
+  };
+};
+
 const PersonalInformation = () => {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   const { client, loading, refreshClient } = useClientProfile();
   const [form, setForm] = useState<ProfileForm>(emptyForm);
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [relationshipPickerVisible, setRelationshipPickerVisible] =
     useState(false);
@@ -74,42 +135,14 @@ const PersonalInformation = () => {
     type: "success" | "error" | "warning";
     visible: boolean;
   }>({ message: "", type: "success", visible: false });
-  console.log({ user: user?.userData?.name });
   useEffect(() => {
-    if (!client) return;
-
-    const profile = client.client || client;
-    const userData = user?.userData || user;
-
-    setForm({
-      first_name: getProfileValue(
-        profile.first_name,
-        profile.firstName,
-        userData?.first_name,
-        userData?.firstName,
-        profile.name,
-      ),
-      last_name: getProfileValue(
-        profile.last_name,
-        profile.lastName,
-        userData?.last_name,
-        userData?.lastName,
-      ),
-      phone: getProfileValue(profile.phone, userData?.phone),
-      alternate_phone: getProfileValue(
-        profile.alternate_phone,
-        profile.alternatePhone,
-      ),
-      home_address: getProfileValue(profile.home_address, profile.homeAddress),
-      home_latitude: profile.home_latitude ?? profile.homeLatitude ?? null,
-      home_longitude: profile.home_longitude ?? profile.homeLongitude ?? null,
-      relationship: profile.relationship || "parent",
-      relationship_other: getProfileValue(
-        profile.relationship_other,
-        profile.relationshipOther,
-      ),
-    });
-  }, [client, user]);
+    if (!client || isEditing) return undefined;
+    const timeout = setTimeout(
+      () => setForm(getFormFromProfile(client, user)),
+      0,
+    );
+    return () => clearTimeout(timeout);
+  }, [client, isEditing, user]);
 
   const updateField = (field: keyof ProfileForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -271,6 +304,7 @@ const PersonalInformation = () => {
 
       await refreshClient();
       setShowValidationErrors(false);
+      setIsEditing(false);
       showNotification("Your personal information has been saved.", "success");
     } catch (error) {
       showNotification(
@@ -288,7 +322,7 @@ const PersonalInformation = () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#159B3A" />
+          <ActivityIndicator size="small" color="#C14BFF" />
           <Text style={styles.loadingText}>Loading your information...</Text>
         </View>
       </SafeAreaView>
@@ -307,14 +341,39 @@ const PersonalInformation = () => {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <MaterialIcons name="arrow-back" size={23} color="#17365E" />
+            <MaterialIcons name="arrow-back" size={23} color="#FBF8FF" />
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.title}>Personal Information</Text>
             <Text style={styles.subtitle}>
-              Keep your client details up to date
+              {isEditing
+                ? "Update your client details"
+                : "Your contact and account details"}
             </Text>
           </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={
+              isEditing ? "Cancel editing personal information" : "Edit personal information"
+            }
+            style={styles.editButton}
+            onPress={() => {
+              if (isEditing) {
+                setForm(getFormFromProfile(client, user));
+                setShowValidationErrors(false);
+              }
+              setIsEditing((current) => !current);
+            }}
+          >
+            <MaterialIcons
+              name={isEditing ? "close" : "edit"}
+              size={20}
+              color="#C14BFF"
+            />
+            <Text style={styles.editButtonText}>
+              {isEditing ? "Cancel" : "Edit"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -322,6 +381,60 @@ const PersonalInformation = () => {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {!isEditing ? (
+            <>
+              <View style={styles.profileSummaryCard}>
+                <View style={styles.profileAvatar}>
+                  <MaterialIcons name="person" size={30} color="#C14BFF" />
+                </View>
+                <Text style={styles.profileName}>
+                  {[form.first_name, form.last_name].filter(Boolean).join(" ") ||
+                    user?.userData?.name ||
+                    "Client"}
+                </Text>
+                <Text style={styles.profileRelationship}>
+                  {relationshipOptions.find(
+                    (option) => option.value === form.relationship,
+                  )?.label || "Parent"}
+                </Text>
+              </View>
+              <Text style={styles.sectionTitle}>Contact information</Text>
+              <View style={styles.card}>
+                <InfoRow
+                  icon="email"
+                  label="Email address"
+                  value={user?.userData?.email || user?.email || "Not provided"}
+                />
+                <InfoRow
+                  icon="phone"
+                  label="Phone number"
+                  value={form.phone || "Not provided"}
+                />
+                <InfoRow
+                  icon="phone-android"
+                  label="Alternate phone"
+                  value={form.alternate_phone || "Not provided"}
+                />
+              </View>
+              <Text style={styles.sectionTitle}>Home address</Text>
+              <View style={styles.card}>
+                <InfoRow
+                  icon="home"
+                  label="Address"
+                  value={form.home_address || "Not provided"}
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => setIsEditing(true)}
+                accessibilityRole="button"
+              >
+                <MaterialIcons name="edit" size={18} color="#FFFFFF" />
+                <Text style={styles.saveButtonText}>Edit information</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
           <Text style={styles.sectionTitle}>Basic details</Text>
           <View style={styles.card}>
             <Field
@@ -360,7 +473,7 @@ const PersonalInformation = () => {
               <MaterialIcons
                 name="keyboard-arrow-down"
                 size={24}
-                color="#607A98"
+                color="#B9AFC4"
               />
             </TouchableOpacity>
             {form.relationship === "other" && (
@@ -442,6 +555,8 @@ const PersonalInformation = () => {
               <Text style={styles.saveButtonText}>Save changes</Text>
             )}
           </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
         <Modal
           visible={relationshipPickerVisible}
@@ -483,7 +598,7 @@ const PersonalInformation = () => {
                       {option.label}
                     </Text>
                     {isSelected && (
-                      <MaterialIcons name="check" size={22} color="#159B3A" />
+                      <MaterialIcons name="check" size={22} color="#C14BFF" />
                     )}
                   </TouchableOpacity>
                 );
@@ -496,9 +611,7 @@ const PersonalInformation = () => {
           type={notification.type}
           visible={notification.visible}
           onHide={() => {
-            const wasSuccessful = notification.type === "success";
             setNotification((current) => ({ ...current, visible: false }));
-            if (wasSuccessful) router.back();
           }}
         />
       </KeyboardAvoidingView>
@@ -534,15 +647,35 @@ const Field = ({
       keyboardType={keyboardType}
       placeholder={placeholder}
       style={[styles.input, error && styles.inputError]}
-      placeholderTextColor="#607A98"
+      placeholderTextColor="#B9AFC4"
     />
+  </View>
+);
+
+const InfoRow = ({
+  icon,
+  label,
+  value,
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  label: string;
+  value: string;
+}) => (
+  <View style={styles.infoRow}>
+    <View style={styles.infoIcon}>
+      <MaterialIcons name={icon} size={18} color="#C14BFF" />
+    </View>
+    <View style={styles.infoCopy}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
   </View>
 );
 
 export default PersonalInformation;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F4F9FF" },
+  safeArea: { flex: 1, backgroundColor: "#07040B" },
   container: { flex: 1 },
   loadingContainer: {
     flex: 1,
@@ -550,14 +683,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
   },
-  loadingText: { color: "#607A98", fontSize: 14 },
+  loadingText: { color: "#B9AFC4", fontSize: 13 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
   },
   backButton: {
     width: 40,
@@ -567,38 +700,111 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerText: { flex: 1 },
-  title: { color: "#17365E", fontSize: 22, fontWeight: "800" },
-  subtitle: { color: "#607A98", fontSize: 12, marginTop: 3 },
+  editButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "#1C1026",
+  },
+  editButtonText: { color: "#C14BFF", fontSize: 12, fontWeight: "800" },
+  title: { color: "#FBF8FF", fontSize: 18, fontWeight: "800" },
+  subtitle: { color: "#B9AFC4", fontSize: 10, marginTop: 3 },
   content: { padding: 20, paddingBottom: 40 },
+  profileSummaryCard: {
+    alignItems: "center",
+    padding: 22,
+    marginBottom: 24,
+    borderRadius: 20,
+    backgroundColor: "#130D1A",
+    borderWidth: 1,
+    borderColor: "#352341",
+  },
+  profileAvatar: {
+    width: 62,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 31,
+    backgroundColor: "#1C1026",
+  },
+  profileName: {
+    marginTop: 12,
+    color: "#FBF8FF",
+    fontSize: 19,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  profileRelationship: {
+    marginTop: 4,
+    color: "#B9AFC4",
+    fontSize: 12,
+    fontWeight: "600",
+  },
   sectionTitle: {
-    color: "#17365E",
-    fontSize: 17,
+    color: "#FBF8FF",
+    fontSize: 14,
     fontWeight: "800",
     marginBottom: 10,
     marginTop: 4,
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 14,
     marginBottom: 22,
   },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+  },
+  infoIcon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#1C1026",
+  },
+  infoCopy: { flex: 1 },
+  infoLabel: { color: "#B9AFC4", fontSize: 10, fontWeight: "700" },
+  infoValue: {
+    marginTop: 3,
+    color: "#FBF8FF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  editProfileButton: {
+    height: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: "#9B2BE7",
+  },
   field: { marginBottom: 13 },
-  label: { color: "#607A98", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  label: { color: "#B9AFC4", fontSize: 11, fontWeight: "700", marginBottom: 6 },
   requiredMarker: { color: "#DC2626" },
   addressInput: { borderRadius: 9 },
   inputError: { borderColor: "#DC2626" },
   input: {
     height: 46,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 9,
-    color: "#17365E",
+    color: "#FBF8FF",
     paddingHorizontal: 12,
-    fontSize: 14,
-    backgroundColor: "#FFFFFF",
+    fontSize: 13,
+    backgroundColor: "#130D1A",
   },
   map: {
     height: 190,
@@ -609,15 +815,15 @@ const styles = StyleSheet.create({
   relationshipTrigger: {
     minHeight: 50,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 9,
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
   },
-  relationshipValue: { color: "#17365E", fontSize: 14, fontWeight: "600" },
+  relationshipValue: { color: "#FBF8FF", fontSize: 13, fontWeight: "600" },
   otherRelationshipField: { marginTop: 14, marginBottom: -2 },
   modalOverlay: {
     flex: 1,
@@ -626,7 +832,7 @@ const styles = StyleSheet.create({
   },
   modalDismissArea: { flex: 1 },
   relationshipSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     padding: 20,
@@ -637,12 +843,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#DCEAF8",
+    backgroundColor: "#1C1026",
     marginBottom: 18,
   },
   sheetTitle: {
-    color: "#17365E",
-    fontSize: 18,
+    color: "#FBF8FF",
+    fontSize: 15,
     fontWeight: "800",
     marginBottom: 10,
   },
@@ -654,17 +860,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  relationshipOptionSelected: { backgroundColor: "#EDF7FF" },
-  relationshipOptionText: { color: "#607A98", fontSize: 15 },
-  relationshipOptionTextSelected: { color: "#159B3A", fontWeight: "700" },
+  relationshipOptionSelected: { backgroundColor: "#1C1026" },
+  relationshipOptionText: { color: "#B9AFC4", fontSize: 14 },
+  relationshipOptionTextSelected: { color: "#C14BFF", fontWeight: "700" },
   saveButton: {
     height: 52,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     marginTop: 2,
   },
   saveButtonDisabled: { opacity: 0.65 },
-  saveButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  saveButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
 });

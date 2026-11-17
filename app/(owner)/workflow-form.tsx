@@ -102,7 +102,7 @@ const WORKFLOW_CONFIG: Record<WorkflowCategory, WorkflowConfig> = {
   complianceDocuments: {
     title: "Compliance",
     endpoint: "compliance",
-    accent: "#7C3AED",
+    accent: "#00B894",
     icon: "verified-user",
     fields: [
       {
@@ -725,14 +725,14 @@ export default WorkflowForm;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
   },
   content: {
     padding: 16,
     paddingBottom: 40,
   },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -760,15 +760,15 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#F4FBF8",
   },
   summaryMeta: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   errorText: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#35151D",
     color: "#B91C1C",
     borderRadius: 12,
     padding: 12,
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   formCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 16,
     shadowColor: "#000",
@@ -795,26 +795,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#0F172A",
+    color: "#F4FBF8",
     minHeight: 44,
   },
   pickerWrap: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 12,
     minHeight: 44,
     justifyContent: "center",
   },
   picker: {
-    color: "#0F172A",
+    color: "#F4FBF8",
     minHeight: 44,
   },
   textArea: {
@@ -822,12 +822,12 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   helperText: {
-    color: "#64748B",
+    color: "#B1C4BC",
     fontSize: 11,
     marginTop: 6,
   },
   primaryButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",

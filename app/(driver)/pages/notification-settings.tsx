@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "@/styles/theme";
+import { useDriverTheme } from "@/styles/theme";
 import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 import { AuthContext } from "@/context/authContext/auth-context";
@@ -41,7 +41,7 @@ const NotificationSettingsPage = () => {
   const router = useRouter();
   const { user } = useContext(AuthContext);
   const { driver, loading, refreshDriver } = useDriverProfile();
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const [settings, setSettings] = useState(defaultNotificationSettings);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

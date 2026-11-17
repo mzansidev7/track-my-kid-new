@@ -24,7 +24,8 @@ import {
 const More = () => {
   const router = useRouter();
   const { colors } = useTheme();
-  const { logout } = useContext(AuthContext);
+  const { logout, user: authUser } = useContext(AuthContext);
+  const isDriver = authUser?.userData?.admin_profile?.role === "driver";
   const { user, school, students, routes, drivers } = useSchoolDashboard();
   const displayName =
     user?.first_name ||
@@ -62,8 +63,8 @@ const More = () => {
           </View>
           <TouchableOpacity
             style={styles.iconRound}
-            onPress={() => router.push("/(school)/(tabs)/messages" as never)}
-            accessibilityLabel="Open messages"
+            onPress={() => router.push("/(school)/pages/notifications" as never)}
+            accessibilityLabel="Open notifications"
           >
             <MaterialIcons
               name="notifications-none"
@@ -105,6 +106,47 @@ const More = () => {
           <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
         </View>
 
+        {isDriver ? (
+          <View style={styles.driverLinks}>
+            <TouchableOpacity
+              style={styles.driverLink}
+              onPress={() => router.push("/(school)/(tabs)/trips" as never)}
+            >
+              <MaterialIcons name="directions-bus" size={22} color="#2563EB" />
+              <Text style={styles.driverLinkText}>Assigned trips</Text>
+              <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.driverLink}
+              onPress={() => router.push("/(school)/(tabs)/messages" as never)}
+            >
+              <MaterialIcons name="chat-bubble-outline" size={22} color="#2563EB" />
+              <Text style={styles.driverLinkText}>Staff messages</Text>
+              <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.driverLink}
+              onPress={() =>
+                router.push("/(school)/pages/notifications" as never)
+              }
+            >
+              <MaterialIcons name="notifications-none" size={22} color="#2563EB" />
+              <Text style={styles.driverLinkText}>Notifications</Text>
+              <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.driverLink}
+              onPress={() => router.push("/(school)/(tabs)/settings" as never)}
+            >
+              <MaterialIcons name="account-circle" size={22} color="#2563EB" />
+              <Text style={styles.driverLinkText}>My profile</Text>
+              <MaterialIcons name="chevron-right" size={21} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {!isDriver && (
+          <>
         <View style={styles.statsRow}>
           <Stat value={students.length} label="Students" />
           <Stat value={routes.length} label="Routes" />
@@ -180,6 +222,8 @@ const More = () => {
           <Text style={styles.helpText}>Help & Support</Text>
           <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
         </TouchableOpacity>
+          </>
+        )}
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <MaterialIcons name="logout" size={20} color="#DC2626" />
@@ -212,6 +256,17 @@ export default More;
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F7F8FA" },
   content: { padding: 16, paddingBottom: 140 },
+  driverLinks: { gap: 10, marginTop: 8 },
+  driverLink: {
+    minHeight: 58,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  driverLinkText: { color: "#17365E", fontSize: 15, fontWeight: "700", flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

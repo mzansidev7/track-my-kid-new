@@ -44,7 +44,7 @@ const CATEGORY_CONFIG: Record<RouteCategoryKey, CategoryConfig> = {
     title: "Compliance",
     endpoint: "compliance",
     icon: "verified-user",
-    accent: "#7C3AED",
+    accent: "#00B894",
   },
   clientEnrollments: {
     key: "clientEnrollments",
@@ -323,7 +323,7 @@ export default OwnerWorkflowCategoryDetail;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
   },
   centerState: {
     flex: 1,
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: "#475569",
+    color: "#B1C4BC",
     fontSize: 16,
     fontWeight: "500",
   },
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -370,15 +370,15 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#F4FBF8",
   },
   summaryMeta: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   emptyState: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   emptyStateText: {
-    color: "#64748B",
+    color: "#B1C4BC",
     fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 14,
     padding: 14,
     shadowColor: "#000",
@@ -423,16 +423,16 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 2,
   },
   itemMeta: {
     fontSize: 13,
-    color: "#475569",
+    color: "#B1C4BC",
     marginBottom: 4,
   },
   itemDate: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#B1C4BC",
   },
 });

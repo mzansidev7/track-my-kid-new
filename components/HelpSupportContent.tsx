@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useTheme } from "../styles/theme";
+import { DRIVER_COLORS, useTheme } from "../styles/theme";
 import type { HelpTopicItem } from "./helpConfig";
 
 type Props = {
@@ -34,10 +34,17 @@ export function HelpSupportContent({
         ? "client"
         : section;
   const brandColors = getBrandColors(brandName);
+  const isDriver = section === "driver";
   const accent = brandColors.primary;
   const surface = brandColors.surface || colors.surface;
   const border = brandColors.border || colors.border;
   const divider = brandColors.divider || colors.divider;
+  const pageBackground = isDriver ? DRIVER_COLORS.background : colors.background;
+  const topicSurface = isDriver
+    ? DRIVER_COLORS.surfaceRaised
+    : colors.surfaceHover;
+  const primaryText = isDriver ? DRIVER_COLORS.text : colors.text.primary;
+  const secondaryText = isDriver ? DRIVER_COLORS.muted : colors.text.secondary;
 
   const supportEmail = "support@trackmykid.co.za";
   const supportChatUrl = "https://trackmykid.co.za/support";
@@ -95,14 +102,14 @@ export function HelpSupportContent({
     <ScrollView
       contentContainerStyle={[
         styles.content,
-        { backgroundColor: colors.background },
+        { backgroundColor: pageBackground },
       ]}
     >
       <View style={[styles.card, { backgroundColor: surface }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <Text style={[styles.sectionTitle, { color: primaryText }]}>
           Help topics
         </Text>
-        <Text style={[styles.description, { color: colors.text.secondary }]}>
+        <Text style={[styles.description, { color: secondaryText }]}>
           Find answers to common questions and learn how to use the app
           effectively.
         </Text>
@@ -113,7 +120,7 @@ export function HelpSupportContent({
               key={`${topic.action}-${index}`}
               style={[
                 styles.topicCard,
-                { backgroundColor: colors.surfaceHover, borderColor: border },
+                { backgroundColor: topicSurface, borderColor: border },
               ]}
               onPress={() => handleTopic(topic.action)}
             >
@@ -127,7 +134,7 @@ export function HelpSupportContent({
               >
                 <Text style={styles.topicIcon}>{topic.icon}</Text>
                 <Text
-                  style={[styles.topicTitle, { color: colors.text.primary }]}
+                  style={[styles.topicTitle, { color: primaryText }]}
                 >
                   {topic.title}
                 </Text>
@@ -142,7 +149,7 @@ export function HelpSupportContent({
               <Text
                 style={[
                   styles.topicDescription,
-                  { color: colors.text.secondary },
+                  { color: secondaryText },
                 ]}
               >
                 {topic.description}
@@ -153,10 +160,10 @@ export function HelpSupportContent({
       </View>
 
       <View style={[styles.card, { backgroundColor: surface }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+        <Text style={[styles.sectionTitle, { color: primaryText }]}>
           Contact support
         </Text>
-        <Text style={[styles.description, { color: colors.text.secondary }]}>
+        <Text style={[styles.description, { color: secondaryText }]}>
           Cannot find what you need? Reach our team using any option below.
         </Text>
 
@@ -170,14 +177,14 @@ export function HelpSupportContent({
               <Text style={styles.contactIcon}>{method.icon}</Text>
               <View style={styles.contactText}>
                 <Text
-                  style={[styles.contactTitle, { color: colors.text.primary }]}
+                  style={[styles.contactTitle, { color: primaryText }]}
                 >
                   {method.title}
                 </Text>
                 <Text
                   style={[
                     styles.contactDescription,
-                    { color: colors.text.secondary },
+                    { color: secondaryText },
                   ]}
                 >
                   {method.description}
@@ -190,10 +197,10 @@ export function HelpSupportContent({
       </View>
 
       <View style={[styles.infoCard, { backgroundColor: surface }]}>
-        <Text style={[styles.infoTitle, { color: colors.text.primary }]}>
+        <Text style={[styles.infoTitle, { color: primaryText }]}>
           Support hours
         </Text>
-        <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+        <Text style={[styles.infoText, { color: secondaryText }]}>
           🕘 Monday - Friday: 6:00 AM - 8:00 PM{"\n"}
           🕘 Saturday: 8:00 AM - 6:00 PM{"\n"}
           🕘 Sunday: 9:00 AM - 5:00 PM{"\n"}

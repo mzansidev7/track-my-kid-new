@@ -394,7 +394,7 @@ const PersonalInfo = () => {
       <View style={styles.container}>
         {renderHeader()}
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.loadingText}>Loading profile details...</Text>
         </View>
       </View>
@@ -538,7 +538,7 @@ const PersonalInfo = () => {
                   },
                 ]}
               >
-                <MaterialIcons name="business" size={16} color="#4A90E2" />
+                <MaterialIcons name="business" size={16} color="#35D9B3" />
                 <Text style={styles.verifiedText}>{owner.company_name}</Text>
               </View>
             ) : null}
@@ -554,7 +554,7 @@ const PersonalInfo = () => {
                   },
                 ]}
               >
-                <MaterialIcons name="place" size={16} color="#4A90E2" />
+                <MaterialIcons name="place" size={16} color="#35D9B3" />
                 <Text style={styles.verifiedText}>{owner.address}</Text>
               </View>
             ) : null}
@@ -573,8 +573,8 @@ const PersonalInfo = () => {
                       alignItems: "center",
                       gap: 4,
                       borderWidth: 1,
-                      borderColor: "#4A90E2",
-                      backgroundColor: "#EFF6FF",
+                      borderColor: "#00B894",
+                      backgroundColor: "#13231D",
                       paddingHorizontal: 12,
                       paddingVertical: 10,
                       marginBottom: 10,
@@ -585,7 +585,7 @@ const PersonalInfo = () => {
                   <MaterialIcons
                     name="add-business"
                     size={16}
-                    color="#4A90E2"
+                    color="#35D9B3"
                   />
                   <Text style={styles.verifiedText}>Add Company Logo</Text>
                 </TouchableOpacity>
@@ -773,15 +773,15 @@ const PersonalInfo = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  container: { flex: 1, backgroundColor: "#0D1713" },
   content: { padding: 16 },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
   },
   profileCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -840,7 +840,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: "#0F766E",
+    backgroundColor: "#087A62",
     alignSelf: "flex-start",
   },
 
@@ -853,19 +853,19 @@ const styles = StyleSheet.create({
   avatarHint: {
     marginTop: 8,
     fontSize: 12,
-    color: "#475569",
+    color: "#B1C4BC",
   },
 
   profileName: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1F2937",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
 
   profileDetail: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginBottom: 2,
   },
 
@@ -876,20 +876,20 @@ const styles = StyleSheet.create({
   },
 
   statusBadge: {
-    backgroundColor: "#E5F8ED",
+    backgroundColor: "#13231D",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
   },
 
   statusText: {
-    color: "#15803D",
+    color: "#35D9B3",
     fontWeight: "700",
     fontSize: 12,
   },
 
   verifiedBadge: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#13231D",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
 
   summaryCard: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     padding: 16,
     borderRadius: 14,
     alignItems: "flex-start",
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: "#82968D",
     marginBottom: 6,
     textTransform: "uppercase",
   },
@@ -931,11 +931,11 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     padding: 20,
     borderRadius: 12,
     elevation: 2,
@@ -948,29 +948,29 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 20,
   },
 
   input: {
     borderWidth: 1,
-    borderColor: "#DDD",
+    borderColor: "#294238",
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
-    backgroundColor: "#F9F9F9",
-    color: "#111827",
+    backgroundColor: "#13231D",
+    color: "#F4FBF8",
   },
 
   readOnlyInput: {
-    backgroundColor: "#F3F4F6",
-    color: "#6B7280",
+    backgroundColor: "#13231D",
+    color: "#B1C4BC",
   },
 
   fieldLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#4B5563",
+    color: "#B1C4BC",
     marginBottom: 8,
     marginTop: 16,
   },
@@ -996,19 +996,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 12,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
 
   saveBtn: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
   },
 
   editBtn: {
-    backgroundColor: "#0F766E",
+    backgroundColor: "#087A62",
   },
 
   cancelBtn: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
 
   actionText: {
@@ -1024,8 +1024,8 @@ const styles = StyleSheet.create({
   },
 
   inputError: {
-    borderColor: "#F87171",
-    backgroundColor: "#FEF2F2",
+    borderColor: "#294238",
+    backgroundColor: "#35151D",
   },
 
   errorText: {
@@ -1042,13 +1042,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 6,
   },
 
   cardSubtitle: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
     lineHeight: 20,
   },
   loadingCenter: {
@@ -1059,12 +1059,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    color: "#666",
+    color: "#B1C4BC",
     fontSize: 16,
   },
   divider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     marginVertical: 20,
   },
 });

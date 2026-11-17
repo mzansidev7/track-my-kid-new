@@ -236,6 +236,13 @@ export default function AdminSupport() {
           </View>
           <TouchableOpacity
             style={styles.headerButton}
+            onPress={() => router.push("/(admin)/(tabs)/support-live-chat" as never)}
+            accessibilityLabel="Open one-to-one support chats"
+          >
+            <MaterialIcons name="chat" size={20} color="#16853B" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
             onPress={() => void loadTickets(true)}
             accessibilityLabel="Refresh tickets"
           >

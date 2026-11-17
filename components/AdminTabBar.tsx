@@ -1,7 +1,13 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const navItems = [
@@ -12,7 +18,6 @@ const navItems = [
     label: "Live",
     route: "/(admin)/(tabs)/live",
   },
-  //   { key: "fab", icon: "add", label: "Create", route: "/(client)/(tabs)/children" },
   {
     key: "support",
     icon: "support-agent",
@@ -45,46 +50,48 @@ export default function AdminTabBar() {
   const activeKey = getActiveKey();
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom || 12 }]}>
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.container,
+        {
+          paddingBottom: Math.max(insets.bottom, 10),
+          backgroundColor: "#FFFFFF",
+        },
+      ]}
+    >
+      <View style={styles.tabBar}>
         {navItems.map((item) => {
-          const isFab = item.key === "fab";
           const isActive = item.key === activeKey;
-
-          if (isFab) {
-            return (
-              <TouchableOpacity
-                key={item.key}
-                activeOpacity={0.9}
-                style={styles.fabWrapper}
-                onPress={() => router.push(item.route as any)}
-              >
-                <View style={styles.fabButton}>
-                  <MaterialIcons
-                    name={item.icon as any}
-                    size={28}
-                    color="#fff"
-                  />
-                </View>
-              </TouchableOpacity>
-            );
-          }
-
           return (
             <TouchableOpacity
               key={item.key}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
               style={styles.tabItem}
               onPress={() => router.push(item.route as any)}
             >
-              <MaterialIcons
-                name={item.icon as any}
-                size={24}
-                color={isActive ? "#10B981" : "#6B7280"}
-              />
-              <Text style={[styles.navText, isActive && styles.navTextActive]}>
+              <View
+                style={[
+                  styles.iconWrapper,
+                  isActive && { backgroundColor: "#E9F8EE" },
+                ]}
+              >
+                <MaterialIcons
+                  name={item.icon as any}
+                  size={isActive ? 23 : 22}
+                  color={isActive ? "#159B3A" : "#496481"}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isActive ? "#159B3A" : "#496481" },
+                  isActive && styles.activeTabLabel,
+                ]}
+              >
                 {item.label}
               </Text>
+              {isActive && <View style={styles.activeIndicator} />}
             </TouchableOpacity>
           );
         })}
@@ -95,39 +102,55 @@ export default function AdminTabBar() {
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    zIndex: 100,
+    width: "100%",
+    paddingHorizontal: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 12 },
+    }),
   },
   tabBar: {
+    height: 66,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-around",
-    alignItems: "center",
-    width: "100%",
-    paddingVertical: 8,
-    backgroundColor: "#FFF",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 12,
+    paddingHorizontal: 6,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E4EDF6",
   },
-  tabItem: { alignItems: "center", flex: 1 },
-  navText: { fontSize: 12, color: "#6B7280", marginTop: 4 },
-  navTextActive: { color: "#10B981", fontWeight: "700" },
-  fabWrapper: { position: "absolute", alignSelf: "center", top: -28 },
-  fabButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#10B981",
-    justifyContent: "center",
+  tabItem: {
+    position: "relative",
+    flex: 1,
+    height: 66,
     alignItems: "center",
-    elevation: 8,
+    justifyContent: "center",
+  },
+  iconWrapper: {
+    width: 42,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+  },
+  tabLabel: {
+    marginTop: 1,
+    fontSize: 9,
+  },
+  activeTabLabel: {
+    fontWeight: "700",
+  },
+  activeIndicator: {
+    position: "absolute",
+    bottom: 0,
+    width: 30,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: "#159B3A",
   },
 });

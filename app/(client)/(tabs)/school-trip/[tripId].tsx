@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import CustomMap from "../../../../components/map";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../../url";
-import { useTheme } from "../../../../styles/theme";
+import { useClientTheme } from "../../../../styles/theme";
 import ClientHeader from "../../components/ClientHeader";
 
 type TripVehicle = {
@@ -29,7 +30,10 @@ type TripVehicle = {
     latitude: number;
     longitude: number;
     recorded_at?: string;
+    shared_by?: { first_name?: string; last_name?: string } | null;
   } | null;
+  journey_phase: "outbound" | "at_destination" | "returning" | "completed";
+  journey_phase_updated_at?: string;
 };
 type SchoolTrip = {
   id: string;
@@ -42,7 +46,9 @@ type SchoolTrip = {
   destination_longitude?: number | null;
   departure_at: string;
   return_at: string;
+  registration_closes_at?: string | null;
   status: string;
+  missed_at?: string | null;
   is_free?: boolean;
   price?: number;
   deposit?: number;
@@ -56,6 +62,11 @@ type SchoolTrip = {
     attendance_status?: string;
     payment_status?: string;
     registration_status?: string;
+    parent_response?: "pending" | "accepted" | "declined";
+    payment_method?: "cash" | "online" | null;
+    cash_payment_request?: "deposit" | "full" | null;
+    cash_payment_amount?: number | null;
+    cash_payment_status?: "not_requested" | "pending" | "confirmed" | "rejected";
     child?: { name?: string; lastname?: string; grade?: string } | null;
   }[];
   vehicles?: TripVehicle[];
@@ -82,32 +93,30 @@ const ago = (value?: string) => {
   const minutes = Math.floor(seconds / 60);
   return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
 };
+const isFreshTracking = (value?: string) => {
+  if (!value) return false;
+  const age = Date.now() - new Date(value).getTime();
+  return Number.isFinite(age) && age >= 0 && age <= 120_000;
+};
+const journeyPhaseLabel = (phase?: string) =>
+  ({
+    outbound: "On the way to destination",
+    at_destination: "At destination · sharing paused",
+    returning: "Returning to school",
+    completed: "Returned to school",
+  })[phase || "outbound"] || "Trip underway";
 
 export default function SchoolTripDetails() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const { user } = useContext(AuthContext);
   const token = user?.token;
-  const { colors: themeColors } = useTheme();
-  const colors = {
-    ...themeColors,
-    primary: "#159B3A",
-    primaryDark: "#087C2B",
-    background: "#F4F9FF",
-    surface: "#FFFFFF",
-    surfaceHover: "#EDF7FF",
-    border: "#DCEAF8",
-    divider: "#DCEAF8",
-    text: {
-      ...themeColors.text,
-      primary: "#17365E",
-      secondary: "#607A98",
-      tertiary: "#607A98",
-    },
-  };
+  const { colors } = useClientTheme();
   const [trips, setTrips] = useState<SchoolTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [learnerActionId, setLearnerActionId] = useState("");
+  const [currentTime, setCurrentTime] = useState(0);
 
   const loadTrips = useCallback(async () => {
     if (!token) {
@@ -135,10 +144,80 @@ export default function SchoolTripDetails() {
     }
   }, [token]);
 
+  const updateLearner = useCallback(
+    async (
+      childId: string,
+      action: "response" | "cash-payment",
+      body: Record<string, string>,
+    ) => {
+      if (!token || !tripId) return;
+      setLearnerActionId(childId);
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/client/school-trips/${tripId}/learners/${childId}/${action}`,
+          {
+            method: action === "response" ? "PATCH" : "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          },
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result?.error || "Unable to update trip response.");
+        }
+        setTrips((current) =>
+          current.map((currentTrip) =>
+            currentTrip.id !== tripId
+              ? currentTrip
+              : {
+                  ...currentTrip,
+                  learners: currentTrip.learners?.map((learner) =>
+                    learner.child_id === childId
+                      ? { ...learner, ...result }
+                      : learner,
+                  ),
+                },
+          ),
+        );
+        await loadTrips();
+        Alert.alert(
+          "Trip updated",
+          action === "response"
+            ? body.response === "accepted"
+              ? "You accepted this trip invitation."
+              : "You declined this trip invitation."
+            : "Cash payment request sent to the school for confirmation.",
+        );
+      } catch (requestError) {
+        Alert.alert(
+          "Could not update trip",
+          requestError instanceof Error
+            ? requestError.message
+            : "Please try again.",
+        );
+      } finally {
+        setLearnerActionId("");
+      }
+    },
+    [loadTrips, token, tripId],
+  );
+
   useEffect(() => {
     const timeout = setTimeout(() => void loadTrips(), 0);
     return () => clearTimeout(timeout);
   }, [loadTrips]);
+  useEffect(() => {
+    const timeout = setTimeout(() => setCurrentTime(Date.now()), 0);
+    const interval = setInterval(() => setCurrentTime(Date.now()), 15000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, []);
 
   const trip = trips.find((item) => item.id === tripId);
   useEffect(() => {
@@ -158,6 +237,12 @@ export default function SchoolTripDetails() {
       type: "driver" | "end";
     }[] = (trip.vehicles || [])
       .filter((assignment) => {
+        if (
+          !["outbound", "returning"].includes(assignment.journey_phase) ||
+          !isFreshTracking(assignment.tracking?.recorded_at)
+        ) {
+          return false;
+        }
         const latitude = Number(assignment.tracking?.latitude);
         const longitude = Number(assignment.tracking?.longitude);
         return Number.isFinite(latitude) && Number.isFinite(longitude);
@@ -228,8 +313,20 @@ export default function SchoolTripDetails() {
   }
 
   const tripLearners = trip.learners || [];
+  const registrationIsOpen =
+    trip.status === "registration_open" &&
+    Boolean(trip.registration_closes_at) &&
+    new Date(trip.registration_closes_at || "").getTime() > currentTime &&
+    new Date(trip.departure_at).getTime() > currentTime;
   const assignments = trip.vehicles || [];
-  const liveAssignments = assignments.filter((item) => item.tracking);
+  const allVehiclesReturned =
+    assignments.length > 0 &&
+    assignments.every((assignment) => assignment.journey_phase === "completed");
+  const liveAssignments = assignments.filter(
+    (item) =>
+      ["outbound", "returning"].includes(item.journey_phase) &&
+      isFreshTracking(item.tracking?.recorded_at),
+  );
   const liveOrigin = liveAssignments[0]?.tracking
     ? {
         latitude: Number(liveAssignments[0].tracking.latitude),
@@ -279,6 +376,7 @@ export default function SchoolTripDetails() {
               style={[
                 styles.status,
                 trip.status === "in_progress" && styles.liveStatus,
+                trip.status === "missed" && styles.missedStatus,
               ]}
             >
               {trip.status.replaceAll("_", " ")}
@@ -294,6 +392,12 @@ export default function SchoolTripDetails() {
           <View style={styles.facts}>
             <Fact label="Departure" value={displayDate(trip.departure_at)} />
             <Fact label="Return" value={displayDate(trip.return_at)} />
+            {trip.registration_closes_at ? (
+              <Fact
+                label="Registration closes"
+                value={displayDate(trip.registration_closes_at)}
+              />
+            ) : null}
             <Fact
               label="Price"
               value={
@@ -318,6 +422,19 @@ export default function SchoolTripDetails() {
           {!!trip.payment_notes && (
             <Text style={[styles.notes, { color: colors.text.secondary }]}>
               {trip.payment_notes}
+            </Text>
+          )}
+          {trip.status === "missed" && (
+            <Text style={[styles.notes, { color: "#B42318" }]}>
+              This trip was marked missed because no vehicle location was shared
+              within 15 minutes of scheduled departure. The school has been
+              notified.
+            </Text>
+          )}
+          {trip.status === "registration_open" && !registrationIsOpen && (
+            <Text style={[styles.notes, { color: colors.text.secondary }]}>
+              Registration is closed. Parent responses and payment requests are
+              no longer available.
             </Text>
           )}
         </View>
@@ -364,10 +481,38 @@ export default function SchoolTripDetails() {
                       ) && styles.livePillOn,
                     ]}
                   >
-                    {assignment.tracking ? "LIVE" : "GPS unavailable"}
+                    {isFreshTracking(assignment.tracking?.recorded_at) &&
+                    ["outbound", "returning"].includes(assignment.journey_phase)
+                      ? "LIVE"
+                      : "PAUSED"}
                   </Text>
                 )}
               </View>
+              {["in_progress", "completed"].includes(trip.status) && (
+                <View style={styles.journeyPhase}>
+                  <MaterialIcons
+                    name={
+                      assignment.journey_phase === "at_destination"
+                        ? "place"
+                        : assignment.journey_phase === "returning"
+                          ? "undo"
+                          : assignment.journey_phase === "completed"
+                            ? "check-circle"
+                            : "near-me"
+                    }
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.journeyPhaseText,
+                      { color: colors.text.primary },
+                    ]}
+                  >
+                    {journeyPhaseLabel(assignment.journey_phase)}
+                  </Text>
+                </View>
+              )}
               <Text style={[styles.muted, { color: colors.text.secondary }]}>
                 Driver: {fullName(assignment.driver)}
                 {assignment.driver?.phone
@@ -385,7 +530,20 @@ export default function SchoolTripDetails() {
               {trip.status === "in_progress" && (
                 <Text style={[styles.muted, { color: colors.text.secondary }]}>
                   {assignment.tracking
-                    ? `Last updated ${ago(assignment.tracking.recorded_at)}`
+                    ? `${isFreshTracking(assignment.tracking.recorded_at) &&
+                      ["outbound", "returning"].includes(
+                        assignment.journey_phase,
+                      )
+                        ? "Last updated"
+                        : "Last known location"} ${ago(
+                        assignment.tracking.recorded_at,
+                      )}${
+                        assignment.tracking.shared_by
+                          ? ` · Shared by ${fullName(
+                              assignment.tracking.shared_by,
+                            )}`
+                          : ""
+                      }`
                     : "Location unavailable · No current GPS update"}
                 </Text>
               )}
@@ -396,16 +554,28 @@ export default function SchoolTripDetails() {
               markers={markers}
               origin={liveOrigin}
               destination={destinationPoint}
+              requestLocationPermission={false}
               style={styles.map}
             />
           )}
-          {trip.status === "in_progress" && markers.length === 0 && (
+          {trip.status === "in_progress" && liveAssignments.length === 0 && (
             <Text style={[styles.muted, { color: colors.text.secondary }]}>
-              Live location is not available yet. The map will appear when the
-              assigned vehicle sends GPS coordinates.
+              {allVehiclesReturned
+                ? "Your child's assigned vehicle has returned. The trip remains active until every assigned vehicle is back."
+                : assignments.some(
+                (assignment) =>
+                  assignment.journey_phase === "at_destination",
+              )
+                ? "The vehicle is at its destination. Location sharing is paused until the return journey starts."
+                : "No fresh location is available. The last GPS update is not shown as live."}
             </Text>
           )}
-          {trip.status !== "in_progress" && (
+          {trip.status === "completed" && (
+            <Text style={[styles.muted, { color: colors.text.secondary }]}>
+              The trip has returned and is complete.
+            </Text>
+          )}
+          {!["in_progress", "completed"].includes(trip.status) && (
             <Text style={[styles.muted, { color: colors.text.secondary }]}>
               Live vehicle tracking is available when the trip starts.
             </Text>
@@ -445,6 +615,14 @@ export default function SchoolTripDetails() {
                     {item.attendance_status?.replaceAll("_", " ") ||
                       "not checked"}
                   </Text>
+                  <Text style={[styles.muted, { color: colors.text.secondary }]}>
+                    Parent response ·{" "}
+                    {item.parent_response === "accepted"
+                      ? "Attending"
+                      : item.parent_response === "declined"
+                        ? "Not attending"
+                        : "Awaiting your response"}
+                  </Text>
                 </View>
                 <Text
                   style={[
@@ -452,8 +630,176 @@ export default function SchoolTripDetails() {
                     { color: colors.text.secondary },
                   ]}
                 >
-                  {item.payment_status?.replaceAll("_", " ")}
+                  {trip.is_free
+                    ? "Free"
+                    : (item.payment_status || "unpaid").replaceAll("_", " ")}
                 </Text>
+                {registrationIsOpen && (
+                  <View style={styles.learnerActions}>
+                    {item.parent_response !== "accepted" && (
+                      <TouchableOpacity
+                        disabled={learnerActionId === item.child_id}
+                        style={[
+                          styles.actionButton,
+                          { backgroundColor: colors.primary },
+                        ]}
+                        onPress={() =>
+                          void updateLearner(item.child_id, "response", {
+                            response: "accepted",
+                          })
+                        }
+                      >
+                        <Text style={styles.actionButtonText}>
+                          {learnerActionId === item.child_id
+                            ? "Saving…"
+                            : "Accept trip"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {item.parent_response !== "declined" &&
+                      item.payment_status !== "paid" &&
+                      item.payment_status !== "waived" &&
+                      item.cash_payment_status !== "pending" && (
+                        <TouchableOpacity
+                          disabled={learnerActionId === item.child_id}
+                          style={[
+                            styles.actionButton,
+                            { backgroundColor: "#1C1026" },
+                          ]}
+                          onPress={() =>
+                            void updateLearner(item.child_id, "response", {
+                              response: "declined",
+                            })
+                          }
+                        >
+                          <Text
+                            style={[
+                              styles.actionButtonText,
+                              { color: "#475569" },
+                            ]}
+                          >
+                            Decline
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    {item.parent_response === "accepted" &&
+                      !trip.is_free &&
+                      item.payment_status !== "paid" && (
+                        <View style={styles.cashPaymentActions}>
+                          {item.cash_payment_status === "pending" ? (
+                            <Text
+                              style={[
+                                styles.muted,
+                                { color: colors.text.secondary },
+                              ]}
+                            >
+                              Cash{" "}
+                              {item.cash_payment_request === "deposit"
+                                ? "deposit request"
+                                : item.payment_status === "deposit_paid"
+                                  ? "balance request"
+                                  : "payment request"}{" "}
+                              {item.cash_payment_amount != null
+                                ? `${trip.currency || "ZAR"} ${Number(
+                                    item.cash_payment_amount,
+                                  ).toFixed(2)} `
+                                : ""}
+                              awaiting school confirmation
+                            </Text>
+                          ) : (
+                            <>
+                              {item.cash_payment_status === "rejected" && (
+                                <Text
+                                  style={[
+                                    styles.muted,
+                                    { color: "#B91C1C" },
+                                  ]}
+                                >
+                                  The school did not confirm the previous cash
+                                  request. You can submit it again after paying.
+                                </Text>
+                              )}
+                              {Number(trip.deposit || 0) > 0 &&
+                                Number(trip.deposit) < Number(trip.price) &&
+                                item.payment_status !== "deposit_paid" && (
+                                  <TouchableOpacity
+                                    disabled={
+                                      learnerActionId === item.child_id
+                                    }
+                                    style={[
+                                      styles.actionButton,
+                                      { backgroundColor: "#1C1026" },
+                                    ]}
+                                    onPress={() =>
+                                      void updateLearner(
+                                        item.child_id,
+                                        "cash-payment",
+                                        { payment_request: "deposit" },
+                                      )
+                                    }
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.actionButtonText,
+                                        { color: "#C14BFF" },
+                                      ]}
+                                    >
+                                      Request cash deposit (
+                                      {trip.currency || "ZAR"}{" "}
+                                      {Number(trip.deposit).toFixed(2)})
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                              <TouchableOpacity
+                                disabled={learnerActionId === item.child_id}
+                                style={[
+                                  styles.actionButton,
+                                  { backgroundColor: "#1C1026" },
+                                ]}
+                                onPress={() =>
+                                  void updateLearner(
+                                    item.child_id,
+                                    "cash-payment",
+                                    { payment_request: "full" },
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.actionButtonText,
+                                    { color: "#C14BFF" },
+                                  ]}
+                                >
+                                  Request cash{" "}
+                                  {item.payment_status === "deposit_paid"
+                                    ? "balance"
+                                    : "payment"}
+                                  {item.payment_status === "deposit_paid"
+                                    ? ` (${trip.currency || "ZAR"} ${Math.max(
+                                        0,
+                                        Number(trip.price || 0) -
+                                          Number(trip.deposit || 0),
+                                      ).toFixed(2)})`
+                                    : ` (${trip.currency || "ZAR"} ${Number(
+                                        trip.price || 0,
+                                      ).toFixed(2)})`}
+                                </Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
+                          <Text
+                            style={[
+                              styles.muted,
+                              { color: colors.text.secondary },
+                            ]}
+                          >
+                            Online payment will be available after the school
+                            configures its payout account.
+                          </Text>
+                        </View>
+                      )}
+                  </View>
+                )}
               </View>
             ))
           ) : (
@@ -491,15 +837,7 @@ export default function SchoolTripDetails() {
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
-  const { colors: themeColors } = useTheme();
-  const colors = {
-    ...themeColors,
-    text: {
-      ...themeColors.text,
-      primary: "#17365E",
-      secondary: "#607A98",
-    },
-  };
+  const { colors } = useClientTheme();
   return (
     <View style={styles.fact}>
       <Text style={[styles.factLabel, { color: colors.text.secondary }]}>
@@ -532,49 +870,59 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroCopy: { flex: 1 },
-  title: { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
-  subTitle: { marginTop: 4, fontSize: 12 },
+  title: { fontSize: 18, fontWeight: "800", letterSpacing: -0.4 },
+  subTitle: { marginTop: 4, fontSize: 10 },
   status: {
     overflow: "hidden",
     borderRadius: 99,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    backgroundColor: "#EDF7FF",
-    color: "#17365E",
+    backgroundColor: "#1C1026",
+    color: "#FBF8FF",
     fontSize: 9,
     fontWeight: "800",
     textTransform: "capitalize",
   },
-  liveStatus: { backgroundColor: "#E9F8EE", color: "#087C2B" },
-  description: { fontSize: 13, lineHeight: 19 },
+  liveStatus: { backgroundColor: "#1C1026", color: "#C14BFF" },
+  missedStatus: { backgroundColor: "#35151D", color: "#FF7777" },
+  description: { fontSize: 12, lineHeight: 19 },
   facts: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   fact: {
     minWidth: "45%",
     flexGrow: 1,
     borderRadius: 10,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     padding: 10,
   },
   factLabel: { fontSize: 10 },
-  factValue: { marginTop: 4, fontSize: 12, fontWeight: "700" },
-  notes: { fontSize: 12, lineHeight: 18 },
+  factValue: { marginTop: 4, fontSize: 11, fontWeight: "700" },
+  notes: { fontSize: 11, lineHeight: 18 },
   card: { borderWidth: 1, borderRadius: 16, padding: 15, gap: 10 },
-  sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 2 },
+  sectionTitle: { fontSize: 14, fontWeight: "800", marginBottom: 2 },
   vehicleCard: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 7 },
   vehicleHead: { flexDirection: "row", alignItems: "center", gap: 9 },
   vehicleCopy: { flex: 1 },
-  vehicleName: { fontSize: 13, fontWeight: "700" },
+  vehicleName: { fontSize: 12, fontWeight: "700" },
   muted: { fontSize: 11, lineHeight: 16 },
   livePill: {
     borderRadius: 99,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 9,
     fontWeight: "800",
   },
-  livePillOn: { backgroundColor: "#E9F8EE", color: "#087C2B" },
+  livePillOn: { backgroundColor: "#1C1026", color: "#C14BFF" },
+  journeyPhase: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    padding: 9,
+    borderRadius: 10,
+    backgroundColor: "#1C1026",
+  },
+  journeyPhaseText: { flex: 1, fontSize: 10, fontWeight: "700" },
   map: {
     width: "100%",
     height: 270,
@@ -584,18 +932,38 @@ const styles = StyleSheet.create({
   },
   learnerRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
     gap: 10,
     borderTopWidth: 1,
     paddingTop: 10,
+  },
+  learnerActions: {
+    width: "100%",
+    paddingLeft: 30,
+    gap: 8,
+  },
+  cashPaymentActions: {
+    gap: 7,
+  },
+  actionButton: {
+    alignSelf: "flex-start",
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
   },
   paymentStatus: { fontSize: 10, textTransform: "capitalize" },
   backButton: {
     marginTop: 6,
     borderRadius: 10,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  backText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  backText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
 });

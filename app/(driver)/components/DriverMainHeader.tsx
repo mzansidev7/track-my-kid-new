@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { DRIVER_COLORS } from "@/styles/theme";
 
@@ -9,6 +9,7 @@ type Props = {
   onProfilePress?: () => void;
   notificationCount?: number;
   subtitle?: string;
+  avatarUrl?: string;
 };
 
 const DriverHeader = ({
@@ -17,17 +18,27 @@ const DriverHeader = ({
   onProfilePress,
   notificationCount = 0,
   subtitle,
+  avatarUrl,
 }: Props) => {
   return (
     <View style={styles.container}>
-      <View>
+      <View style={styles.identity}>
         <Text style={styles.eyebrow}>DRIVER DASHBOARD</Text>
-        <Text style={styles.greeting}>Good day, {driverName}</Text>
-        {subtitle && (
-          <Text style={styles.subtitle}>
-            {subtitle}
-          </Text>
-        )}
+        <Text style={styles.greeting} numberOfLines={2} ellipsizeMode="tail">
+          Good day, {driverName}
+        </Text>
+        {subtitle ? (
+          <View style={styles.subtitleRow}>
+            <View style={styles.subtitleAccent} />
+            <Text
+              style={styles.subtitle}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {subtitle}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
@@ -49,13 +60,28 @@ const DriverHeader = ({
             </View>
           )}
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={onProfilePress}
-        >
-          <MaterialIcons name="person" size={23} color={DRIVER_COLORS.white} />
-        </TouchableOpacity>
+        {avatarUrl ? (
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={onProfilePress}
+          >
+            <Image
+              source={{ uri: avatarUrl }}
+              style={{ width: 42, height: 42, borderRadius: 14 }}
+            />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={onProfilePress}
+          >
+            <MaterialIcons
+              name="person"
+              size={23}
+              color={DRIVER_COLORS.white}
+            />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -64,9 +90,16 @@ const DriverHeader = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    width: "100%",
+    marginBottom: 10,
+    paddingHorizontal: 15,
+  },
+
+  identity: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
   },
 
   eyebrow: {
@@ -79,21 +112,43 @@ const styles = StyleSheet.create({
 
   greeting: {
     color: DRIVER_COLORS.text,
-    fontSize: 25,
+    fontSize: 23,
     fontWeight: "800",
     letterSpacing: -0.5,
+    flexShrink: 1,
   },
 
   subtitle: {
     color: DRIVER_COLORS.muted,
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    letterSpacing: 0.15,
+    flexShrink: 1,
+  },
+
+  subtitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 7,
+    minWidth: 0,
+  },
+
+  subtitleAccent: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: DRIVER_COLORS.cyan,
     marginTop: 5,
+    marginRight: 8,
+    flexShrink: 0,
   },
 
   actions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+    flexShrink: 0,
   },
 
   iconButton: {
@@ -109,12 +164,12 @@ const styles = StyleSheet.create({
 
   notificationBadge: {
     position: "absolute",
-    right: 6,
-    top: 6,
+    right: -5,
+    top: -5,
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#FF4444",
+    backgroundColor: DRIVER_COLORS.danger,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,

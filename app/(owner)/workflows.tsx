@@ -74,7 +74,7 @@ const getWorkflowCategoryConfig = (summary?: WorkflowSummary) => [
     count: summary?.summary.complianceDocuments ?? 0,
     items: summary?.recent.complianceDocuments ?? [],
     emptyText: "No compliance items yet",
-    accent: "#7C3AED",
+    accent: "#00B894",
   },
   {
     key: "clientEnrollments",
@@ -219,7 +219,7 @@ const OwnerWorkflows = () => {
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.loadingText}>Loading workflow overview...</Text>
         </View>
       ) : (
@@ -314,7 +314,7 @@ export default OwnerWorkflows;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
   },
   centerState: {
     flex: 1,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: "#475569",
+    color: "#B1C4BC",
     fontSize: 16,
     fontWeight: "500",
   },
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     width: "48%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
@@ -367,18 +367,18 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
   summaryCount: {
     fontSize: 25,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   sectionsContainer: {
     gap: 16,
   },
   sectionCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 14,
     shadowColor: "#000",
@@ -396,18 +396,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   sectionAction: {
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#13231D",
   },
   sectionActionText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#2563EB",
+    color: "#35D9B3",
   },
   emptyState: {
     paddingVertical: 18,
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyStateText: {
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontSize: 14,
     fontWeight: "500",
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#294238",
   },
   listDot: {
     width: 8,
@@ -439,16 +439,16 @@ const styles = StyleSheet.create({
   listItemTitle: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 2,
   },
   listItemMeta: {
     fontSize: 12,
-    color: "#475569",
+    color: "#B1C4BC",
   },
   listItemDate: {
     marginTop: 4,
     fontSize: 11,
-    color: "#64748B",
+    color: "#B1C4BC",
   },
 });

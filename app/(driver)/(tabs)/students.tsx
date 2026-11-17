@@ -11,27 +11,21 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 import useDriverRoutes, {
   deriveDriverStudentStatus,
+  timeToMinutes,
 } from "@/app-support/driver/driverHelpers/hooks/useDriverRoutes";
 import DriverHeader from "../components/DriverHeader";
 
-const timeToMinutes = (value?: string | null) => {
-  if (!value) return null;
-  const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-  return hours * 60 + minutes;
-};
-
 const Students = () => {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const { routes, routesLoading, routesError, refreshRoutes } =
     useDriverRoutes();
   const [selectedRouteId, setSelectedRouteId] = React.useState("all");
   const [selectedFilter, setSelectedFilter] = React.useState<
-    "all" | "dropped_off" | "waiting" | "current" | "onboard"
+    "all" | "dropped_off" | "waiting" | "current" | "onboard" | "restricted"
   >("all");
   const [currentTime, setCurrentTime] = React.useState(() => Date.now());
   const currentDate = new Date(currentTime);
@@ -65,6 +59,17 @@ const Students = () => {
     selectedRouteId === "all"
       ? routes
       : routes.filter((candidate) => candidate.id === selectedRouteId);
+  const routeSelectorItems = routes.map((assignedRoute) => {
+    const routeChildren = assignedRoute.route_children || [];
+    const activeCount = routeChildren.filter(
+      (routeChild) => !routeChild.transport_restricted,
+    ).length;
+    return {
+      route: assignedRoute,
+      activeCount,
+      pausedCount: routeChildren.length - activeCount,
+    };
+  });
   const route =
     displayRoutes.find((candidate) => candidate.id === activeRoute?.id) ||
     displayRoutes[0] ||
@@ -88,8 +93,11 @@ const Students = () => {
       name: string;
       school: string;
       grade: string;
-      status: ReturnType<typeof deriveDriverStudentStatus>["status"];
+      status:
+        | ReturnType<typeof deriveDriverStudentStatus>["status"]
+        | "NOT INCLUDED";
       onboard: boolean;
+      transportRestricted: boolean;
       pickedUp: string;
       avatar: string | null;
       highlight: boolean;
@@ -104,10 +112,23 @@ const Students = () => {
       const childStops = (assignedRoute.route_stops || []).filter(
         (routeStop) => routeStop.child_id === childId,
       );
-      const childStatus = deriveDriverStudentStatus(childStops);
+      const childStatus = deriveDriverStudentStatus(
+        childStops,
+        assignedRoute,
+        currentMinutes,
+      );
       const student = studentsById.get(String(childId));
       if (student) {
-        student.routeNames.add(assignedRoute.route_name || "Assigned route");
+        if (routeChild.transport_restricted) {
+          student.transportRestricted = true;
+          student.status = "NOT INCLUDED";
+          student.onboard = false;
+          student.pickedUp = "Payment outstanding";
+          student.highlight = false;
+          student.routeNames = new Set(["Not included in route"]);
+        } else if (!student.transportRestricted) {
+          student.routeNames.add(assignedRoute.route_name || "Assigned route");
+        }
         continue;
       }
       studentsById.set(String(childId), {
@@ -116,12 +137,25 @@ const Students = () => {
         school:
           child.school_name || child.schools?.name || "School not specified",
         grade: child.grade || "Grade not specified",
-        status: childStatus.status,
-        onboard: childStatus.onboard,
-        pickedUp: childStatus.pickedUp ? "Picked up" : "Not picked up",
+        status: routeChild.transport_restricted
+          ? "NOT INCLUDED"
+          : childStatus.status,
+        onboard: !routeChild.transport_restricted && childStatus.onboard,
+        transportRestricted: Boolean(routeChild.transport_restricted),
+        pickedUp: routeChild.transport_restricted
+          ? "Payment outstanding"
+          : childStatus.pickedUp
+            ? "Picked up"
+            : "Not picked up",
         avatar: child.avatar || null,
-        highlight: Boolean(childStatus.currentStop),
-        routeNames: new Set([assignedRoute.route_name || "Assigned route"]),
+        highlight:
+          !routeChild.transport_restricted &&
+          childStatus.status === "CURRENT STOP",
+        routeNames: new Set(
+          routeChild.transport_restricted
+            ? ["Not included in route"]
+            : [assignedRoute.route_name || "Assigned route"],
+        ),
       });
     }
   }
@@ -129,14 +163,18 @@ const Students = () => {
     ...student,
     routeName: [...student.routeNames].join(", "),
   }));
-  const onboardCount = students.filter((student) => student.onboard).length;
-  const droppedOffCount = students.filter(
+  const activeStudents = students.filter(
+    (student) => !student.transportRestricted,
+  );
+  const restrictedCount = students.length - activeStudents.length;
+  const onboardCount = activeStudents.filter((student) => student.onboard).length;
+  const droppedOffCount = activeStudents.filter(
     (student) => student.status === "DROPPED OFF",
   ).length;
-  const waitingCount = students.filter(
+  const waitingCount = activeStudents.filter(
     (student) => student.status === "WAITING",
   ).length;
-  const currentCount = students.filter(
+  const currentCount = activeStudents.filter(
     (student) => student.status === "CURRENT STOP",
   ).length;
   const completedStopCount = routeStops.filter((stop) =>
@@ -151,6 +189,8 @@ const Students = () => {
     : 0;
   const visibleStudents = students.filter((student) => {
     if (selectedFilter === "all") return true;
+    if (selectedFilter === "restricted") return student.transportRestricted;
+    if (student.transportRestricted) return false;
     if (selectedFilter === "dropped_off")
       return student.status === "DROPPED OFF";
     if (selectedFilter === "waiting") return student.status === "WAITING";
@@ -245,57 +285,86 @@ const Students = () => {
         onRightPress={() => router.push("/(driver)/pages/notifications")}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.heroCard, { marginTop: 8 }]}>
-          <View style={styles.heroIconCircle}>
-            <MaterialIcons
-              name="directions-bus"
-              size={26}
-              color={DRIVER_COLORS.cyan}
-            />
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIconCircle}>
+              <MaterialIcons
+                name={selectedRouteId === "all" ? "directions-bus" : "route"}
+                size={24}
+                color={DRIVER_COLORS.cyan}
+              />
+            </View>
+            <View style={styles.heroHeading}>
+              <Text style={styles.heroLabel}>
+                {selectedRouteId === "all" ? "DRIVER OVERVIEW" : "SELECTED ROUTE"}
+              </Text>
+              <Text style={styles.heroTitle} numberOfLines={1}>
+                {selectedRouteId === "all"
+                  ? `${routes.length} assigned route${routes.length === 1 ? "" : "s"}`
+                  : route?.route_name || "No route assigned"}
+              </Text>
+              <Text style={styles.heroSubtitle} numberOfLines={2}>
+                {selectedRouteId === "all"
+                  ? "Your students across all assigned routes"
+                  : `${route?.start_location || "Route start"} → ${route?.end_location || "Route end"}`}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.heroBadge,
+                !displayRoutes.length && styles.heroBadgeInactive,
+              ]}
+            >
+              <View
+                style={[
+                  styles.heroBadgeDot,
+                  !displayRoutes.length && styles.heroBadgeDotInactive,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.heroBadgeText,
+                  !displayRoutes.length && styles.heroBadgeTextInactive,
+                ]}
+              >
+                {displayRoutes.length ? "ASSIGNED" : "NO ROUTE"}
+              </Text>
+            </View>
           </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.heroLabel}>
-              {selectedRouteId === "all" ? "Assigned routes" : "Selected route"}
-            </Text>
-            <Text style={styles.heroTitle}>
-              {selectedRouteId === "all"
-                ? `${routes.length} route${routes.length === 1 ? "" : "s"}`
-                : route?.route_name || "No route assigned"}
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              {selectedRouteId === "all"
-                ? `${students.length} unique students across your routes`
-                : `${route?.start_location || "Route start"} → ${route?.end_location || "Route end"}`}
-            </Text>
-          </View>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>
-              {displayRoutes.length ? "ASSIGNED" : "NO ROUTE"}
-            </Text>
+          <View style={styles.heroDivider} />
+          <View style={styles.heroSummary}>
+            <View style={styles.heroSummaryItem}>
+              <MaterialIcons name="groups" size={18} color={DRIVER_COLORS.cyan} />
+              <Text style={styles.heroSummaryValue}>{activeStudents.length}</Text>
+              <Text style={styles.heroSummaryLabel}>active students</Text>
+            </View>
+            {restrictedCount > 0 ? (
+              <View style={styles.heroSummaryItem}>
+                <MaterialIcons
+                  name="payments"
+                  size={17}
+                  color={DRIVER_COLORS.warning}
+                />
+                <Text style={[styles.heroSummaryValue, styles.restrictedText]}>
+                  {restrictedCount}
+                </Text>
+                <Text style={styles.heroSummaryLabel}>transport paused</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
+        <View style={styles.selectorHeading}>
+          <Text style={styles.selectorTitle}>ROUTES</Text>
+          <Text style={styles.selectorCount}>
+            {routes.length} assigned
+          </Text>
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.routeSelector}
         >
-          <TouchableOpacity
-            style={[
-              styles.tabItem,
-              selectedFilter === "all" && styles.tabActive,
-            ]}
-            onPress={() => setSelectedFilter("all")}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                selectedFilter === "all" && styles.tabTextActive,
-              ]}
-            >
-              All ({students.length})
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setSelectedRouteId("all")}
             style={[
@@ -303,45 +372,93 @@ const Students = () => {
               selectedRouteId === "all" && styles.routeChipActive,
             ]}
           >
-            <Text
-              style={[
-                styles.routeChipText,
-                selectedRouteId === "all" && styles.routeChipTextActive,
-              ]}
-            >
-              All routes ({routes.length})
-            </Text>
-          </TouchableOpacity>
-          {routes.map((assignedRoute) => (
-            <TouchableOpacity
-              key={assignedRoute.id}
-              onPress={() => setSelectedRouteId(assignedRoute.id)}
-              style={[
-                styles.routeChip,
-                selectedRouteId === assignedRoute.id && styles.routeChipActive,
-              ]}
-            >
+            <View style={styles.routeChipHeading}>
+              <MaterialIcons
+                name="apps"
+                size={16}
+                color={
+                  selectedRouteId === "all"
+                    ? DRIVER_COLORS.white
+                    : DRIVER_COLORS.primary
+                }
+              />
               <Text
                 style={[
                   styles.routeChipText,
-                  selectedRouteId === assignedRoute.id &&
-                    styles.routeChipTextActive,
+                  selectedRouteId === "all" && styles.routeChipTextActive,
                 ]}
                 numberOfLines={1}
               >
-                {assignedRoute.route_name || "Route"}
+                All routes
               </Text>
-              <Text
-                style={[
-                  styles.routeChipMeta,
-                  selectedRouteId === assignedRoute.id &&
-                    styles.routeChipTextActive,
-                ]}
-              >
-                {assignedRoute.route_children?.length || 0} students
-              </Text>
-            </TouchableOpacity>
-          ))}
+              {selectedRouteId === "all" ? (
+                <MaterialIcons
+                  name="check-circle"
+                  size={15}
+                  color={DRIVER_COLORS.white}
+                />
+              ) : null}
+            </View>
+            <Text
+              style={[
+                styles.routeChipMeta,
+                selectedRouteId === "all" && styles.routeChipTextActive,
+              ]}
+            >
+              {activeStudents.length} active
+              {restrictedCount > 0 ? ` · ${restrictedCount} paused` : ""}
+            </Text>
+          </TouchableOpacity>
+          {routeSelectorItems.map(
+            ({ route: assignedRoute, activeCount, pausedCount }) => {
+              const selected = selectedRouteId === assignedRoute.id;
+              return (
+                <TouchableOpacity
+                  key={assignedRoute.id}
+                  onPress={() => setSelectedRouteId(assignedRoute.id)}
+                  style={[
+                    styles.routeChip,
+                    selected && styles.routeChipActive,
+                  ]}
+                >
+                  <View style={styles.routeChipHeading}>
+                    <MaterialIcons
+                      name="alt-route"
+                      size={16}
+                      color={
+                        selected ? DRIVER_COLORS.white : DRIVER_COLORS.primary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.routeChipText,
+                        selected && styles.routeChipTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {assignedRoute.route_name || "Route"}
+                    </Text>
+                    {selected ? (
+                      <MaterialIcons
+                        name="check-circle"
+                        size={15}
+                        color={DRIVER_COLORS.white}
+                      />
+                    ) : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.routeChipMeta,
+                      selected && styles.routeChipTextActive,
+                    ]}
+                  >
+                    {activeCount} active
+                    {pausedCount > 0 ? ` · ${pausedCount} paused` : ""}
+                  </Text>
+                </TouchableOpacity>
+              );
+            },
+          )}
         </ScrollView>
 
         <View style={styles.heroStats}>
@@ -418,11 +535,33 @@ const Students = () => {
           </View>
         </View>
 
+        <View style={[styles.selectorHeading, styles.studentFilterHeading]}>
+          <Text style={styles.selectorTitle}>STUDENT STATUS</Text>
+          <Text style={styles.selectorCount}>
+            {visibleStudents.length} shown
+          </Text>
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabRow}
         >
+          <TouchableOpacity
+            style={[
+              styles.tabItem,
+              selectedFilter === "all" && styles.tabActive,
+            ]}
+            onPress={() => setSelectedFilter("all")}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedFilter === "all" && styles.tabTextActive,
+              ]}
+            >
+              All ({students.length})
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.tabItem,
@@ -487,7 +626,48 @@ const Students = () => {
               Onboard ({onboardCount})
             </Text>
           </TouchableOpacity>
+          {restrictedCount > 0 ? (
+            <TouchableOpacity
+              style={[
+                styles.tabItem,
+                styles.restrictedTab,
+                selectedFilter === "restricted" && styles.restrictedTabActive,
+              ]}
+              onPress={() => setSelectedFilter("restricted")}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  styles.restrictedTabText,
+                  selectedFilter === "restricted" &&
+                    styles.restrictedTabTextActive,
+                ]}
+              >
+                Payment paused ({restrictedCount})
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
+
+        {restrictedCount > 0 ? (
+          <View style={styles.paymentNotice}>
+            <MaterialIcons
+              name="payments"
+              size={19}
+              color={DRIVER_COLORS.warning}
+            />
+            <View style={styles.paymentNoticeContent}>
+              <Text style={styles.paymentNoticeTitle}>
+                Transport paused for {restrictedCount} student
+                {restrictedCount === 1 ? "" : "s"}
+              </Text>
+              <Text style={styles.paymentNoticeText}>
+                Outstanding payments mean these students are not included in
+                route stops.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.infoBanner}>
           <View style={styles.infoBadge}>
@@ -524,9 +704,10 @@ const Students = () => {
                 style={[
                   styles.studentRow,
                   student.highlight && {
-                    backgroundColor: "#EAF2ED",
+                    backgroundColor: DRIVER_COLORS.successSurface,
                     borderColor: DRIVER_COLORS.cardBorder,
                   },
+                  student.transportRestricted && styles.restrictedStudentRow,
                 ]}
               >
                 {student.avatar ? (
@@ -548,10 +729,32 @@ const Students = () => {
                   <Text style={styles.studentGrade}>{student.grade}</Text>
                 </View>
                 <View style={styles.studentMeta}>
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusPillText}>{student.status}</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      student.transportRestricted &&
+                        styles.restrictedStatusPill,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        student.transportRestricted &&
+                          styles.restrictedStatusPillText,
+                      ]}
+                    >
+                      {student.status}
+                    </Text>
                   </View>
-                  <Text style={styles.studentPickedUp}>{student.pickedUp}</Text>
+                  <Text
+                    style={[
+                      styles.studentPickedUp,
+                      student.transportRestricted &&
+                        styles.restrictedStudentPickedUp,
+                    ]}
+                  >
+                    {student.pickedUp}
+                  </Text>
                 </View>
               </View>
             ))
@@ -563,15 +766,27 @@ const Students = () => {
           onPress={() => void refreshRoutes(true)}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <MaterialIcons name="groups" size={20} color="#0F9D58" />
+            <MaterialIcons
+              name="groups"
+              size={20}
+              color={DRIVER_COLORS.primary}
+            />
             <Text style={styles.viewAllText}>View All Children</Text>
           </View>
-          <MaterialIcons name="chevron-right" size={20} color="#0F9D58" />
+          <MaterialIcons
+            name="chevron-right"
+            size={20}
+            color={DRIVER_COLORS.primary}
+          />
         </TouchableOpacity>
 
         <View style={styles.reminderCard}>
           <View style={styles.reminderIconBox}>
-            <MaterialIcons name="safety-check" size={22} color="#F97316" />
+            <MaterialIcons
+              name="safety-check"
+              size={22}
+              color={DRIVER_COLORS.warning}
+            />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.reminderTitle}>Safety Reminder</Text>
@@ -681,32 +896,96 @@ const styles = StyleSheet.create({
     paddingBottom: 116,
   },
   emptyState: {
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     textAlign: "center",
     paddingVertical: 20,
     fontSize: 14,
   },
   heroCard: {
     marginHorizontal: 16,
-    borderRadius: 22,
+    marginTop: 8,
     padding: 18,
-    backgroundColor: DRIVER_COLORS.primaryDark,
+    borderRadius: 22,
+    backgroundColor: DRIVER_COLORS.card,
+    borderWidth: 1,
+    borderColor: DRIVER_COLORS.cardBorder,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
+  heroHeading: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: DRIVER_COLORS.cardBorder,
+    marginVertical: 16,
+  },
+  heroSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
+    flexWrap: "wrap",
+  },
+  heroSummaryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  heroSummaryValue: {
+    color: DRIVER_COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  heroSummaryLabel: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 11,
+  },
+  restrictedText: {
+    color: DRIVER_COLORS.warning,
+  },
+  selectorHeading: {
+    marginTop: 20,
+    marginHorizontal: 18,
+    marginBottom: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  selectorTitle: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  selectorCount: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  studentFilterHeading: {
+    marginTop: 16,
+  },
   routeSelector: {
     gap: 8,
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 2,
   },
   routeChip: {
-    minWidth: 112,
-    maxWidth: 190,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
+    minWidth: 142,
+    maxWidth: 220,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
     backgroundColor: DRIVER_COLORS.card,
@@ -719,6 +998,12 @@ const styles = StyleSheet.create({
     color: DRIVER_COLORS.text,
     fontSize: 12,
     fontWeight: "700",
+    flex: 1,
+  },
+  routeChipHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
   },
   routeChipTextActive: {
     color: DRIVER_COLORS.white,
@@ -729,50 +1014,72 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   heroIconCircle: {
-    width: 56,
-    height: 56,
+    width: 50,
+    height: 50,
     borderRadius: 16,
-    backgroundColor: DRIVER_COLORS.card,
+    backgroundColor: DRIVER_COLORS.primaryDark,
     justifyContent: "center",
     alignItems: "center",
   },
   heroLabel: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 12,
+    color: DRIVER_COLORS.cyan,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.1,
     marginBottom: 4,
   },
   heroTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
+    color: DRIVER_COLORS.text,
+    fontSize: 17,
+    fontWeight: "800",
   },
   heroSubtitle: {
-    color: "rgba(255,255,255,0.85)",
+    color: DRIVER_COLORS.muted,
     marginTop: 4,
+    fontSize: 11,
   },
   heroBadge: {
-    backgroundColor: DRIVER_COLORS.card,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: DRIVER_COLORS.successSurface,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 999,
   },
+  heroBadgeInactive: {
+    backgroundColor: DRIVER_COLORS.neutralSurface,
+  },
+  heroBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: DRIVER_COLORS.success,
+  },
+  heroBadgeDotInactive: {
+    backgroundColor: DRIVER_COLORS.muted,
+  },
   heroBadgeText: {
-    color: "#0F9D58",
-    fontWeight: "700",
-    fontSize: 12,
+    color: DRIVER_COLORS.success,
+    fontWeight: "800",
+    fontSize: 9,
+    letterSpacing: 0.4,
+  },
+  heroBadgeTextInactive: {
+    color: DRIVER_COLORS.muted,
   },
   heroStats: {
     marginTop: 16,
     marginHorizontal: 16,
     borderRadius: 22,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DRIVER_COLORS.card,
     padding: 10,
     flexDirection: "row",
     flexWrap: "wrap",
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
     gap: 8,
-    shadowColor: "#0F172A",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.045,
     shadowRadius: 12,
@@ -787,9 +1094,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 12,
     borderRadius: 16,
-    backgroundColor: "#F7FAF8",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     borderWidth: 1,
-    borderColor: "#E7EFEA",
+    borderColor: DRIVER_COLORS.cardBorder,
   },
   heroStatHeading: {
     flexDirection: "row",
@@ -805,25 +1112,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heroStatIconGreen: {
-    backgroundColor: "#E4F5EC",
+    backgroundColor: DRIVER_COLORS.successSurface,
   },
   heroStatIconBlue: {
-    backgroundColor: "#EAF1FF",
+    backgroundColor: DRIVER_COLORS.infoSurface,
   },
   heroStatIconPurple: {
-    backgroundColor: "#F1EAFE",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
   },
   heroStatIconOrange: {
-    backgroundColor: "#FFF0E5",
+    backgroundColor: DRIVER_COLORS.warningSurface,
   },
   heroStatLabel: {
-    color: "#64748B",
+    color: DRIVER_COLORS.muted,
     fontSize: 11,
     fontWeight: "700",
     flexShrink: 1,
   },
   heroStatValue: {
-    color: "#17385F",
+    color: DRIVER_COLORS.text,
     fontWeight: "800",
     marginTop: 1,
     fontSize: 18,
@@ -831,7 +1138,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   heroStatMeta: {
-    color: "#8492A6",
+    color: DRIVER_COLORS.muted,
     fontSize: 11,
     marginTop: 3,
   },
@@ -839,7 +1146,7 @@ const styles = StyleSheet.create({
     height: 5,
     width: "100%",
     borderRadius: 999,
-    backgroundColor: "#E3EAE6",
+    backgroundColor: DRIVER_COLORS.cardBorder,
     overflow: "hidden",
     marginTop: 7,
   },
@@ -877,12 +1184,52 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: DRIVER_COLORS.white,
   },
+  restrictedTab: {
+    borderColor: DRIVER_COLORS.warning,
+    backgroundColor: DRIVER_COLORS.warningSurface,
+  },
+  restrictedTabActive: {
+    backgroundColor: DRIVER_COLORS.warning,
+    borderColor: DRIVER_COLORS.warning,
+  },
+  restrictedTabText: {
+    color: DRIVER_COLORS.warning,
+  },
+  restrictedTabTextActive: {
+    color: DRIVER_COLORS.background,
+  },
+  paymentNotice: {
+    marginTop: 14,
+    marginHorizontal: 16,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(242, 184, 75, 0.4)",
+    backgroundColor: DRIVER_COLORS.warningSurface,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  paymentNoticeContent: {
+    flex: 1,
+  },
+  paymentNoticeTitle: {
+    color: DRIVER_COLORS.warning,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  paymentNoticeText: {
+    color: DRIVER_COLORS.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
+  },
   infoBanner: {
     marginTop: 16,
     marginHorizontal: 16,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
     flexDirection: "row",
@@ -892,7 +1239,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#E2F2E9",
+    backgroundColor: DRIVER_COLORS.successSurface,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -926,11 +1273,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: DRIVER_COLORS.cardBorder,
   },
+  restrictedStudentRow: {
+    backgroundColor: DRIVER_COLORS.warningSurface,
+    borderBottomColor: DRIVER_COLORS.cardBorder,
+  },
   studentAvatar: {
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.successSurface,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -963,7 +1314,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   statusPill: {
-    backgroundColor: "#E2F2E9",
+    backgroundColor: DRIVER_COLORS.successSurface,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
@@ -978,6 +1329,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
     fontWeight: "700",
+  },
+  restrictedStatusPill: {
+    backgroundColor: DRIVER_COLORS.warning,
+  },
+  restrictedStatusPillText: {
+    color: DRIVER_COLORS.background,
+  },
+  restrictedStudentPickedUp: {
+    color: DRIVER_COLORS.warning,
+    maxWidth: 110,
+    textAlign: "right",
   },
   viewAllButton: {
     marginTop: 16,
@@ -1002,7 +1364,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     borderRadius: 18,
     padding: 16,
-    backgroundColor: "#FFF4E1",
+    backgroundColor: DRIVER_COLORS.warningSurface,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1010,17 +1372,17 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "rgba(213, 138, 22, 0.16)",
+    backgroundColor: "rgba(242, 184, 75, 0.16)",
     justifyContent: "center",
     alignItems: "center",
   },
   reminderTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#80510E",
+    color: DRIVER_COLORS.warning,
   },
   reminderText: {
-    color: "#80510E",
+    color: DRIVER_COLORS.warning,
     marginTop: 4,
     fontSize: 13,
   },

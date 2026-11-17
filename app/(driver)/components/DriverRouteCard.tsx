@@ -41,7 +41,10 @@ const DriverRouteCard = ({
         </View>
 
         <View
-          style={[styles.routeIcon, { backgroundColor: "#EAF2ED" }]}
+          style={[
+            styles.routeIcon,
+            { backgroundColor: DRIVER_COLORS.successSurface },
+          ]}
         >
           <MaterialIcons
             name="alt-route"
@@ -155,7 +158,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     fontSize: 12,
   },
 
@@ -170,7 +173,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.successSurface,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -189,7 +192,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#22C55E",
+    backgroundColor: DRIVER_COLORS.cyan,
   },
 
   line: {
@@ -202,7 +205,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
   },
 
   locations: {

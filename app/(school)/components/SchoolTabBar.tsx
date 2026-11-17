@@ -2,9 +2,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
 import React, { useContext } from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../../styles/theme";
 import { SchoolBillingAccessContext } from "@/app-support/school/schoolBillingAccess";
+import { AuthContext } from "../../../context/authContext/auth-context";
 
 const tabs = [
   {
@@ -42,9 +42,15 @@ const tabs = [
 export default function SchoolTabBar() {
   const router = useRouter();
   const segments = useSegments();
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { trialExpired } = useContext(SchoolBillingAccessContext);
+  const { user } = useContext(AuthContext);
+  const isDriver = user?.userData?.admin_profile?.role === "driver";
+  const visibleTabs = isDriver
+    ? tabs.filter((tab) =>
+        ["trips", "messages", "more"].includes(tab.key),
+      )
+    : tabs;
 
   const activeSegment = String(segments[segments.length - 1] || "school");
 
@@ -76,15 +82,7 @@ export default function SchoolTabBar() {
   const activeKey = getActiveKey();
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.container,
-        {
-          paddingBottom: Math.max(insets.bottom, 10),
-        },
-      ]}
-    >
+    <View pointerEvents="box-none" style={[styles.container]}>
       <View
         style={[
           styles.floatingBar,
@@ -95,16 +93,14 @@ export default function SchoolTabBar() {
       >
         {(trialExpired
           ? [
-              ...tabs.filter((tab) =>
-                ["home", "students", "routes", "trips", "messages", "more"].includes(tab.key),
-              ),
+              ...visibleTabs,
               {
                 key: "billing",
                 icon: "credit-card",
                 route: "/(school)/billing",
               },
             ]
-          : tabs
+          : visibleTabs
         ).map((tab) => {
           const isActive = tab.key === activeKey;
 
@@ -115,7 +111,9 @@ export default function SchoolTabBar() {
               onPress={() => router.push(tab.route as any)}
               style={styles.tabItem}
               accessibilityRole="button"
-              accessibilityLabel={tab.key === "billing" ? "Subscription and billing" : tab.key}
+              accessibilityLabel={
+                tab.key === "billing" ? "Subscription and billing" : tab.key
+              }
             >
               <View
                 style={[
@@ -156,20 +154,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-
     alignItems: "center",
-
-    paddingHorizontal: 18,
-
-    // Allows the content behind the tab bar
-    // to remain visible.
     backgroundColor: "transparent",
   },
 
   floatingBar: {
     width: "100%",
     height: 62,
-    borderRadius: 22,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 5,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",

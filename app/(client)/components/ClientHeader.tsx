@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { CLIENT_COLORS } from "../../../styles/theme";
 
 type Props = {
   title: string;
@@ -163,12 +164,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     position: "relative",
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.background,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#087C2B",
-    shadowColor: "#087C2B",
+    borderBottomColor: CLIENT_COLORS.border,
+    shadowColor: CLIENT_COLORS.primaryDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,
@@ -192,15 +193,15 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
     textAlign: "center",
     letterSpacing: -0.3,
   },
 
   subtitle: {
-    color: "#E9F8EE",
-    fontSize: 12,
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 10,
     marginTop: 2,
     textAlign: "center",
   },
@@ -209,12 +210,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#087C2B",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#42B85B",
-    shadowColor: "#087C2B",
+    borderColor: CLIENT_COLORS.border,
+    shadowColor: CLIENT_COLORS.primaryDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -233,13 +234,13 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#087C2B",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#42B85B",
+    borderColor: CLIENT_COLORS.border,
     position: "relative",
-    shadowColor: "#087C2B",
+    shadowColor: CLIENT_COLORS.primaryDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -254,11 +255,11 @@ const styles = StyleSheet.create({
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: "#087C2B",
+    backgroundColor: CLIENT_COLORS.primaryDark,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#159B3A",
+    borderColor: CLIENT_COLORS.background,
   },
 
   notificationText: {

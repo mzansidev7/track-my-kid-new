@@ -6,10 +6,22 @@ import {
 } from "../asyncStorage/messages.asyncStore";
 
 import { client } from "../../supabaseConfig/supabaseConfig";
+import { BASE_URL } from "../../url";
 
 export interface ConversationData {
   id: string;
   conversation_type: string;
+  group_name?: string | null;
+  is_group_conversation?: boolean;
+  can_manage_group?: boolean;
+  anchor_user_id?: string | null;
+  participants?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+    avatar?: string | null;
+  }[];
   other_participant: {
     id: string;
     name: string;
@@ -17,6 +29,8 @@ export interface ConversationData {
     phone?: string | null;
     role: string;
     profile: any;
+    avatar?: string | null;
+    school_name?: string | null;
   };
   last_message: any | null;
   unread_count?: number;
@@ -41,9 +55,12 @@ export interface MessageData {
     | {
         name: string;
         role: string;
+        avatar?: string | null;
       }
     | any;
 }
+
+const GROUP_CONVERSATION_TYPES = ["admin_group", "school_group"];
 
 const getConversationActivityTime = (conversation: any) => {
   const timestamp =
@@ -100,6 +117,8 @@ const supportTeamConversation = (conversation: any): any => ({
 export const fetchConversationsWithCache = async (
   userId: string,
   onCached?: (conversations: ConversationData[]) => void,
+  accessToken?: string,
+  conversationEndpoint = "/client/conversations",
 ): Promise<ConversationData[]> => {
   if (!userId) {
     return [];
@@ -112,6 +131,28 @@ export const fetchConversationsWithCache = async (
       cachedConversations.map(supportTeamConversation),
     );
     if (normalizedCached.length > 0) onCached?.(normalizedCached);
+
+    if (accessToken) {
+      const response = await fetch(
+        `${BASE_URL.replace(/\/$/, "")}${conversationEndpoint}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || "Unable to refresh client conversations",
+        );
+      }
+      if (!Array.isArray(payload)) {
+        throw new Error("Client conversations response was invalid");
+      }
+
+      const normalizedConversations = sortConversationsByLastMessage(
+        payload.map(supportTeamConversation),
+      );
+      await cacheConversations(normalizedConversations, userId);
+      return normalizedConversations;
+    }
 
     // Fetch fresh conversations
     const { data, error } = await client
@@ -183,7 +224,7 @@ export const fetchConversationsWithCache = async (
               )
             `,
             )
-            .eq("conversation_type", "admin_group")
+            .in("conversation_type", GROUP_CONVERSATION_TYPES)
             .in("id", groupConversationIds)
         : { data: [], error: null };
     if (groupConversationsError) {
@@ -220,7 +261,7 @@ export const fetchConversationsWithCache = async (
             message.sender_id !== userId && message.is_read === false,
         ).length;
 
-        if (conv.conversation_type === "admin_group") {
+        if (GROUP_CONVERSATION_TYPES.includes(conv.conversation_type)) {
           return {
             id: conv.id,
             conversation_type: conv.conversation_type,
@@ -326,6 +367,8 @@ export const fetchConversationsWithCache = async (
 export const subscribeToConversations = (
   userId: string,
   onConversationsChange: (conversations: ConversationData[]) => void,
+  accessToken?: string,
+  conversationEndpoint = "/client/conversations",
 ) => {
   if (!userId) {
     console.warn("⚠️ No userId provided for conversations subscription");
@@ -337,7 +380,12 @@ export const subscribeToConversations = (
   const refreshConversations = () => {
     if (refreshTimeout) clearTimeout(refreshTimeout);
     refreshTimeout = setTimeout(() => {
-      void fetchConversationsWithCache(userId)
+      void fetchConversationsWithCache(
+        userId,
+        undefined,
+        accessToken,
+        conversationEndpoint,
+      )
         .then(onConversationsChange)
         .catch((err) => {
           console.error("❌ Error refreshing conversations:", err);

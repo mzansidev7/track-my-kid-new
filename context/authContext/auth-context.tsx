@@ -11,11 +11,10 @@ import {
   getUserFromAsyncStorage,
   normalizeRole,
 } from "../../store/asyncStorage/authStore";
-import {
-  clearSupabaseSession,
-} from "../../supabaseConfig/supabaseConfig";
+import { clearSupabaseSession } from "../../supabaseConfig/supabaseConfig";
 import { BASE_URL, resolveWorkingBaseUrl } from "../../url";
 import { installAuthExpiryHandler } from "../../utils/authExpiry";
+import PresenceProvider from "../../components/presence/PresenceProvider";
 
 const OWNER_DRIVER_MODE_KEY = "owner_driver_mode";
 
@@ -85,7 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         OWNER_DRIVER_MODE_KEY,
       );
       setDriverMode(storedDriverMode === "true");
-
     } catch (err) {
       setUser(null);
       console.error("Error loading user from AsyncStorage:", err);
@@ -96,6 +94,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // 🔄 Load user ONCE
   useEffect(() => {
+    // Auth state must be hydrated from AsyncStorage after the provider mounts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUser();
   }, []);
 
@@ -223,20 +223,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // Then try to notify backend (non-critical - ignore errors)
-    // try {
-    //   await fetch(`${BASE_URL}/logout`, {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //     },
-    //   });
-    // } catch (error) {
-    //   // Silently ignore - logout already completed locally
-    //   console.debug(
-    //     "Backend logout notification failed (non-critical):",
-    //     error,
-    //   );
-    // }
+    try {
+      await fetch(`${BASE_URL}/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      // Silently ignore - logout already completed locally
+      console.debug(
+        "Backend logout notification failed (non-critical):",
+        error,
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -258,7 +258,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         toggleDriverMode,
       }}
     >
-      {children}
+      <PresenceProvider
+        userId={user?.userData?.id || user?.userData?.user_id}
+        token={user?.token}
+      >
+        {children}
+      </PresenceProvider>
     </AuthContext.Provider>
   );
 };

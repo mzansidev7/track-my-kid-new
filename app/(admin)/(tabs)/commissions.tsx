@@ -309,7 +309,7 @@ export default function AdminFinance() {
                   {data.subscription_invoices.length ? (
                     data.subscription_invoices.map((item) => (
                       <MoneyRow
-                        key={item.stripe_invoice_id}
+                        key={item.id}
                         title={item.owner_name}
                         detail={`${formatDate(item.period_start)} – ${formatDate(item.period_end)} · Due ${formatDate(item.due_at)}`}
                         amount={formatMoney(
@@ -318,12 +318,11 @@ export default function AdminFinance() {
                         )}
                         status={statusLabel(item)}
                         overdue={item.overdue}
-                        url={item.hosted_invoice_url}
                       />
                     ))
                   ) : (
                     <Text style={styles.empty}>
-                      Invoice history starts as Stripe billing events arrive.
+                      Invoice history appears after the billing period is processed.
                     </Text>
                   )}
                 </View>

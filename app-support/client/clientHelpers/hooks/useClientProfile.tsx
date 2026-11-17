@@ -9,24 +9,27 @@ import {
 
 export const useClientProfile = () => {
   const { user, loading: authLoading } = useContext(AuthContext);
+  const token = user?.token;
+  const userId = user?.userData?.id || user?.id;
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchClientProfile = useCallback(async () => {
-    if (!user?.token) {
+    if (!token) {
+      setClient(null);
       setError("Missing authentication token");
       setLoading(false);
-      return;
+      return null;
     }
-
     setError(null);
+    const profileCacheKey = userId ? `client_profile:${userId}` : null;
     let hasCache = false;
 
-    const baseUrl = await resolveWorkingBaseUrl();
-
     try {
-      const storedClient = await AsyncStorage.getItem("client_profile");
+      const storedClient = profileCacheKey
+        ? await AsyncStorage.getItem(profileCacheKey)
+        : null;
       if (storedClient) {
         const parsedClient = JSON.parse(storedClient);
         setClient(parsedClient);
@@ -37,7 +40,22 @@ export const useClientProfile = () => {
     }
 
     if (!hasCache) {
+      setClient(null);
       setLoading(true);
+    }
+
+    let baseUrl: string;
+    try {
+      baseUrl = await resolveWorkingBaseUrl();
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to reach the server.";
+      setError(message);
+      setLoading(false);
+      console.error("Failed to refresh client profile:", requestError);
+      return null;
     }
 
     const endpoints = [
@@ -56,7 +74,7 @@ export const useClientProfile = () => {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
 
@@ -65,10 +83,12 @@ export const useClientProfile = () => {
           const freshClient = data.client || data || null;
           setClient(freshClient);
           try {
-            await AsyncStorage.setItem(
-              "client_profile",
-              JSON.stringify(freshClient),
-            );
+            if (profileCacheKey) {
+              await AsyncStorage.setItem(
+                profileCacheKey,
+                JSON.stringify(freshClient),
+              );
+            }
           } catch (saveErr) {
             console.error(
               "Failed to save client profile to AsyncStorage:",
@@ -76,7 +96,7 @@ export const useClientProfile = () => {
             );
           }
           setLoading(false);
-          return;
+          return freshClient;
         }
 
         if (response.status === 404) {
@@ -97,14 +117,14 @@ export const useClientProfile = () => {
 
     setError(lastError);
     setLoading(false);
-  }, [user?.token]);
+    return null;
+  }, [token, userId]);
 
   useEffect(() => {
-    if (authLoading || !user?.token) return;
+    if (authLoading || !token) return;
 
     fetchClientProfile();
 
-    const userId = user?.userData?.id || user?.id;
     const channel = subscribeToClientProfileUpdates(
       userId,
       () => {
@@ -118,9 +138,8 @@ export const useClientProfile = () => {
   }, [
     authLoading,
     fetchClientProfile,
-    user?.id,
-    user?.token,
-    user?.userData?.id,
+    token,
+    userId,
   ]);
 
   return { client, loading, error, refreshClient: fetchClientProfile };

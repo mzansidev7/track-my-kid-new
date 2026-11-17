@@ -22,7 +22,7 @@ import { AuthContext } from "@/context/authContext/auth-context";
 import { useDriverRoutes } from "@/app-support/driver/driverHelpers/hooks/useDriverRoutes";
 import { useDriverTracking } from "@/app-support/driver/driverHelpers/hooks/useDriverTracking";
 import { resolveWorkingBaseUrl } from "@/url";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 
 const checklistItems = [
   { key: "tyres", label: "Tyres and wheels" },
@@ -66,7 +66,7 @@ export default function DriverPreTripInspection() {
   const requestedRouteType = getParam(params.routeType);
   const { user } = useContext(AuthContext);
   const token = user?.token;
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const { routes, routesLoading, routesError, refreshRoutes } =
     useDriverRoutes();
   const route = useMemo(
@@ -85,6 +85,7 @@ export default function DriverPreTripInspection() {
   const [loadingInspection, setLoadingInspection] = useState(
     () => Boolean(routeId && token),
   );
+  const [confirmCheckAll, setConfirmCheckAll] = useState(false);
   const [saving, setSaving] = useState(false);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -159,6 +160,25 @@ export default function DriverPreTripInspection() {
   const checklistComplete = checklistItems.every(
     ({ key }) => typeof checklist[key] === "boolean",
   );
+  const allChecklistItemsOk = checklistItems.every(
+    ({ key }) => checklist[key] === true,
+  );
+
+  const issueCount = checklistItems.filter(
+    ({ key }) => checklist[key] === false,
+  ).length;
+
+  const markAllItemsOk = () => {
+    const completedChecklist = checklistItems.reduce<Checklist>(
+      (completed, { key }) => {
+        completed[key] = true;
+        return completed;
+      },
+      {},
+    );
+    setChecklist(completedChecklist);
+    setConfirmCheckAll(false);
+  };
 
   const saveInspection = async () => {
     if (!routeId || !user?.token || !checklistComplete) {
@@ -349,9 +369,120 @@ export default function DriverPreTripInspection() {
           />
         ) : (
           <>
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
-              Vehicle safety checklist
-            </Text>
+            <View style={styles.sectionHeader}>
+              <Text
+                style={[styles.sectionTitle, { color: colors.text.primary }]}
+              >
+                Vehicle safety checklist
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Check all vehicle inspection items"
+                disabled={
+                  inspectionPassed || isSubmitting || allChecklistItemsOk
+                }
+                onPress={() => setConfirmCheckAll(true)}
+                style={[
+                  styles.checkAllButton,
+                  (inspectionPassed || isSubmitting || allChecklistItemsOk) &&
+                    styles.disabledChoice,
+                ]}
+              >
+                <MaterialIcons
+                  name="done-all"
+                  size={17}
+                  color={
+                    allChecklistItemsOk
+                      ? colors.text.secondary
+                      : colors.primary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.checkAllText,
+                    {
+                      color: allChecklistItemsOk
+                        ? colors.text.secondary
+                        : colors.primary,
+                    },
+                  ]}
+                >
+                  {allChecklistItemsOk ? "All checked" : "Check all"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {confirmCheckAll ? (
+              <View
+                accessibilityRole="alert"
+                style={[
+                  styles.checkAllConfirm,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.checkAllConfirmMessage}>
+                  <MaterialIcons
+                    name="health-and-safety"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <View style={styles.checkAllConfirmCopy}>
+                    <Text
+                      style={[
+                        styles.checkAllConfirmTitle,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      Mark every item OK?
+                    </Text>
+                    <Text
+                      style={[
+                        styles.checkAllConfirmText,
+                        { color: colors.text.secondary },
+                      ]}
+                    >
+                      Continue only after physically checking each item.
+                      {issueCount > 0
+                        ? ` ${issueCount} item${issueCount === 1 ? " is" : "s are"} currently marked as an issue.`
+                        : ""}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.checkAllConfirmActions}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={() => setConfirmCheckAll(false)}
+                    style={[
+                      styles.checkAllCancelButton,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.checkAllCancelText,
+                        { color: colors.text.primary },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    onPress={markAllItemsOk}
+                    style={[
+                      styles.checkAllConfirmButton,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Text style={styles.checkAllConfirmButtonText}>
+                      Mark all OK
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
             {checklistItems.map(({ key, label }) => {
               const checked = checklist[key];
               return (
@@ -392,9 +523,10 @@ export default function DriverPreTripInspection() {
                       accessibilityRole="button"
                       accessibilityLabel={`${label}: no issue`}
                       disabled={inspectionPassed || isSubmitting}
-                      onPress={() =>
+                      onPress={() => {
+                        setConfirmCheckAll(false);
                         setChecklist((current) => ({ ...current, [key]: true }))
-                      }
+                      }}
                       style={[
                         styles.choice,
                         checked === true && styles.safeChoiceSelected,
@@ -415,9 +547,10 @@ export default function DriverPreTripInspection() {
                       accessibilityRole="button"
                       accessibilityLabel={`${label}: issue found`}
                       disabled={inspectionPassed || isSubmitting}
-                      onPress={() =>
+                      onPress={() => {
+                        setConfirmCheckAll(false);
                         setChecklist((current) => ({ ...current, [key]: false }))
-                      }
+                      }}
                       style={[
                         styles.choice,
                         checked === false && styles.issueChoiceSelected,
@@ -562,7 +695,58 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: "600" },
   reinspectButton: { alignSelf: "flex-end", paddingVertical: 8, paddingHorizontal: 2 },
-  sectionTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 10,
+  },
+  sectionTitle: { flex: 1, fontSize: 18, fontWeight: "800" },
+  checkAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  checkAllText: { fontSize: 12, fontWeight: "700" },
+  checkAllConfirm: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 12,
+  },
+  checkAllConfirmMessage: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 9,
+  },
+  checkAllConfirmCopy: { flex: 1, gap: 3 },
+  checkAllConfirmTitle: { fontSize: 13, fontWeight: "800" },
+  checkAllConfirmText: { fontSize: 12, lineHeight: 17 },
+  checkAllConfirmActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  checkAllCancelButton: {
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderRadius: 9,
+  },
+  checkAllCancelText: { fontSize: 12, fontWeight: "700" },
+  checkAllConfirmButton: {
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 13,
+    borderRadius: 9,
+  },
+  checkAllConfirmButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   checkItem: {
     minHeight: 66,
     paddingHorizontal: 12,
@@ -588,10 +772,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   choiceText: { color: DRIVER_COLORS.muted, fontSize: 12, fontWeight: "700" },
-  safeChoiceSelected: { backgroundColor: "#E2F2E9", borderColor: DRIVER_COLORS.success },
+  safeChoiceSelected: {
+    backgroundColor: DRIVER_COLORS.successSurface,
+    borderColor: DRIVER_COLORS.success,
+  },
   safeChoiceTextSelected: { color: DRIVER_COLORS.primaryDark },
-  issueChoiceSelected: { backgroundColor: "#FEE2E2", borderColor: "#DC2626" },
-  issueChoiceTextSelected: { color: "#991B1B" },
+  issueChoiceSelected: {
+    backgroundColor: DRIVER_COLORS.dangerSurface,
+    borderColor: DRIVER_COLORS.danger,
+  },
+  issueChoiceTextSelected: { color: DRIVER_COLORS.danger },
   disabledChoice: { opacity: 0.65 },
   label: { fontSize: 14, fontWeight: "700", marginTop: 12, marginBottom: 6 },
   notes: {

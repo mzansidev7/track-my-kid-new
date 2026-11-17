@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CLIENT_COLORS } from "../../../styles/theme";
 
 const tabs = [
   {
@@ -77,7 +78,7 @@ export default function ClientTabBar(props: any) {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: "#FFFFFF",
+          backgroundColor: CLIENT_COLORS.background,
         },
       ]}
     >
@@ -85,7 +86,7 @@ export default function ClientTabBar(props: any) {
         style={[
           styles.tabBar,
           {
-            backgroundColor: "#FFFFFF",
+            backgroundColor: CLIENT_COLORS.background,
           },
         ]}
       >
@@ -103,21 +104,25 @@ export default function ClientTabBar(props: any) {
                 style={[
                   styles.iconWrapper,
                   isActive && {
-                    backgroundColor: "#E9F8EE",
+                    backgroundColor: CLIENT_COLORS.surfaceElevated,
                   },
                 ]}
               >
                 <MaterialIcons
                   name={tab.icon as any}
                   size={isActive ? 23 : 22}
-                  color={isActive ? "#159B3A" : "#496481"}
+                  color={isActive ? CLIENT_COLORS.primaryBright : CLIENT_COLORS.textMuted}
                 />
               </View>
 
               <Text
                 style={[
                   styles.tabLabel,
-                  { color: isActive ? "#159B3A" : "#496481" },
+                  {
+                    color: isActive
+                      ? CLIENT_COLORS.primaryBright
+                      : CLIENT_COLORS.textMuted,
+                  },
                   isActive && styles.activeTabLabel,
                 ]}
               >
@@ -164,7 +169,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
 
     borderTopWidth: 1,
-    borderTopColor: "#E4EDF6",
+    borderTopColor: CLIENT_COLORS.border,
   },
 
   tabItem: {
@@ -203,6 +208,6 @@ const styles = StyleSheet.create({
     width: 30,
     height: 2,
     borderRadius: 2,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
   },
 });

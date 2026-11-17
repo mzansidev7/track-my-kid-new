@@ -188,6 +188,17 @@ export const subscribeToClientChildrenAndSchoolsUpdates = (
       async () => {
         onDataChange();
       },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "absence_reports",
+      },
+      async () => {
+        onDataChange();
+      },
     );
 
   channel.subscribe((status: string) => {
@@ -223,6 +234,38 @@ export const subscribeToRouteStopUpdates = (onStopsChange: () => void) => {
   return channel;
 };
 
+export const subscribeToClientTripHistoryUpdates = (
+  clientId: string,
+  onHistoryChange: () => void,
+) => {
+  const channel = client
+    .channel(`client-trip-history-${clientId}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "child_trip_history",
+      },
+      onHistoryChange,
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "route_stops",
+      },
+      onHistoryChange,
+    );
+
+  channel.subscribe((status: string) => {
+    logSubscriptionStatus("Client trip history subscription", clientId, status);
+  });
+
+  return channel;
+};
+
 export const subscribeToPaymentUpdates = (
   scope: "client_id" | "owner_id",
   id: string,
@@ -243,6 +286,40 @@ export const subscribeToPaymentUpdates = (
 
   channel.subscribe((status: string) => {
     logSubscriptionStatus(`Payment ${scope} subscription`, id, status);
+  });
+
+  return channel;
+};
+
+export const subscribeToOwnerPayoutSettingsUpdates = (
+  ownerIds: string[],
+  onSettingsChange: () => void,
+) => {
+  const uniqueOwnerIds = [...new Set(ownerIds.filter(Boolean))];
+  if (!uniqueOwnerIds.length) return null;
+
+  const channel = client.channel(
+    `owner-payout-settings-${uniqueOwnerIds.join("-")}-${Date.now()}`,
+  );
+  uniqueOwnerIds.forEach((ownerId) => {
+    channel.on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "owners",
+        filter: `id=eq.${ownerId}`,
+      },
+      onSettingsChange,
+    );
+  });
+
+  channel.subscribe((status: string) => {
+    logSubscriptionStatus(
+      "Owner payout settings subscription",
+      uniqueOwnerIds.join(","),
+      status,
+    );
   });
 
   return channel;

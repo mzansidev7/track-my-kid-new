@@ -138,7 +138,7 @@ export default function AttendancePage() {
       setReason("");
       Alert.alert(
         "Absence reported",
-        `${reportingChild.childName}'s school has been notified.`,
+        `${reportingChild.childName}'s school and driver have been notified. Their scheduled trip for ${absenceDate} has been cancelled, and the driver will not see the pickup stops for that day.`,
       );
       await reload();
     } catch (error) {
@@ -158,10 +158,10 @@ export default function AttendancePage() {
   };
 
   const statusColor = (status: ClientAttendanceItem["status"]) => {
-    if (status === "present") return "#159B3A";
+    if (status === "present") return "#C14BFF";
     if (status === "late") return "#D97706";
     if (status === "absent") return "#DC2626";
-    return "#607A98";
+    return "#B9AFC4";
   };
 
   return (
@@ -190,7 +190,7 @@ export default function AttendancePage() {
             style={styles.dateButton}
             onPress={() => shiftDate(-1)}
           >
-            <MaterialIcons name="chevron-left" size={24} color="#087C2B" />
+            <MaterialIcons name="chevron-left" size={24} color="#C14BFF" />
           </TouchableOpacity>
           <View style={styles.dateCopy}>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
@@ -202,13 +202,13 @@ export default function AttendancePage() {
             style={styles.dateButton}
             onPress={() => shiftDate(1)}
           >
-            <MaterialIcons name="chevron-right" size={24} color="#087C2B" />
+            <MaterialIcons name="chevron-right" size={24} color="#C14BFF" />
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#159B3A" />
+            <ActivityIndicator color="#C14BFF" />
             <Text style={styles.muted}>Loading attendance...</Text>
           </View>
         ) : attendance.length === 0 ? (
@@ -253,7 +253,7 @@ export default function AttendancePage() {
                 </View>
               </View>
               <View style={styles.detailRow}>
-                <MaterialIcons name="schedule" size={18} color="#607A98" />
+                <MaterialIcons name="schedule" size={18} color="#B9AFC4" />
                 <Text style={styles.detailText}>
                   {item.arrivalTime
                     ? `Arrived ${new Date(item.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
@@ -273,7 +273,7 @@ export default function AttendancePage() {
                   setReportingChild(item);
                 }}
               >
-                <MaterialIcons name="event-busy" size={18} color="#087C2B" />
+                <MaterialIcons name="event-busy" size={18} color="#C14BFF" />
                 <Text style={styles.reportButtonText}>Report absence</Text>
               </TouchableOpacity>
             </View>
@@ -288,7 +288,7 @@ export default function AttendancePage() {
                   Recent attendance and parent absence reports
                 </Text>
               </View>
-              <MaterialIcons name="history" size={22} color="#087C2B" />
+              <MaterialIcons name="history" size={22} color="#C14BFF" />
             </View>
             {history.length === 0 ? (
               <Text style={styles.historyEmpty}>
@@ -361,12 +361,12 @@ export default function AttendancePage() {
               style={styles.absenceDateButton}
               onPress={() => setShowAbsenceDatePicker((visible) => !visible)}
             >
-              <MaterialIcons name="calendar-today" size={18} color="#087C2B" />
+              <MaterialIcons name="calendar-today" size={18} color="#C14BFF" />
               <Text style={styles.absenceDateText}>{absenceDateLabel}</Text>
               <MaterialIcons
                 name="keyboard-arrow-down"
                 size={20}
-                color="#607A98"
+                color="#B9AFC4"
               />
             </TouchableOpacity>
             {showAbsenceDatePicker && (
@@ -385,7 +385,7 @@ export default function AttendancePage() {
               value={reason}
               onChangeText={setReason}
               placeholder="Reason for absence"
-              placeholderTextColor="#607A98"
+              placeholderTextColor="#B9AFC4"
               multiline
               textAlignVertical="top"
               style={styles.reasonInput}
@@ -421,16 +421,16 @@ export default function AttendancePage() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F9FF" },
+  safe: { flex: 1, backgroundColor: "#07040B" },
   content: { padding: 16, paddingBottom: 36 },
   dateCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 16,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     marginBottom: 16,
   },
   dateButton: {
@@ -439,32 +439,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
   dateCopy: { flex: 1, alignItems: "center" },
-  dateLabel: { color: "#17365E", fontSize: 16, fontWeight: "800" },
-  dateHint: { color: "#607A98", fontSize: 12, marginTop: 3 },
+  dateLabel: { color: "#FBF8FF", fontSize: 15, fontWeight: "800" },
+  dateHint: { color: "#B9AFC4", fontSize: 11, marginTop: 3 },
   childCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
   },
   childTopRow: { flexDirection: "row", alignItems: "center" },
   avatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#087C2B", fontSize: 20, fontWeight: "800" },
+  avatarText: { color: "#C14BFF", fontSize: 18, fontWeight: "800" },
   childCopy: { flex: 1, marginLeft: 11 },
-  childName: { color: "#17365E", fontSize: 16, fontWeight: "800" },
-  schoolName: { color: "#607A98", fontSize: 12, marginTop: 3 },
+  childName: { color: "#FBF8FF", fontSize: 15, fontWeight: "800" },
+  schoolName: { color: "#B9AFC4", fontSize: 11, marginTop: 3 },
   statusPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   statusText: { fontSize: 11, fontWeight: "800", textTransform: "capitalize" },
   detailRow: {
@@ -473,15 +473,15 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 16,
   },
-  detailText: { color: "#607A98", fontSize: 13 },
+  detailText: { color: "#B9AFC4", fontSize: 12 },
   historyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 16,
     padding: 16,
     marginTop: 4,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
   },
   historyHeader: {
     flexDirection: "row",
@@ -491,11 +491,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E7EFF7",
   },
-  historyTitle: { color: "#17365E", fontSize: 16, fontWeight: "800" },
-  historySubtitle: { color: "#607A98", fontSize: 11, marginTop: 4 },
+  historyTitle: { color: "#FBF8FF", fontSize: 14, fontWeight: "800" },
+  historySubtitle: { color: "#B9AFC4", fontSize: 10, marginTop: 4 },
   historyEmpty: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     lineHeight: 18,
     paddingTop: 14,
   },
@@ -513,14 +513,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: "#07040B",
   },
   historyCopy: { flex: 1 },
-  historyChild: { color: "#17365E", fontSize: 13, fontWeight: "700" },
-  historyDetail: { color: "#607A98", fontSize: 11, marginTop: 4 },
+  historyChild: { color: "#FBF8FF", fontSize: 12, fontWeight: "700" },
+  historyDetail: { color: "#B9AFC4", fontSize: 11, marginTop: 4 },
   historyReason: {
     color: "#475569",
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
     marginTop: 5,
   },
@@ -531,50 +531,50 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 12,
     paddingVertical: 10,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
   },
-  reportButtonText: { color: "#087C2B", fontSize: 13, fontWeight: "800" },
+  reportButtonText: { color: "#C14BFF", fontSize: 12, fontWeight: "800" },
   centerState: { alignItems: "center", paddingVertical: 60, gap: 10 },
   emptyState: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 28,
     marginTop: 8,
   },
   emptyTitle: {
-    color: "#17365E",
-    fontSize: 17,
+    color: "#FBF8FF",
+    fontSize: 14,
     fontWeight: "800",
     marginTop: 12,
   },
-  muted: { color: "#607A98", fontSize: 13, textAlign: "center", marginTop: 5 },
+  muted: { color: "#B9AFC4", fontSize: 12, textAlign: "center", marginTop: 5 },
   modalBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(15,23,42,0.45)",
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 22,
   },
-  modalTitle: { color: "#17365E", fontSize: 20, fontWeight: "800" },
+  modalTitle: { color: "#FBF8FF", fontSize: 17, fontWeight: "800" },
   modalSubtitle: {
-    color: "#607A98",
-    fontSize: 13,
+    color: "#B9AFC4",
+    fontSize: 10,
     lineHeight: 20,
     marginTop: 7,
   },
   dateInputLabel: {
-    color: "#17365E",
-    fontSize: 13,
+    color: "#FBF8FF",
+    fontSize: 12,
     fontWeight: "700",
     marginTop: 18,
     marginBottom: 7,
@@ -584,21 +584,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  absenceDateText: { flex: 1, color: "#17365E", fontSize: 14 },
+  absenceDateText: { flex: 1, color: "#FBF8FF", fontSize: 13 },
   reasonInput: {
     minHeight: 110,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 12,
     padding: 12,
     marginTop: 18,
-    backgroundColor: "#FFFFFF",
-    color: "#17365E",
+    backgroundColor: "#130D1A",
+    color: "#FBF8FF",
   },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 18 },
   cancelButton: {
@@ -606,18 +606,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 10,
     paddingVertical: 12,
   },
-  cancelText: { color: "#607A98", fontWeight: "800" },
+  cancelText: { color: "#B9AFC4", fontWeight: "800" },
   submitButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
     paddingVertical: 12,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
   submitText: { color: "#FFF", fontWeight: "800" },
   disabledButton: { opacity: 0.5 },

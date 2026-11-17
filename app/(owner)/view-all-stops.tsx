@@ -142,11 +142,11 @@ const ViewAllStops = () => {
       "#2563EB",
       "#E11D48",
       "#0F766E",
-      "#7C3AED",
+      "#00B894",
       "#D97706",
       "#0891B2",
       "#DC2626",
-      "#4F46E5",
+      "#00B894",
     ];
 
     const grouped = new Map<string, any[]>();
@@ -316,14 +316,14 @@ const ViewAllStops = () => {
             </Text>
           </View>
           <View style={styles.countBadge}>
-            <MaterialIcons name="place" size={15} color="#1769D2" />
+            <MaterialIcons name="place" size={15} color="#35D9B3" />
             <Text style={styles.countBadgeText}>{allStops.length}</Text>
           </View>
         </View>
 
         {loading ? (
           <View style={styles.stateContainer}>
-            <ActivityIndicator size="large" color="#2563EB" />
+            <ActivityIndicator size="large" color="#35D9B3" />
             <Text style={styles.stateText}>Loading stops...</Text>
           </View>
         ) : error ? (
@@ -353,7 +353,7 @@ const ViewAllStops = () => {
                     <MaterialIcons
                       name={item.stopType === "pickup" ? "home" : "school"}
                       size={22}
-                      color="#2563EB"
+                      color="#35D9B3"
                     />
                   </View>
 
@@ -379,7 +379,7 @@ export default ViewAllStops;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
 
   map: {
@@ -389,7 +389,7 @@ const styles = StyleSheet.create({
 
   bottomSheet: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
     marginTop: -10,
     paddingHorizontal: 10,
     paddingTop: 10,
@@ -405,10 +405,10 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   subheading: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 2,
   },
@@ -419,10 +419,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 9,
     paddingVertical: 5,
-    backgroundColor: "#E6F1FF",
+    backgroundColor: "#13231D",
   },
   countBadgeText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 10,
     fontWeight: "700",
   },
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   stateText: {
     marginTop: 8,
     fontSize: 13,
-    color: "#607A98",
+    color: "#B1C4BC",
     textAlign: "center",
   },
 
@@ -448,12 +448,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#FFF",
+    borderColor: "#294238",
   },
 
   markerLabel: {
     marginTop: 4,
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
@@ -469,19 +469,19 @@ const styles = StyleSheet.create({
   stopCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 11,
     padding: 9,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
 
   iconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#EDF5FD",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 9,
@@ -494,13 +494,13 @@ const styles = StyleSheet.create({
   stopName: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
 
   stopAddress: {
     marginTop: 2,
     fontSize: 10,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   listContent: {
     paddingBottom: 16,
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     padding: 18,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     textAlign: "center",
   },

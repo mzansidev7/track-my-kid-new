@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React from "react";
 import { Alert, Linking, StyleSheet, View } from "react-native";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
+import { DRIVER_COLORS } from "@/styles/theme";
 import { HelpSupportContent } from "@/components/HelpSupportContent";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -75,7 +76,7 @@ const DriverHelpPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: DRIVER_COLORS.background,
   },
   content: {
     flex: 1,

@@ -10,11 +10,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../styles/theme";
+import { useOwnerTheme } from "../../styles/theme";
 
 export default function OwnerOnboarding() {
   const router = useRouter();
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useOwnerTheme();
   const [checkingState, setCheckingState] = useState(true);
 
   useEffect(() => {
@@ -70,25 +70,26 @@ export default function OwnerOnboarding() {
         </View>
 
         <Text style={[styles.title, { color: colors.text.primary }]}>
-          Set up client payments
+          Review client payments
         </Text>
 
         <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-          Before you can continue to your dashboard, add your payout details so
-          parents and clients can pay for transport services securely.
+          Review how parents and clients pay for transport services. Owner
+          payouts are reconciled monthly and handled through a separate verified
+          finance process; do not enter bank details here.
         </Text>
 
         <View style={styles.list}>
           <View style={styles.listItem}>
-            <MaterialIcons name="check-circle" size={18} color="#10B981" />
+            <MaterialIcons name="check-circle" size={18} color="#35D9B3" />
             <Text style={[styles.listText, { color: colors.text.secondary }]}>
-              Connect your payout account for parent/client payments
+              Accept secure client card payments through Paystack
             </Text>
           </View>
           <View style={styles.listItem}>
-            <MaterialIcons name="check-circle" size={18} color="#10B981" />
+            <MaterialIcons name="check-circle" size={18} color="#35D9B3" />
             <Text style={[styles.listText, { color: colors.text.secondary }]}>
-              Unlock dashboard access after setup is complete
+              Review monthly payout statements from your payments page
             </Text>
           </View>
         </View>
@@ -99,7 +100,7 @@ export default function OwnerOnboarding() {
             router.push("/(owner)/payments?fromOnboarding=true" as never)
           }
         >
-          <Text style={styles.primaryButtonText}>Set up client payments</Text>
+          <Text style={styles.primaryButtonText}>Review payment information</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 22,
-    backgroundColor: "#4F46E5",
+    backgroundColor: "#00B894",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   primaryButton: {
-    backgroundColor: "#4F46E5",
+    backgroundColor: "#00B894",
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",

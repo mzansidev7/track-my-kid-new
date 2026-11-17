@@ -1,21 +1,21 @@
 import { Dimensions, StyleSheet } from "react-native";
-import { useTheme } from "../../../../styles/theme";
+import { useOwnerTheme } from "../../../../styles/theme";
 
 export const useOwnerStyles = () => {
   const { width, height } = Dimensions.get("window");
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useOwnerTheme();
 
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#F5F5F5",
+      backgroundColor: "#050907",
     },
     header: {
-      backgroundColor: "#FFF",
+      backgroundColor: "#0D1713",
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: "#E5E7EB",
+      borderBottomColor: "#294238",
     },
     headerTop: {
       flexDirection: "row",
@@ -24,7 +24,7 @@ export const useOwnerStyles = () => {
     },
     headerDate: {
       fontSize: 11,
-      color: "#6B7280",
+      color: "#B1C4BC",
       fontWeight: "500",
     },
     headerIcons: {
@@ -52,7 +52,7 @@ export const useOwnerStyles = () => {
       gap: 8,
     },
     summaryCard: {
-      backgroundColor: "#FFF",
+      backgroundColor: "#0D1713",
       borderRadius: 14,
       padding: 10,
       shadowColor: "#000",
@@ -72,14 +72,14 @@ export const useOwnerStyles = () => {
       fontWeight: "700",
     },
     summaryBadge: {
-      backgroundColor: "#DBEAFE",
+      backgroundColor: "#13231D",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 999,
     },
     summaryBadgeText: {
       fontSize: 11,
-      color: "#2563EB",
+      color: "#35D9B3",
       fontWeight: "600",
     },
     summaryStatsRow: {
@@ -88,7 +88,7 @@ export const useOwnerStyles = () => {
     },
     summaryStatBox: {
       flex: 1,
-      backgroundColor: "#F9FAFB",
+      backgroundColor: "#0D1713",
       borderRadius: 10,
       paddingVertical: 10,
       paddingHorizontal: 10,
@@ -109,7 +109,7 @@ export const useOwnerStyles = () => {
     },
     metricCard: {
       flex: 1,
-      backgroundColor: "#FFF",
+      backgroundColor: "#0D1713",
       borderRadius: 12,
       padding: 10,
       shadowOffset: { width: 0, height: 1 },
@@ -133,23 +133,23 @@ export const useOwnerStyles = () => {
     metricPercentage: {
       fontSize: 12,
       fontWeight: "600",
-      color: "#10B981",
+      color: "#35D9B3",
     },
     metricValue: {
       fontSize: 18,
       fontWeight: "700",
-      color: "#1F2937",
+      color: "#F4FBF8",
       marginBottom: 4,
     },
     metricLabel: {
       fontSize: 11,
       fontWeight: "600",
-      color: "#4B5563",
+      color: "#B1C4BC",
       marginBottom: 2,
     },
     metricSubtext: {
       fontSize: 11,
-      color: "#9CA3AF",
+      color: "#82968D",
     },
     section: {
       paddingHorizontal: 16,
@@ -164,13 +164,13 @@ export const useOwnerStyles = () => {
     sectionTitle: {
       fontSize: 14,
       fontWeight: "700",
-      color: "#1F2937",
+      color: "#F4FBF8",
     },
     liveBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      backgroundColor: "#ECFDF5",
+      backgroundColor: "#13231D",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 12,
@@ -179,22 +179,22 @@ export const useOwnerStyles = () => {
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#10B981",
+      backgroundColor: "#35D9B3",
     },
     liveText: {
       fontSize: 12,
-      color: "#10B981",
+      color: "#35D9B3",
       fontWeight: "600",
     },
     routeBadge: {
-      backgroundColor: "#DBEAFE",
+      backgroundColor: "#13231D",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 12,
     },
     routeBadgeText: {
       fontSize: 12,
-      color: "#0284C7",
+      color: "#35D9B3",
       fontWeight: "600",
     },
     mapPlaceholder: {
@@ -223,14 +223,14 @@ export const useOwnerStyles = () => {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
-      backgroundColor: "#ECFDF5",
+      backgroundColor: "#13231D",
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 999,
     },
     mapPillText: {
       fontSize: 11,
-      color: "#10B981",
+      color: "#35D9B3",
       fontWeight: "600",
     },
     mapCanvas: {
@@ -238,11 +238,11 @@ export const useOwnerStyles = () => {
       borderRadius: 12,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: "#E5E7EB",
+      borderColor: "#294238",
     },
     fullScreenMapContainer: {
       flex: 1,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: "#0D1713",
     },
     fullScreenMapHeader: {
       flexDirection: "row",
@@ -251,7 +251,7 @@ export const useOwnerStyles = () => {
       paddingHorizontal: 16,
       paddingVertical: 14,
       borderBottomWidth: 1,
-      borderBottomColor: "#E5E7EB",
+      borderBottomColor: "#294238",
     },
     fullScreenMapTitle: {
       fontSize: 16,
@@ -259,7 +259,7 @@ export const useOwnerStyles = () => {
     },
     fullScreenMapClose: {
       fontSize: 14,
-      color: "#2563EB",
+      color: "#35D9B3",
       fontWeight: "600",
     },
     fullScreenMap: {
@@ -270,7 +270,7 @@ export const useOwnerStyles = () => {
       height: 14,
       borderRadius: 7,
       borderWidth: 2,
-      borderColor: "#FFFFFF",
+      borderColor: "#294238",
     },
     mapFooter: {
       flexDirection: "row",
@@ -279,7 +279,7 @@ export const useOwnerStyles = () => {
     },
     mapStat: {
       flex: 1,
-      backgroundColor: "#F9FAFB",
+      backgroundColor: "#0D1713",
       borderRadius: 10,
       paddingVertical: 8,
       paddingHorizontal: 10,
@@ -293,7 +293,7 @@ export const useOwnerStyles = () => {
       marginTop: 2,
     },
     routeItem: {
-      backgroundColor: "#FFF",
+      backgroundColor: "#0D1713",
       borderRadius: 12,
       padding: 12,
       marginBottom: 8,
@@ -318,17 +318,17 @@ export const useOwnerStyles = () => {
     routeName: {
       fontSize: 14,
       fontWeight: "700",
-      color: "#1F2937",
+      color: "#F4FBF8",
       marginBottom: 4,
     },
     routeDriver: {
       fontSize: 12,
-      color: "#6B7280",
+      color: "#B1C4BC",
       marginBottom: 2,
     },
     routeStudents: {
       fontSize: 11,
-      color: "#9CA3AF",
+      color: "#82968D",
     },
     statusBadge: {
       paddingHorizontal: 10,
@@ -341,11 +341,11 @@ export const useOwnerStyles = () => {
     },
     routeEta: {
       fontSize: 11,
-      color: "#6B7280",
+      color: "#B1C4BC",
       fontWeight: "500",
     },
     chartContainer: {
-      backgroundColor: "#FFF",
+      backgroundColor: "#0D1713",
       borderRadius: 12,
       minHeight: 140,
       paddingVertical: 16,
@@ -381,10 +381,10 @@ export const useOwnerStyles = () => {
       minHeight: 12,
     },
     morningBar: {
-      backgroundColor: "#4F46E5",
+      backgroundColor: "#00B894",
     },
     afternoonBar: {
-      backgroundColor: "#F59E0B",
+      backgroundColor: "#13231D",
     },
     dayLabel: {
       marginTop: 8,
@@ -405,13 +405,13 @@ export const useOwnerStyles = () => {
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#4F46E5",
+      backgroundColor: "#00B894",
     },
     legendDotAfternoon: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      backgroundColor: "#F59E0B",
+      backgroundColor: "#13231D",
     },
     legendText: {
       fontSize: 11,
@@ -441,14 +441,14 @@ export const useOwnerStyles = () => {
       minHeight: 10,
     },
     actualBar: {
-      backgroundColor: "#4F46E5",
+      backgroundColor: "#00B894",
     },
     targetBar: {
-      backgroundColor: "#F59E0B",
+      backgroundColor: "#13231D",
     },
     chartSubtitle: {
       fontSize: 12,
-      color: "#9CA3AF",
+      color: "#82968D",
       marginBottom: 12,
     },
     loadingContainer: {
@@ -462,7 +462,7 @@ export const useOwnerStyles = () => {
     },
     emptyStateText: {
       fontSize: 14,
-      color: "#9CA3AF",
+      color: "#82968D",
       marginTop: 12,
     },
   });
@@ -472,7 +472,7 @@ export type OwnerStyles = ReturnType<typeof useOwnerStyles>;
 export const driversPageStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
 
   statusCardsRow: {
@@ -484,7 +484,7 @@ export const driversPageStyles = StyleSheet.create({
   },
   statusCard: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 14,
@@ -498,26 +498,26 @@ export const driversPageStyles = StyleSheet.create({
   statusCardNumber: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   statusCardLabel: {
     marginTop: 8,
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     textTransform: "uppercase",
   },
 
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     marginHorizontal: 16,
     marginVertical: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#294238",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -534,7 +534,7 @@ export const driversPageStyles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  headerSafeArea: { backgroundColor: "#17385F" },
+  headerSafeArea: { backgroundColor: "#050907" },
   managementHeaderRow: {
     minHeight: 54,
     flexDirection: "row",
@@ -564,9 +564,9 @@ export const driversPageStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
   },
   filterRow: {
     flexDirection: "row",
@@ -579,11 +579,11 @@ export const driversPageStyles = StyleSheet.create({
     paddingHorizontal: 11,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E0EAF5",
-    backgroundColor: "#EEF4FA",
+    borderColor: "#294238",
+    backgroundColor: "#13231D",
   },
-  filterChipSelected: { backgroundColor: "#1769D2", borderColor: "#1769D2" },
-  filterChipText: { color: "#526981", fontSize: 10, fontWeight: "600" },
+  filterChipSelected: { backgroundColor: "#00B894", borderColor: "#00B894" },
+  filterChipText: { color: "#B1C4BC", fontSize: 10, fontWeight: "600" },
   filterChipTextSelected: { color: "#FFFFFF" },
 
   searchIcon: {
@@ -593,7 +593,7 @@ export const driversPageStyles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: "#111827",
+    color: "#F4FBF8",
     paddingVertical: 4,
   },
 
@@ -615,7 +615,7 @@ export const driversPageStyles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 15,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   errorText: {
@@ -627,12 +627,12 @@ export const driversPageStyles = StyleSheet.create({
 
   /* CARD */
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     padding: 12,
     borderRadius: 13,
     marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
   },
 
   row: {
@@ -643,7 +643,7 @@ export const driversPageStyles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   cardHeader: {
@@ -657,13 +657,13 @@ export const driversPageStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#E9F2FC",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
 
   avatarText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "800",
     fontSize: 15,
   },
@@ -687,19 +687,19 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   activePill: {
-    backgroundColor: "#E4F5EC",
+    backgroundColor: "#13231D",
   },
 
   inactivePill: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
 
   activeText: {
-    color: "#258052",
+    color: "#35D9B3",
   },
 
   inactiveText: {
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   cardStats: {
@@ -711,7 +711,7 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   statItem: {
-    backgroundColor: "#F2F6FA",
+    backgroundColor: "#13231D",
     paddingVertical: 5,
     paddingHorizontal: 9,
     borderRadius: 8,
@@ -721,23 +721,23 @@ export const driversPageStyles = StyleSheet.create({
   statLabel: {
     marginTop: 4,
     fontSize: 11,
-    color: "#6B7280",
+    color: "#B1C4BC",
     textTransform: "uppercase",
   },
 
   statNumber: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   summaryCard: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderRadius: 18,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#EEF2FF",
+    borderColor: "#294238",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -746,7 +746,7 @@ export const driversPageStyles = StyleSheet.create({
 
   summaryDivider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     marginHorizontal: 16,
     marginBottom: 16,
   },
@@ -754,13 +754,13 @@ export const driversPageStyles = StyleSheet.create({
   summaryTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   summarySubtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   summaryMetrics: {
@@ -775,12 +775,12 @@ export const driversPageStyles = StyleSheet.create({
   metricNumber: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   metricLabel: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   listEmptyContainer: {
@@ -790,24 +790,24 @@ export const driversPageStyles = StyleSheet.create({
 
   emptyState: {
     padding: 24,
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderRadius: 18,
     alignItems: "center",
     marginTop: 24,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#294238",
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 10,
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   emptyBody: {
     textAlign: "center",
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginBottom: 16,
     lineHeight: 20,
   },
@@ -820,13 +820,13 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   refreshButtonText: {
-    color: "#fff",
+    color: "#FFF",
     fontWeight: "700",
   },
 
   subText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   iconRow: {
@@ -851,7 +851,7 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   inactive: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
 
   statusText: {
@@ -868,7 +868,7 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   modalContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -899,7 +899,7 @@ export const driversPageStyles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   profileRow: {
@@ -911,11 +911,11 @@ export const driversPageStyles = StyleSheet.create({
 
   profileText: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   infoCard: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0D1713",
     padding: 12,
     borderRadius: 12,
     marginTop: 12,
@@ -931,13 +931,13 @@ export const driversPageStyles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   value: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   sectionTitle: {
@@ -948,7 +948,7 @@ export const driversPageStyles = StyleSheet.create({
 
   modalText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   closeBtn: {
@@ -960,21 +960,21 @@ export const driversPageStyles = StyleSheet.create({
   },
 
   closeText: {
-    color: "#fff",
+    color: "#FFF",
     fontWeight: "700",
   },
   cardInactive: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#050907",
     opacity: 0.7,
   },
   nameInactive: {
-    color: "#999",
+    color: "#B1C4BC",
   },
   subTextInactive: {
-    color: "#B0B0B0",
+    color: "#B1C4BC",
   },
   avatarTextInactive: {
-    color: "#999",
+    color: "#B1C4BC",
   },
   driverDivider: {
     flexDirection: "row",
@@ -986,12 +986,12 @@ export const driversPageStyles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#DDD",
+    backgroundColor: "#13231D",
   },
   dividerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#999",
+    color: "#B1C4BC",
   },
   pageHeader: {
     paddingTop: 16,
@@ -1028,7 +1028,7 @@ export const driversPageStyles = StyleSheet.create({
   },
   addButton: {
     marginTop: 20,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
@@ -1047,14 +1047,14 @@ export const driversPageStyles = StyleSheet.create({
 });
 
 export const ownersProfileStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F8FC" },
+  container: { flex: 1, backgroundColor: "#050907" },
   logoBackgroundContainer: {
     backgroundColor: "transparent",
   },
   pageForeground: {
     flex: 1,
   },
-  safeArea: { backgroundColor: "#17385F" },
+  safeArea: { backgroundColor: "#050907" },
   logoBackgroundHeader: { backgroundColor: "transparent" },
   pageBackgroundImage: { opacity: 0.025 },
   logoSurface: {
@@ -1096,7 +1096,7 @@ export const ownersProfileStyles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   headerRow: {
     flexDirection: "row",
@@ -1120,7 +1120,7 @@ export const ownersProfileStyles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    color: "#666",
+    color: "#B1C4BC",
     fontSize: 16,
   },
   errorText: {
@@ -1132,7 +1132,7 @@ export const ownersProfileStyles = StyleSheet.create({
   retryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 18,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     borderRadius: 9,
   },
   retryText: {
@@ -1142,24 +1142,24 @@ export const ownersProfileStyles = StyleSheet.create({
   accountCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
     marginBottom: 10,
   },
   accountAvatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: "#EAF3FD",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
   accountAvatarText: {
     fontSize: 24,
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "800",
   },
   accountInfo: {
@@ -1169,17 +1169,17 @@ export const ownersProfileStyles = StyleSheet.create({
   accountName: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   accountRole: {
     fontSize: 14,
-    color: "#526981",
+    color: "#B1C4BC",
     marginBottom: 4,
   },
   accountSince: {
     fontSize: 12,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   profileSummary: {
     flexDirection: "row",
@@ -1187,7 +1187,7 @@ export const ownersProfileStyles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingTop: 10,
     paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
   },
@@ -1196,9 +1196,9 @@ export const ownersProfileStyles = StyleSheet.create({
     height: 92,
     padding: 4,
     borderRadius: 46,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1220,19 +1220,19 @@ export const ownersProfileStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 14,
-    backgroundColor: "#EAF3FD",
+    backgroundColor: "#13231D",
   },
   ownerBadgeText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
   contactCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
     marginBottom: 12,
   },
   profileDetailRow: {
@@ -1240,7 +1240,7 @@ export const ownersProfileStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#E7EDF3",
+    borderBottomColor: "#294238",
   },
   lastProfileDetailRow: {
     borderBottomWidth: 0,
@@ -1253,24 +1253,24 @@ export const ownersProfileStyles = StyleSheet.create({
     paddingVertical: 8,
   },
   detailLabel: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 11,
     marginBottom: 2,
   },
   detailValue: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "500",
   },
   sectionCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     paddingHorizontal: 13,
     paddingTop: 13,
     paddingBottom: 3,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
+    borderColor: "#294238",
   },
   overviewHeading: {
     flexDirection: "row",
@@ -1279,7 +1279,7 @@ export const ownersProfileStyles = StyleSheet.create({
     marginBottom: 4,
   },
   overviewDescription: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 10,
@@ -1289,7 +1289,7 @@ export const ownersProfileStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    backgroundColor: "#EEF5FC",
+    backgroundColor: "#13231D",
     borderRadius: 9,
     marginBottom: 9,
     paddingVertical: 8,
@@ -1300,25 +1300,25 @@ export const ownersProfileStyles = StyleSheet.create({
     justifyContent: "center",
   },
   statValue: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "800",
     marginTop: 2,
   },
   statLabel: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 1,
   },
   statDivider: {
     width: 1,
     height: 42,
-    backgroundColor: "#DCE8F3",
+    backgroundColor: "#13231D",
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 5,
   },
   settingRow: {
@@ -1327,7 +1327,7 @@ export const ownersProfileStyles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 11,
     borderBottomWidth: 1,
-    borderBottomColor: "#E7EDF3",
+    borderBottomColor: "#294238",
   },
   lastSettingRow: {
     borderBottomWidth: 0,
@@ -1335,16 +1335,16 @@ export const ownersProfileStyles = StyleSheet.create({
   settingRowTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   settingRowSubtitle: {
     fontSize: 13,
-    color: "#71869C",
+    color: "#B1C4BC",
     marginTop: 4,
     maxWidth: 250,
   },
   logoutBtn: {
-    backgroundColor: "#D94747",
+    backgroundColor: "#13231D",
     padding: 13,
     borderRadius: 11,
     alignItems: "center",
@@ -1365,10 +1365,10 @@ export const ownersProfileStyles = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
+    borderColor: "#294238",
     padding: 18,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
@@ -1379,12 +1379,12 @@ export const ownersProfileStyles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 10,
   },
   modalMessage: {
     fontSize: 15,
-    color: "#4B5563",
+    color: "#B1C4BC",
     lineHeight: 22,
     marginBottom: 24,
   },
@@ -1401,10 +1401,10 @@ export const ownersProfileStyles = StyleSheet.create({
     alignItems: "center",
   },
   modalCancelButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
   modalConfirmButton: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
   modalCancelText: {
     color: "#374151",

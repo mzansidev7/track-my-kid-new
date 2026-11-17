@@ -208,7 +208,7 @@ export default function LinkedClients({ setActiveButton }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#0D1713",
   },
   center: {
     flex: 1,
@@ -218,13 +218,13 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: "#666",
+    color: "#B1C4BC",
   },
   listContainer: {
     padding: 16,
   },
   clientCard: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -251,22 +251,22 @@ const styles = StyleSheet.create({
   clientName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   clientDetail: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     marginBottom: 2,
   },
   clientSubDetail: {
     fontSize: 12,
-    color: "#999",
+    color: "#B1C4BC",
     fontStyle: "italic",
   },
   linkedDate: {
     fontSize: 12,
-    color: "#34C759",
+    color: "#35D9B3",
     marginTop: 4,
     fontWeight: "500",
   },
@@ -279,13 +279,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#666",
+    color: "#B1C4BC",
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubText: {
     fontSize: 14,
-    color: "#999",
+    color: "#B1C4BC",
     textAlign: "center",
     paddingHorizontal: 32,
   },

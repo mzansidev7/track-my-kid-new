@@ -4,7 +4,7 @@ import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 
 const helpTopics = {
   guide: {
@@ -248,7 +248,7 @@ export default function DriverHelpTopicPage() {
     ? params.topic[0]
     : params.topic;
   const topic = topicParam ? helpTopics[topicParam as HelpTopicKey] : undefined;
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
 
   if (!topic) {
     return (
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 14,
     borderRadius: 22,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DRIVER_COLORS.card,
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
   },
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 18,
-    backgroundColor: "#E8F3ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
   },

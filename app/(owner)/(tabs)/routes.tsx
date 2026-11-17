@@ -1,6 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useTheme } from "../../../styles/theme";
+import { useOwnerTheme } from "../../../styles/theme";
 import React, { useContext, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,7 +20,7 @@ import { resolveWorkingBaseUrl } from "../../../url";
 
 const Routes = () => {
   const router = useRouter();
-  const { getBrandColors } = useTheme();
+  const { getBrandColors } = useOwnerTheme();
   const ownerColors = getBrandColors("owner");
   const { user } = useContext(AuthContext);
   const { allRoutes, loadingRoutes, refreshRoutes, timePreferences } =
@@ -286,7 +286,7 @@ const Routes = () => {
           }
         >
           <View style={styles.routeIconCircle}>
-            <MaterialIcons name="alt-route" size={20} color="#1769D2" />
+            <MaterialIcons name="alt-route" size={20} color="#35D9B3" />
           </View>
           <View style={styles.routeCardContent}>
             <View style={styles.routeTitleRow}>
@@ -318,12 +318,12 @@ const Routes = () => {
             <View style={styles.routeMetaRow}>
               {distance != null ? (
                 <>
-                  <MaterialIcons name="place" size={12} color="#68829D" />
+                  <MaterialIcons name="place" size={12} color="#82968D" />
                   <Text style={styles.routeMetaText}>{distance} km</Text>
                   <Text style={styles.metaDivider}>|</Text>
                 </>
               ) : null}
-              <MaterialIcons name="schedule" size={12} color="#68829D" />
+              <MaterialIcons name="schedule" size={12} color="#82968D" />
               <Text style={styles.routeMetaText}>{duration}</Text>
               {routePreferenceScope ? (
                 <>
@@ -392,7 +392,7 @@ const Routes = () => {
       </SafeAreaView>
 
       <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={18} color="#68829D" />
+        <MaterialIcons name="search" size={18} color="#82968D" />
         <TextInput
           style={styles.searchInput}
           placeholder="Search routes by name, destination or status..."
@@ -406,7 +406,7 @@ const Routes = () => {
             onPress={() => setSearchQuery("")}
             accessibilityLabel="Clear route search"
           >
-            <MaterialIcons name="close" size={18} color="#71869C" />
+            <MaterialIcons name="close" size={18} color="#B1C4BC" />
           </TouchableOpacity>
         )}
       </View>
@@ -469,7 +469,7 @@ const Routes = () => {
                       <MaterialIcons
                         name="check-circle"
                         size={21}
-                        color="#1769D2"
+                        color="#35D9B3"
                       />
                     ) : (
                       <View style={styles.filterOptionRadio} />
@@ -499,7 +499,7 @@ const Routes = () => {
           ) : (
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
-                <MaterialIcons name="alt-route" size={27} color="#1769D2" />
+                <MaterialIcons name="alt-route" size={27} color="#35D9B3" />
               </View>
               <Text style={styles.emptyTitle}>
                 {allRouteItems.length === 0
@@ -543,10 +543,10 @@ const Routes = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 46,
@@ -578,14 +578,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 4,
     paddingHorizontal: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 9,
   },
   searchInput: {
     flex: 1,
-    color: "#263B50",
+    color: "#F4FBF8",
     fontSize: 11,
     paddingVertical: 7,
   },
@@ -602,8 +602,8 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
     shadowColor: "#102A43",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.18,
@@ -617,13 +617,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   filterModalTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 18,
     fontWeight: "700",
   },
   filterModalSubtitle: {
     marginTop: 3,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
   },
   filterModalClose: {
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 17,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#13231D",
   },
   filterOptions: {
     gap: 7,
@@ -645,32 +645,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#E4ECF4",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   filterOptionSelected: {
     borderColor: "#9CC6F3",
-    backgroundColor: "#F0F7FF",
+    backgroundColor: "#13231D",
   },
   filterOptionLabel: {
-    color: "#294660",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "600",
   },
   filterOptionLabelSelected: {
-    color: "#1769D2",
+    color: "#35D9B3",
   },
   filterOptionCount: {
     marginTop: 2,
-    color: "#8393A5",
+    color: "#B1C4BC",
     fontSize: 11,
   },
   filterOptionRadio: {
     width: 19,
     height: 19,
     borderWidth: 1.5,
-    borderColor: "#C5D2DF",
+    borderColor: "#294238",
     borderRadius: 10,
   },
   scrollContent: {
@@ -689,8 +689,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: "#DCE8F3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   routeMainTap: {
     flex: 1,
@@ -703,7 +703,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#EDF5FD",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -718,12 +718,12 @@ const styles = StyleSheet.create({
   },
   routeTitle: {
     flex: 1,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "700",
   },
   routeSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 8,
     marginTop: 1,
   },
@@ -738,20 +738,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   statusActive: {
-    color: "#258052",
-    backgroundColor: "#E4F5EC",
+    color: "#35D9B3",
+    backgroundColor: "#13231D",
   },
   statusInactive: {
-    color: "#64748B",
-    backgroundColor: "#EEF2F6",
+    color: "#B1C4BC",
+    backgroundColor: "#13231D",
   },
   statusUpcoming: {
-    color: "#1769D2",
-    backgroundColor: "#E6F1FF",
+    color: "#35D9B3",
+    backgroundColor: "#13231D",
   },
   statusCompleted: {
-    color: "#61758B",
-    backgroundColor: "#EDF1F5",
+    color: "#B1C4BC",
+    backgroundColor: "#13231D",
   },
   moreButton: {
     width: 20,
@@ -766,11 +766,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   routeMetaText: {
-    color: "#68829D",
+    color: "#82968D",
     fontSize: 8,
   },
   metaDivider: {
-    color: "#A4B3C1",
+    color: "#B1C4BC",
     fontSize: 8,
     marginHorizontal: 3,
   },
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
     marginBottom: 5,
     borderRadius: 9,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   createRouteButtonText: {
     color: "#FFFFFF",
@@ -797,7 +797,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 12,
-    color: "#71869C",
+    color: "#B1C4BC",
     marginTop: 10,
   },
   emptyState: {
@@ -810,18 +810,18 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF3FD",
+    backgroundColor: "#13231D",
   },
   emptyTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginTop: 12,
     marginBottom: 5,
   },
   emptyText: {
     fontSize: 11,
-    color: "#71869C",
+    color: "#B1C4BC",
     textAlign: "center",
     lineHeight: 17,
     maxWidth: 280,
@@ -831,10 +831,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: "#EAF3FD",
+    backgroundColor: "#13231D",
   },
   clearFiltersText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "600",
   },

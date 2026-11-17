@@ -259,7 +259,7 @@ const Notifications = () => {
           onBackPress={() => router.push("/")}
         />
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#35D9B3" />
         </View>
       </View>
     );
@@ -324,7 +324,7 @@ const Notifications = () => {
             onPress={markAllAsRead}
             style={styles.readAllButton}
           >
-            <MaterialIcons name="done-all" size={17} color="#1D4ED8" />
+            <MaterialIcons name="done-all" size={17} color="#35D9B3" />
             <Text style={styles.readAllText}>
               {markingAll ? "Reading..." : "Read all"}
             </Text>
@@ -366,7 +366,7 @@ const Notifications = () => {
                 <MaterialIcons
                   name="notifications"
                   size={24}
-                  color="#2563EB"
+                  color="#35D9B3"
                 />
               </View>
               <Pressable
@@ -420,7 +420,7 @@ export default Notifications;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#13231D",
   },
   loadingCenter: {
     flex: 1,
@@ -432,21 +432,21 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     padding: 13,
     borderRadius: 14,
     marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#DCE8F5",
+    borderColor: "#294238",
     elevation: 1,
-    shadowColor: "#17385F",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.045,
     shadowRadius: 5,
   },
   cardRead: {
-    backgroundColor: "#FCFDFE",
-    borderColor: "#E6ECF2",
+    backgroundColor: "#13231D",
+    borderColor: "#294238",
   },
   cardHeader: {
     flexDirection: "row",
@@ -459,10 +459,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 10,
     borderRadius: 12,
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#13231D",
   },
   iconWrapRead: {
-    backgroundColor: "#F0F3F7",
+    backgroundColor: "#13231D",
   },
   cardText: {
     flex: 1,
@@ -475,24 +475,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
     flex: 1,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
     marginLeft: 8,
   },
   message: {
     fontSize: 12,
-    color: "#526981",
+    color: "#B1C4BC",
     lineHeight: 18,
   },
   actorText: {
     fontSize: 11,
-    color: "#71869C",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   metaRow: {
@@ -503,31 +503,31 @@ const styles = StyleSheet.create({
   },
   typeBadge: {
     fontSize: 10,
-    color: "#1D4ED8",
+    color: "#35D9B3",
     fontWeight: "700",
     textTransform: "capitalize",
   },
   timeText: {
     fontSize: 10,
-    color: "#8799AB",
+    color: "#B1C4BC",
   },
   summaryBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     paddingVertical: 4,
     paddingHorizontal: 13,
     marginHorizontal: 14,
     marginTop: 12,
     marginBottom: 2,
     borderWidth: 1,
-    borderColor: "#DCE8F5",
+    borderColor: "#294238",
     borderRadius: 13,
   },
   summaryText: {
     flex: 1,
-    color: "#23496F",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   readAllText: {
-    color: "#1D4ED8",
+    color: "#35D9B3",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -552,12 +552,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
     marginBottom: 6,
   },
   emptyText: {
     fontSize: 13,
-    color: "#647A90",
+    color: "#82968D",
     textAlign: "center",
     lineHeight: 20,
   },
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
   },
   senderIndicator: {
     fontSize: 11,
-    color: "#8799AB",
+    color: "#B1C4BC",
     fontStyle: "italic",
   },
   modalBackdrop: {
@@ -576,12 +576,12 @@ const styles = StyleSheet.create({
     padding: 22,
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#E3EBF4",
-    shadowColor: "#17385F",
+    borderColor: "#294238",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.2,
     shadowRadius: 24,
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -604,56 +604,56 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
   closeButtonText: {
     fontSize: 26,
     lineHeight: 28,
-    color: "#475569",
+    color: "#B1C4BC",
     fontWeight: "300",
   },
   modalEyebrow: {
     marginTop: 20,
-    color: "#1D4ED8",
+    color: "#35D9B3",
     fontSize: 12,
     fontWeight: "700",
     textTransform: "uppercase",
   },
   modalTitle: {
     marginTop: 7,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 19,
     lineHeight: 24,
     fontWeight: "800",
   },
   modalMessage: {
     marginTop: 12,
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 13,
     lineHeight: 19,
   },
   modalDivider: {
     height: 1,
-    backgroundColor: "#E4EBF2",
+    backgroundColor: "#13231D",
     marginVertical: 18,
   },
   modalMeta: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     marginTop: 5,
   },
   relatedBadge: {
     alignSelf: "flex-start",
     marginTop: 16,
-    backgroundColor: "#EEF5FF",
+    backgroundColor: "#13231D",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   relatedBadgeText: {
-    color: "#1D4ED8",
+    color: "#35D9B3",
     fontSize: 12,
     fontWeight: "700",
   },

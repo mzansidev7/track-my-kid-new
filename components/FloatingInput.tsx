@@ -66,6 +66,7 @@ const FloatingInput: React.FC<FloatingInputProps> = ({
         <Animated.Text style={labelStyle}>{label}</Animated.Text>
         <TextInput
           {...props}
+          accessibilityLabel={props.accessibilityLabel || label}
           value={value}
           style={[
             styles.input,

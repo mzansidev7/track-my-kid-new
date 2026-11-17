@@ -118,7 +118,7 @@ const ViewAllStudents = () => {
 
       {loading ? (
         <View style={styles.stateContainer}>
-          <ActivityIndicator size="large" color="#2563EB" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.stateText}>Loading students...</Text>
         </View>
       ) : error ? (
@@ -133,7 +133,7 @@ const ViewAllStudents = () => {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <MaterialIcons name="school" size={26} color="#1769D2" />
+              <MaterialIcons name="school" size={26} color="#35D9B3" />
               <Text style={styles.emptyTitle}>No students assigned</Text>
               <Text style={styles.emptySubtitle}>
                 Students linked to this route will appear here.
@@ -170,7 +170,14 @@ const ViewAllStudents = () => {
               </View>
               <View style={styles.studentInfo}>
                 <Text style={styles.studentName}>{item.name}</Text>
-                <Text style={styles.studentSchool}>{item.schoolName}</Text>
+                <Text style={styles.studentSchool}>
+                  {[
+                    item.schoolName,
+                    item.grade ? `Grade ${item.grade}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
@@ -185,7 +192,7 @@ export default ViewAllStudents;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   header: {
     paddingHorizontal: 12,
@@ -195,12 +202,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   subtitle: {
     marginTop: 3,
     fontSize: 10,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   stateContainer: {
     flex: 1,
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
   stateText: {
     marginTop: 8,
     fontSize: 13,
-    color: "#607A98",
+    color: "#B1C4BC",
     textAlign: "center",
   },
   listContent: {
@@ -225,36 +232,36 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   emptyTitle: {
     marginTop: 8,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "700",
   },
   emptySubtitle: {
     marginTop: 3,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     textAlign: "center",
   },
   studentCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 10,
     marginBottom: 7,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
   avatarContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#EDF5FD",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
@@ -271,11 +278,11 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   studentSchool: {
     marginTop: 3,
     fontSize: 10,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
 });

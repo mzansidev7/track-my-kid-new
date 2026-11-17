@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 
 import { AuthContext } from "../../../context/authContext/auth-context";
+import { CLIENT_COLORS } from "../../../styles/theme";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { useChildren } from "@/app-support/client/clientHelpers/hooks/useChildren";
 import { useClientProfile } from "@/app-support/client/clientHelpers/hooks/useClientProfile";
@@ -164,6 +165,11 @@ const ClientProfile = () => {
       icon: "family-restroom",
     },
     {
+      label: "SOS Messages",
+      desc: "View emergency responses and message support",
+      icon: "sos",
+    },
+    {
       label: "Payments & Invoices",
       desc: "View payments, invoices and transport billing",
       icon: "payments",
@@ -195,17 +201,7 @@ const ClientProfile = () => {
 
   const handleSupportAction = async (label: string) => {
     if (label === "Help Center") {
-      Alert.alert(
-        "Help Center",
-        "Find help with children, trips, payments, and safety. Our support team is available 24/7 for emergencies.",
-        [
-          { text: "Close", style: "cancel" },
-          {
-            text: "Email support",
-            onPress: () => Linking.openURL("mailto:support@trackmykid.com"),
-          },
-        ],
-      );
+      router.push("/(client)/pages/help-center" as never);
       return;
     }
 
@@ -233,7 +229,6 @@ const ClientProfile = () => {
       <ClientHeader
         title="My Profile"
         subtitle=" Manage your account and preferences"
-        showBackButton={true}
       />
       <View style={styles.container}>
         <ScrollView
@@ -244,14 +239,18 @@ const ClientProfile = () => {
           {!hasClientAvatar && (
             <View style={styles.avatarBanner}>
               <View style={styles.avatarBannerIcon}>
-                <MaterialIcons name="add-a-photo" size={22} color="#B45309" />
+                <MaterialIcons
+                  name="add-a-photo"
+                  size={22}
+                  color={CLIENT_COLORS.warning}
+                />
               </View>
               <View style={styles.avatarBannerContent}>
                 <Text style={styles.avatarBannerTitle}>
                   Add a profile photo
                 </Text>
                 <Text style={styles.avatarBannerText}>
-                  Add your photo before adding a child.
+                  Add a photo to personalize your account.
                 </Text>
               </View>
             </View>
@@ -263,7 +262,7 @@ const ClientProfile = () => {
                 <MaterialIcons
                   name="assignment-late"
                   size={22}
-                  color="#B45309"
+                  color={CLIENT_COLORS.warning}
                 />
               </View>
               <View style={styles.profileCompletionContent}>
@@ -296,9 +295,16 @@ const ClientProfile = () => {
                   onPress={handlePickAvatar}
                 >
                   {uploadingAvatar ? (
-                    <ActivityIndicator size="small" color="#159B3A" />
+                    <ActivityIndicator
+                      size="small"
+                      color={CLIENT_COLORS.primary}
+                    />
                   ) : (
-                    <Ionicons name="camera-outline" size={16} color="#159B3A" />
+                    <Ionicons
+                      name="camera-outline"
+                      size={16}
+                      color={CLIENT_COLORS.primary}
+                    />
                   )}
                 </TouchableOpacity>
               </View>
@@ -309,13 +315,21 @@ const ClientProfile = () => {
                 </Text>
 
                 <View style={styles.contactRow}>
-                  <Ionicons name="call-outline" size={17} color="#159B3A" />
+                  <Ionicons
+                    name="call-outline"
+                    size={17}
+                    color={CLIENT_COLORS.primary}
+                  />
 
                   <Text style={styles.contactText}>{phone}</Text>
                 </View>
 
                 <View style={styles.contactRow}>
-                  <Ionicons name="mail-outline" size={17} color="#159B3A" />
+                  <Ionicons
+                    name="mail-outline"
+                    size={17}
+                    color={CLIENT_COLORS.primary}
+                  />
 
                   <Text style={styles.contactText} numberOfLines={1}>
                     {email}
@@ -323,7 +337,11 @@ const ClientProfile = () => {
                 </View>
               </View>
 
-              <MaterialIcons name="chevron-right" size={28} color="#607A98" />
+              <MaterialIcons
+                name="chevron-right"
+                size={28}
+                color={CLIENT_COLORS.textMuted}
+              />
             </View>
 
             {/* Quick Actions */}
@@ -336,9 +354,16 @@ const ClientProfile = () => {
                 }
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#EDF7FF" }]}
+                  style={[
+                    styles.quickIcon,
+                    { backgroundColor: CLIENT_COLORS.surfaceElevated },
+                  ]}
                 >
-                  <Ionicons name="people-outline" size={25} color="#159B3A" />
+                  <Ionicons
+                    name="people-outline"
+                    size={25}
+                    color={CLIENT_COLORS.primary}
+                  />
                 </View>
 
                 <Text style={styles.quickTitle}>My Children</Text>
@@ -358,12 +383,15 @@ const ClientProfile = () => {
                 }
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#E9F8EE" }]}
+                  style={[
+                    styles.quickIcon,
+                    { backgroundColor: CLIENT_COLORS.surfaceElevated },
+                  ]}
                 >
                   <MaterialIcons
                     name="verified-user"
                     size={25}
-                    color="#159B3A"
+                    color={CLIENT_COLORS.primary}
                   />
                 </View>
 
@@ -382,9 +410,16 @@ const ClientProfile = () => {
                 onPress={() => router.push("/(client)/pages/payments" as never)}
               >
                 <View
-                  style={[styles.quickIcon, { backgroundColor: "#E9F8EE" }]}
+                  style={[
+                    styles.quickIcon,
+                    { backgroundColor: CLIENT_COLORS.surfaceElevated },
+                  ]}
                 >
-                  <Ionicons name="card-outline" size={25} color="#159B3A" />
+                  <Ionicons
+                    name="card-outline"
+                    size={25}
+                    color={CLIENT_COLORS.primary}
+                  />
                 </View>
 
                 <Text style={styles.quickTitle}>Payment</Text>
@@ -404,7 +439,14 @@ const ClientProfile = () => {
               {accountItems
                 .filter(
                   (item) =>
-                    profileComplete || item.label === "Personal Information",
+                    profileComplete ||
+                    [
+                      "Personal Information",
+                      "Change Password",
+                      "Notification Preferences",
+                      "Privacy & Security",
+                      "SOS Messages",
+                    ].includes(item.label),
                 )
                 .map((item, index, visibleItems) => (
                   <TouchableOpacity
@@ -422,10 +464,24 @@ const ClientProfile = () => {
                         router.push(
                           "/(client)/pages/personal-information" as never,
                         );
+                      } else if (item.label === "Change Password") {
+                        router.push(
+                          "/(client)/pages/change-password" as never,
+                        );
+                      } else if (item.label === "Notification Preferences") {
+                        router.push(
+                          "/(client)/pages/notification-preferences" as never,
+                        );
                       } else if (item.label === "Family & Safety") {
                         router.push("/(client)/pages/family-safety" as never);
+                      } else if (item.label === "SOS Messages") {
+                        router.push("/(client)/pages/sos-messages" as never);
                       } else if (item.label === "Payments & Invoices") {
                         router.push("/(client)/pages/payments" as never);
+                      } else if (item.label === "Privacy & Security") {
+                        router.push(
+                          "/(client)/pages/privacy-security" as never,
+                        );
                       }
                     }}
                   >
@@ -433,7 +489,7 @@ const ClientProfile = () => {
                       <MaterialIcons
                         name={item.icon as any}
                         size={23}
-                        color="#159B3A"
+                        color={CLIENT_COLORS.primaryBright}
                       />
                     </View>
 
@@ -446,7 +502,7 @@ const ClientProfile = () => {
                     <MaterialIcons
                       name="chevron-right"
                       size={26}
-                      color="#607A98"
+                      color={CLIENT_COLORS.textMuted}
                     />
                   </TouchableOpacity>
                 ))}
@@ -473,7 +529,7 @@ const ClientProfile = () => {
                       <MaterialIcons
                         name={item.icon as any}
                         size={23}
-                        color="#159B3A"
+                        color={CLIENT_COLORS.primaryBright}
                       />
                     </View>
 
@@ -486,7 +542,7 @@ const ClientProfile = () => {
                     <MaterialIcons
                       name="chevron-right"
                       size={26}
-                      color="#607A98"
+                      color={CLIENT_COLORS.textMuted}
                     />
                   </TouchableOpacity>
                 ))}
@@ -500,7 +556,11 @@ const ClientProfile = () => {
             style={styles.logoutButton}
             onPress={() => handleLogout(logout)}
           >
-            <MaterialIcons name="logout" size={23} color="#DC2626" />
+            <MaterialIcons
+              name="logout"
+              size={23}
+              color={CLIENT_COLORS.error}
+            />
 
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
@@ -517,12 +577,12 @@ export default ClientProfile;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
   },
 
   container: {
     flex: 1,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
     paddingHorizontal: 20,
   },
 
@@ -537,17 +597,17 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 25,
     lineHeight: 36,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     letterSpacing: -0.8,
   },
 
   subtitle: {
     marginTop: 3,
-    fontSize: 14,
-    color: "#607A98",
+    fontSize: 11,
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "500",
   },
 
@@ -555,9 +615,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
     alignItems: "center",
     justifyContent: "center",
 
@@ -579,9 +639,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
     borderWidth: 1.5,
-    borderColor: "#FFFFFF",
+    borderColor: CLIENT_COLORS.background,
   },
 
   /* Scroll */
@@ -597,9 +657,9 @@ const styles = StyleSheet.create({
   avatarBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFBEB",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#FCD34D",
+    borderColor: CLIENT_COLORS.warning,
     borderRadius: 14,
     padding: 12,
     marginBottom: 14,
@@ -609,7 +669,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: CLIENT_COLORS.surface,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -621,26 +681,26 @@ const styles = StyleSheet.create({
   },
 
   avatarBannerTitle: {
-    color: "#92400E",
-    fontSize: 13,
+    color: CLIENT_COLORS.warning,
+    fontSize: 12,
     fontWeight: "800",
   },
 
   avatarBannerText: {
-    color: "#78350F",
+    color: CLIENT_COLORS.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
 
   avatarBannerButton: {
-    backgroundColor: "#D97706",
+    backgroundColor: CLIENT_COLORS.primary,
     borderRadius: 9,
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
 
   avatarBannerButtonText: {
-    color: "#FFFFFF",
+    color: CLIENT_COLORS.textPrimary,
     fontSize: 11,
     fontWeight: "800",
   },
@@ -648,9 +708,9 @@ const styles = StyleSheet.create({
   profileCompletionBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF7ED",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#FDBA74",
+    borderColor: CLIENT_COLORS.warning,
     borderRadius: 14,
     padding: 12,
     marginBottom: 14,
@@ -660,7 +720,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#FFEDD5",
+    backgroundColor: CLIENT_COLORS.surface,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -671,13 +731,13 @@ const styles = StyleSheet.create({
   },
 
   profileCompletionTitle: {
-    color: "#9A3412",
-    fontSize: 13,
+    color: CLIENT_COLORS.warning,
+    fontSize: 12,
     fontWeight: "800",
   },
 
   profileCompletionText: {
-    color: "#7C2D12",
+    color: CLIENT_COLORS.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
@@ -685,14 +745,14 @@ const styles = StyleSheet.create({
   /* Profile */
 
   profileCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
 
     overflow: "hidden",
 
-    shadowColor: "#17365E",
+    shadowColor: CLIENT_COLORS.primaryDark,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -706,7 +766,7 @@ const styles = StyleSheet.create({
   },
 
   profileTop: {
-    backgroundColor: "#EDF7FF",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     padding: 22,
     flexDirection: "row",
     alignItems: "center",
@@ -716,7 +776,7 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: "#DCEAF8",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     overflow: "visible",
     marginRight: 18,
   },
@@ -736,13 +796,13 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
 
     alignItems: "center",
     justifyContent: "center",
 
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
 
     shadowColor: "#000",
     shadowOffset: {
@@ -760,9 +820,9 @@ const styles = StyleSheet.create({
   },
 
   profileName: {
-    fontSize: 23,
+    fontSize: 21,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     marginBottom: 10,
     letterSpacing: -0.4,
   },
@@ -776,8 +836,8 @@ const styles = StyleSheet.create({
   contactText: {
     marginLeft: 8,
     flex: 1,
-    fontSize: 14,
-    color: "#607A98",
+    fontSize: 13,
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "500",
   },
 
@@ -788,7 +848,7 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     paddingVertical: 18,
     paddingHorizontal: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
   },
 
   quickAction: {
@@ -799,7 +859,7 @@ const styles = StyleSheet.create({
 
   quickDivider: {
     width: 1,
-    backgroundColor: "#DCEAF8",
+    backgroundColor: CLIENT_COLORS.border,
     marginVertical: 4,
   },
 
@@ -813,36 +873,36 @@ const styles = StyleSheet.create({
   },
 
   quickTitle: {
-    fontSize: 13,
-    color: "#607A98",
+    fontSize: 12,
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "600",
     marginBottom: 3,
   },
 
   quickValue: {
-    fontSize: 20,
-    color: "#17365E",
+    fontSize: 18,
+    color: CLIENT_COLORS.textPrimary,
     fontWeight: "800",
   },
 
   pinValue: {
-    fontSize: 16,
-    color: "#17365E",
+    fontSize: 15,
+    color: CLIENT_COLORS.textPrimary,
     fontWeight: "800",
     letterSpacing: 3,
     marginVertical: 2,
   },
 
   paymentValue: {
-    fontSize: 17,
-    color: "#159B3A",
+    fontSize: 15,
+    color: CLIENT_COLORS.primaryBright,
     fontWeight: "800",
   },
 
   quickLink: {
     marginTop: 3,
-    fontSize: 13,
-    color: "#159B3A",
+    fontSize: 12,
+    color: CLIENT_COLORS.primaryBright,
     fontWeight: "700",
   },
 
@@ -853,9 +913,9 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     marginBottom: 12,
     letterSpacing: -0.3,
   },
@@ -863,14 +923,14 @@ const styles = StyleSheet.create({
   /* Menu */
 
   menuCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
 
     overflow: "hidden",
 
-    shadowColor: "#17365E",
+    shadowColor: CLIENT_COLORS.primaryDark,
     shadowOffset: {
       width: 0,
       height: 3,
@@ -890,7 +950,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
 
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: CLIENT_COLORS.divider,
   },
 
   menuRowLast: {
@@ -899,7 +959,7 @@ const styles = StyleSheet.create({
 
   incompleteProfileRow: {
     borderLeftWidth: 4,
-    borderLeftColor: "#FCD34D",
+    borderLeftColor: CLIENT_COLORS.warning,
   },
 
   menuIcon: {
@@ -907,7 +967,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 14,
 
-    backgroundColor: "#EDF7FF",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
 
     alignItems: "center",
     justifyContent: "center",
@@ -920,15 +980,15 @@ const styles = StyleSheet.create({
   },
 
   menuTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     marginBottom: 3,
   },
 
   menuDescription: {
-    fontSize: 12.5,
-    color: "#607A98",
+    fontSize: 11.5,
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "500",
   },
 
@@ -939,9 +999,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
 
     borderWidth: 1.5,
-    borderColor: "#FECACA",
+    borderColor: CLIENT_COLORS.error,
 
-    backgroundColor: "#FFF8F8",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
 
     flexDirection: "row",
     alignItems: "center",
@@ -952,9 +1012,9 @@ const styles = StyleSheet.create({
   },
 
   logoutText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-    color: "#DC2626",
+    color: CLIENT_COLORS.error,
   },
 
   bottomSpacer: {

@@ -22,8 +22,8 @@ export const getRouteStatus = (item: any): RouteStatus => {
   if (childrenCount === 0 && stopsCount === 0) {
     return {
       text: "No stops",
-      color: "#6B7280",
-      bgColor: "#F3F4F6",
+      color: "#B1C4BC",
+      bgColor: "#13231D",
     };
   }
 
@@ -32,7 +32,7 @@ export const getRouteStatus = (item: any): RouteStatus => {
     return {
       text: "Waiting for Children",
       color: "#F59E0B",
-      bgColor: "#FFFBEB",
+      bgColor: "#382D1B",
     };
   }
 
@@ -41,15 +41,15 @@ export const getRouteStatus = (item: any): RouteStatus => {
     return {
       text: "Stops Not Added",
       color: "#EF4444",
-      bgColor: "#FEF2F2",
+      bgColor: "#3B1D20",
     };
   }
 
   // Route is ready
   return {
     text: "Ready",
-    color: "#10B981",
-    bgColor: "#ECFDF5",
+    color: "#35D9B3",
+    bgColor: "#12342F",
   };
 };
 

@@ -1,22 +1,41 @@
-import { useTheme } from "@/styles/theme";
 import { MaterialIcons } from "@expo/vector-icons";
-import React from "react";
-import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Keyboard,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { OWNER_COLORS } from "@/styles/theme";
 
 type OwnerTabBarProps = {
   state: {
     routes: { key: string; name: string }[];
     index: number;
   };
-  navigation: {
-    navigate: (name: string) => void;
-  };
+  navigateToTab: (routeKey: string) => void;
 };
 
-export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
-  const { colors } = useTheme();
+export default function OwnerTabBar({ state, navigateToTab }: OwnerTabBarProps) {
   const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true),
+    );
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  if (keyboardVisible) return null;
 
   function getIcon(routeName: string) {
     switch (routeName) {
@@ -44,7 +63,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: "#17385F",
+          backgroundColor: OWNER_COLORS.background,
         },
       ]}
     >
@@ -52,7 +71,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
         style={[
           styles.tabBar,
           {
-            backgroundColor: "#17385F",
+            backgroundColor: OWNER_COLORS.background,
           },
         ]}
       >
@@ -64,20 +83,20 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
               key={route.key}
               activeOpacity={0.75}
               style={styles.tabItem}
-              onPress={() => navigation.navigate(route.name as never)}
+              onPress={() => navigateToTab(route.key)}
             >
               <View
                 style={[
                   styles.iconWrapper,
                   focused && {
-                    backgroundColor: "white",
+                    backgroundColor: OWNER_COLORS.primary,
                   },
                 ]}
               >
                 <MaterialIcons
                   name={getIcon(route.name) as any}
                   size={focused ? 23 : 22}
-                  color={focused ? "#17385F" : "white"}
+                  color={focused ? OWNER_COLORS.background : OWNER_COLORS.textSecondary}
                 />
               </View>
 
@@ -86,7 +105,7 @@ export default function OwnerTabBar({ state, navigation }: OwnerTabBarProps) {
                   style={[
                     styles.activeIndicator,
                     {
-                      backgroundColor: "white",
+                      backgroundColor: OWNER_COLORS.primaryBright,
                     },
                   ]}
                 />

@@ -89,7 +89,7 @@ const SafetyPin = () => {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <MaterialIcons name="arrow-back" size={23} color="#17365E" />
+            <MaterialIcons name="arrow-back" size={23} color="#FBF8FF" />
           </TouchableOpacity>
           <View>
             <Text style={styles.title}>Safety PIN</Text>
@@ -104,7 +104,7 @@ const SafetyPin = () => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.iconWrap}>
-            <MaterialIcons name="verified-user" size={34} color="#159B3A" />
+            <MaterialIcons name="verified-user" size={34} color="#C14BFF" />
           </View>
           <Text style={styles.heading}>Set your handover PIN</Text>
           <Text style={styles.description}>
@@ -122,7 +122,7 @@ const SafetyPin = () => {
             maxLength={6}
             style={styles.input}
             placeholder="4 to 6 digits"
-            placeholderTextColor="#607A98"
+            placeholderTextColor="#B9AFC4"
           />
 
           <Text style={styles.label}>Confirm PIN</Text>
@@ -136,7 +136,7 @@ const SafetyPin = () => {
             maxLength={6}
             style={styles.input}
             placeholder="Enter PIN again"
-            placeholderTextColor="#607A98"
+            placeholderTextColor="#B9AFC4"
           />
 
           <TouchableOpacity
@@ -194,16 +194,16 @@ const SafetyPin = () => {
 export default SafetyPin;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F4F9FF" },
+  safeArea: { flex: 1, backgroundColor: "#07040B" },
   container: { flex: 1 },
   scrollView: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
   },
   backButton: {
     width: 40,
@@ -212,29 +212,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  title: { color: "#17365E", fontSize: 22, fontWeight: "800" },
-  subtitle: { color: "#607A98", fontSize: 12, marginTop: 3 },
+  title: { color: "#FBF8FF", fontSize: 18, fontWeight: "800" },
+  subtitle: { color: "#B9AFC4", fontSize: 10, marginTop: 3 },
   content: { padding: 24 },
   iconWrap: {
     width: 68,
     height: 68,
     borderRadius: 20,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 18,
   },
-  heading: { color: "#17365E", fontSize: 22, fontWeight: "800" },
+  heading: { color: "#FBF8FF", fontSize: 18, fontWeight: "800" },
   description: {
-    color: "#607A98",
-    fontSize: 14,
+    color: "#B9AFC4",
+    fontSize: 13,
     lineHeight: 21,
     marginTop: 8,
     marginBottom: 26,
   },
   label: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     fontWeight: "700",
     marginBottom: 6,
     marginTop: 12,
@@ -242,53 +242,53 @@ const styles = StyleSheet.create({
   input: {
     height: 50,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    color: "#17365E",
+    backgroundColor: "#130D1A",
+    color: "#FBF8FF",
     paddingHorizontal: 14,
-    fontSize: 18,
+    fontSize: 16,
     letterSpacing: 4,
   },
   saveButton: {
     height: 52,
     borderRadius: 12,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 28,
   },
   disabled: { opacity: 0.65 },
-  saveText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  saveText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   flowCard: {
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 16,
     marginTop: 18,
   },
   flowTitle: {
-    color: "#087C2B",
-    fontSize: 14,
+    color: "#C14BFF",
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 8,
   },
   flowDescription: {
-    color: "#17365E",
-    fontSize: 12,
+    color: "#FBF8FF",
+    fontSize: 11,
     lineHeight: 18,
     marginBottom: 8,
   },
   flowStep: {
-    color: "#17365E",
-    fontSize: 12,
+    color: "#FBF8FF",
+    fontSize: 11,
     lineHeight: 18,
     marginTop: 6,
   },
   flowWarning: {
-    color: "#087C2B",
-    fontSize: 12,
+    color: "#C14BFF",
+    fontSize: 11,
     lineHeight: 18,
     fontWeight: "700",
     marginTop: 12,

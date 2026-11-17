@@ -228,7 +228,7 @@ export default function AddVehicle({ setActiveButton }: any) {
               <MaterialIcons
                 name="directions-bus"
                 size={17}
-                color="#1769D2"
+                color="#35D9B3"
               />
             </View>
             <View>
@@ -306,7 +306,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                 <MaterialIcons
                   name={selectedDriver ? "person" : "person-outline"}
                   size={17}
-                  color={selectedDriver ? "#1769D2" : "#71869C"}
+                  color={selectedDriver ? "#00B894" : "#82968D"}
                 />
                 <Text
                   style={[
@@ -327,13 +327,13 @@ export default function AddVehicle({ setActiveButton }: any) {
                     accessibilityLabel="Clear selected driver"
                     hitSlop={8}
                   >
-                    <MaterialIcons name="close" size={17} color="#71869C" />
+                    <MaterialIcons name="close" size={17} color="#B1C4BC" />
                   </TouchableOpacity>
                 ) : null}
                 <MaterialIcons
                   name="keyboard-arrow-down"
                   size={21}
-                  color="#71869C"
+                  color="#B1C4BC"
                 />
               </View>
             </TouchableOpacity>
@@ -366,7 +366,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                 <MaterialIcons
                   name="add-a-photo"
                   size={21}
-                  color={newVehicleImages.length >= 10 ? "#A9B7C6" : "#1769D2"}
+                  color={newVehicleImages.length >= 10 ? "#A9B7C6" : "#00B894"}
                 />
               </View>
               <Text style={styles.addImageBtnText}>
@@ -445,7 +445,7 @@ export default function AddVehicle({ setActiveButton }: any) {
 
             {loadingDrivers ? (
               <View style={styles.driverModalLoading}>
-                <ActivityIndicator size="small" color="#1769D2" />
+                <ActivityIndicator size="small" color="#35D9B3" />
                 <Text style={styles.driverModalEmptyText}>
                   Loading drivers...
                 </Text>
@@ -470,7 +470,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                     <MaterialIcons
                       name="person-outline"
                       size={18}
-                      color="#71869C"
+                      color="#B1C4BC"
                     />
                   </View>
                   <View style={styles.driverOptionInfo}>
@@ -483,7 +483,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                     <MaterialIcons
                       name="check-circle"
                       size={19}
-                      color="#1769D2"
+                      color="#35D9B3"
                     />
                   ) : null}
                 </TouchableOpacity>
@@ -514,7 +514,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                         <MaterialIcons
                           name="person"
                           size={18}
-                          color={isAssigned ? "#9AAABC" : "#1769D2"}
+                          color={isAssigned ? "#9AAABC" : "#00B894"}
                         />
                       </View>
                       <View style={styles.driverOptionInfo}>
@@ -552,7 +552,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                         <MaterialIcons
                           name="check-circle"
                           size={19}
-                          color="#1769D2"
+                          color="#35D9B3"
                         />
                       ) : null}
                     </TouchableOpacity>
@@ -564,7 +564,7 @@ export default function AddVehicle({ setActiveButton }: any) {
                 <MaterialIcons
                   name="person-search"
                   size={34}
-                  color="#91A1B5"
+                  color="#82968D"
                 />
                 <Text style={styles.driverModalEmptyTitle}>
                   {driversError ? "Could not load drivers" : "No drivers found"}
@@ -600,10 +600,10 @@ export default function AddVehicle({ setActiveButton }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 56,
@@ -648,8 +648,8 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   formContainer: {
-    backgroundColor: "#FFF",
-    borderColor: "#DDEBFA",
+    backgroundColor: "#0D1713",
+    borderColor: "#294238",
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
@@ -666,23 +666,23 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     marginBottom: 1,
     borderBottomWidth: 1,
-    borderBottomColor: "#E8F0F8",
+    borderBottomColor: "#294238",
   },
   formHeadingIcon: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
   formHeadingTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "700",
   },
   formHeadingSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 2,
   },
@@ -690,20 +690,20 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
   formLabel: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 11,
     marginBottom: 6,
     fontWeight: "600",
   },
   textInput: {
     minHeight: 40,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 9,
     paddingHorizontal: 11,
     paddingVertical: 8,
-    color: "#1F3552",
+    color: "#F4FBF8",
     fontSize: 12,
   },
   formRow: {
@@ -719,11 +719,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 9,
     paddingHorizontal: 11,
     minHeight: 40,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   driverPickerLabel: {
     flexDirection: "row",
@@ -731,12 +731,12 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   pickerPlaceholder: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     flexShrink: 1,
   },
   selectedDriverText: {
-    color: "#1F3552",
+    color: "#F4FBF8",
     fontWeight: "600",
   },
   driverPickerActions: {
@@ -745,7 +745,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   fieldHint: {
-    color: "#8497AA",
+    color: "#B1C4BC",
     fontSize: 9,
     marginTop: 5,
   },
@@ -756,11 +756,11 @@ const styles = StyleSheet.create({
   },
   driverModal: {
     maxHeight: "78%",
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
     paddingBottom: 20,
     overflow: "hidden",
   },
@@ -768,19 +768,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#DDEBFA",
+    borderBottomColor: "#294238",
   },
   driverModalTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 15,
     fontWeight: "700",
   },
   driverModalSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 3,
   },
@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: "#F1F6FB",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -800,27 +800,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
     borderRadius: 11,
     padding: 10,
     marginBottom: 8,
   },
   driverOptionSelected: {
-    backgroundColor: "#EDF6FF",
-    borderColor: "#1769D2",
+    backgroundColor: "#13231D",
+    borderColor: "#00B894",
   },
   driverOptionDisabled: {
-    backgroundColor: "#F1F4F7",
-    borderColor: "#E1E7EE",
+    backgroundColor: "#13231D",
+    borderColor: "#294238",
     opacity: 0.7,
   },
   driverOptionIcon: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -829,26 +829,26 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   driverOptionName: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "700",
   },
   driverOptionMeta: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 3,
   },
   driverAvailability: {
-    backgroundColor: "#E5F8ED",
+    backgroundColor: "#13231D",
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 4,
   },
   driverAssignedBadge: {
-    backgroundColor: "#FFF4DC",
+    backgroundColor: "#382D1B",
   },
   driverAvailabilityText: {
-    color: "#20864B",
+    color: "#35D9B3",
     fontSize: 9,
     fontWeight: "600",
   },
@@ -867,13 +867,13 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
   },
   driverModalEmptyTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "700",
     marginTop: 8,
   },
   driverModalEmptyText: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 11,
     textAlign: "center",
     lineHeight: 16,
@@ -884,10 +884,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
   },
   driverRetryText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 40,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   driverModalDoneText: {
     color: "#FFFFFF",
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   imageCount: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     fontWeight: "600",
   },
@@ -922,14 +922,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: "dashed",
     borderColor: "#9CC5EF",
-    backgroundColor: "#F8FBFF",
+    backgroundColor: "#13231D",
     borderRadius: 10,
     paddingVertical: 13,
     marginBottom: 10,
   },
   addImageBtnDisabled: {
-    borderColor: "#D8E2EC",
-    backgroundColor: "#F5F7FA",
+    borderColor: "#294238",
+    backgroundColor: "#13231D",
   },
   imagePickerIcon: {
     width: 36,
@@ -937,21 +937,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     marginBottom: 6,
   },
   imagePickerIconDisabled: {
-    backgroundColor: "#EEF1F4",
+    backgroundColor: "#13231D",
   },
   addImageBtnText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
   imagePickerHint: {
     marginTop: 3,
     fontSize: 9,
-    color: "#8497AA",
+    color: "#B1C4BC",
   },
   imagePreviewContainer: {
     flexDirection: "row",
@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   submitBtnGradient: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",

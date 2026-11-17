@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,12 +27,20 @@ import MapView, { Marker } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import CustomMap from "../../../../components/map";
 import AppNotification from "../../../../components/Notification";
+import GooglePlacesAutoComplete from "../../../../components/GooglePlacesAutoComplete";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useTheme } from "../../../../styles/theme";
+import { useClientTheme } from "../../../../styles/theme";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl, GOOGLE_API_KEY } from "@/url";
+import {
+  ClientRouteStop,
+  getActiveRouteWindow,
+  getTodayRouteStops,
+  isStopBoardedToday,
+  isStopCompletedToday,
+} from "@/app-support/client/clientHelpers/utils/routeStops";
 import {
   loadChildDetails,
   loadChildren,
@@ -38,13 +53,30 @@ const getLocalDateKey = (date = new Date()) =>
     .map((part) => String(part).padStart(2, "0"))
     .join("-");
 
+const formatLastLocation = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const isLongOffline = (value?: string | null, timestamp = Date.now()) => {
+  const recordedAt = new Date(value || "").getTime();
+  return Number.isFinite(recordedAt) && timestamp - recordedAt >= 10 * 60_000;
+};
+
 const getScheduleDateKey = (value?: string) => value?.split("T")[0];
 
 const lightRouteMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#EEF2F5" }] },
   {
     elementType: "labels.text.fill",
-    stylers: [{ color: "#607A98" }],
+    stylers: [{ color: "#B9AFC4" }],
   },
   {
     elementType: "labels.text.stroke",
@@ -107,30 +139,35 @@ const ChildDetailScreen = () => {
     openLiveTrip?: string;
   }>();
   const childId = params.childId;
-  const { colors: themeColors } = useTheme();
-  const colors = {
-    ...themeColors,
-    primary: "#159B3A",
-    primaryDark: "#087C2B",
-    background: "#F4F9FF",
-    surface: "#FFFFFF",
-    surfaceHover: "#EDF7FF",
-    border: "#DCEAF8",
-    divider: "#E7EFF7",
-    text: {
-      ...themeColors.text,
-      primary: "#17365E",
-      secondary: "#607A98",
-      tertiary: "#7D94AC",
-    },
-  };
+  const { colors } = useClientTheme();
   const { user } = useContext(AuthContext);
+  const userToken = user?.token;
+  const userId = user?.userData?.id || user?.id;
   const detailScrollRef = useRef<ScrollView>(null);
   const tripCardOffset = useRef(0);
   const liveMapRef = useRef<MapView | null>(null);
   const autoOpenedLiveTripForChild = useRef<string | null>(null);
 
   const [child, setChild] = useState<any>(null);
+  const [paymentAccessVerified, setPaymentAccessVerified] = useState(false);
+  const [paymentAccessBlocked, setPaymentAccessBlocked] = useState(false);
+  const [paymentAccessError, setPaymentAccessError] = useState<string | null>(
+    null,
+  );
+  const routeAccessBlocked = !paymentAccessVerified || paymentAccessBlocked;
+  const [routeStops, setRouteStops] = useState<ClientRouteStop[]>([]);
+  const [routeMapStops, setRouteMapStops] = useState<ClientRouteStop[]>([]);
+  const [previewDriverLocation, setPreviewDriverLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [previewDriverLocationAt, setPreviewDriverLocationAt] = useState<
+    string | null
+  >(null);
+  const [previewDriverStatus, setPreviewDriverStatus] = useState<
+    "loading" | "online" | "connection_lost" | "offline" | "unavailable"
+  >("loading");
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [savingChild, setSavingChild] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -163,7 +200,38 @@ const ChildDetailScreen = () => {
     lastname: "",
     grade: "",
     school_name: "",
+    school_address: "",
+    school_latitude: null as number | null,
+    school_longitude: null as number | null,
   });
+  const editSchoolMapRegion = useMemo(() => {
+    if (
+      editForm.school_latitude === null ||
+      editForm.school_longitude === null
+    ) {
+      return null;
+    }
+
+    const latitude = Number(editForm.school_latitude);
+    const longitude = Number(editForm.school_longitude);
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return null;
+    }
+
+    return {
+      latitude,
+      longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+  }, [editForm.school_latitude, editForm.school_longitude]);
   const [isWeekendScheduleVisible, setIsWeekendScheduleVisible] =
     useState(false);
   const [weekendDate, setWeekendDate] = useState(new Date());
@@ -188,12 +256,60 @@ const ChildDetailScreen = () => {
   const cacheChild = useCallback(
     async (childData: any) => {
       await Promise.all([
-        saveChildDetails(childId, childData),
-        updateChildInChildrenCache(childId, childData),
+        saveChildDetails(childId, childData, userId),
+        updateChildInChildrenCache(childId, childData, userId),
       ]);
     },
-    [childId],
+    [childId, userId],
   );
+
+  const refreshPaymentAccess = useCallback(async () => {
+    if (!userToken || !childId) {
+      setPaymentAccessVerified(false);
+      setPaymentAccessError("Unable to verify payment status.");
+      return;
+    }
+    setPaymentAccessError(null);
+    try {
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(`${baseUrl}/client/transport-access`, {
+        headers: { Authorization: "Bearer " + userToken },
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to verify payment status.");
+      }
+      const unpaidIds = Array.isArray(data?.unpaid_child_ids)
+        ? data.unpaid_child_ids
+        : [];
+      const isUnpaid = unpaidIds.includes(childId);
+      setPaymentAccessBlocked(isUnpaid);
+      setPaymentAccessVerified(true);
+    } catch (error) {
+      setPaymentAccessVerified(false);
+      console.error("Failed to verify child transport payment access:", error);
+      setPaymentAccessError(
+        error instanceof Error
+          ? error.message
+          : "Unable to verify payment status.",
+      );
+    }
+  }, [childId, userToken]);
+
+  useEffect(() => {
+    void refreshPaymentAccess();
+    const interval = setInterval(() => void refreshPaymentAccess(), 30_000);
+    return () => clearInterval(interval);
+  }, [refreshPaymentAccess]);
+
+  useEffect(() => {
+    if (paymentAccessVerified && !paymentAccessBlocked) return;
+    setScanModalVisible(false);
+    setIsMapModalVisible(false);
+    setIsWeekendScheduleVisible(false);
+    setIsActivityModalVisible(false);
+  }, [paymentAccessBlocked, paymentAccessVerified]);
 
   const fetchChild = useCallback(
     async (showError = true) => {
@@ -201,7 +317,9 @@ const ChildDetailScreen = () => {
 
       try {
         const baseUrl = await resolveWorkingBaseUrl();
-        const response = await fetch(`${baseUrl}/client/children/${childId}`, {
+        const response = await fetch(
+          `${baseUrl}/client/children/${childId}?include_restricted_vehicle=true`,
+          {
           headers: { Authorization: `Bearer ${user?.token}` },
         });
         const data = await response.json();
@@ -212,6 +330,11 @@ const ChildDetailScreen = () => {
         }
         setChild(data);
         await cacheChild(data);
+        if (data.transport_restricted) {
+          setScheduledTrips([]);
+          setWeekendTripScheduled(false);
+          return;
+        }
 
         const tripsResponse = await fetch(
           `${baseUrl}/client/children/${childId}/scheduled-trips`,
@@ -247,6 +370,21 @@ const ChildDetailScreen = () => {
     [cacheChild, childId, user?.token],
   );
 
+  useEffect(() => {
+    if (
+      paymentAccessVerified &&
+      !paymentAccessBlocked &&
+      child?.transport_restricted
+    ) {
+      void fetchChild(false);
+    }
+  }, [
+    child?.transport_restricted,
+    fetchChild,
+    paymentAccessBlocked,
+    paymentAccessVerified,
+  ]);
+
   const getWeekendOptions = () => {
     const today = new Date();
     const weekendStart = new Date(today);
@@ -272,8 +410,8 @@ const ChildDetailScreen = () => {
       }
 
       const [cachedDetails, cachedChildren] = await Promise.all([
-        loadChildDetails(childId),
-        loadChildren(),
+        loadChildDetails(childId, userId),
+        loadChildren(userId),
       ]);
       const cachedChild =
         cachedDetails ||
@@ -293,10 +431,175 @@ const ChildDetailScreen = () => {
     return () => {
       active = false;
     };
-  }, [childId, fetchChild]);
+  }, [childId, fetchChild, userId]);
 
   useEffect(() => {
-    if (!isMapModalVisible || mapModalTitle !== "Live Trip") return;
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const routeId = child?.route?.id;
+    if (routeAccessBlocked || !routeId || !childId || !user?.token) return;
+
+    let active = true;
+    const loadRouteStops = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/client/children/${childId}/route-stops`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!response.ok) {
+          throw new Error(`Unable to load route stops (${response.status}).`);
+        }
+        const data = await response.json();
+        if (!active) return;
+        setRouteStops(
+          (Array.isArray(data) ? data : []).filter(
+            (stop) => stop.route_id === routeId,
+          ),
+        );
+      } catch (error) {
+        if (active) {
+          console.error("Failed to load child route activity", error);
+        }
+      }
+    };
+
+    void loadRouteStops();
+    const interval = setInterval(() => void loadRouteStops(), 10_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [child?.route?.id, childId, routeAccessBlocked, user?.token]);
+
+  const currentRouteStops = routeStops.filter(
+    (stop) => stop.route_id === child?.route?.id,
+  );
+  const todayRouteStops = getTodayRouteStops(
+    currentRouteStops,
+    new Date(currentTime),
+  );
+  const activeRouteWindow = getActiveRouteWindow(
+    child?.route,
+    new Date(currentTime),
+    todayRouteStops,
+  );
+  const activeRouteDirection = activeRouteWindow?.direction;
+  const driverId = child?.vehicle?.driver?.id;
+  const routePreviewStatus = !activeRouteDirection
+    ? "unavailable"
+    : !driverId
+      ? "offline"
+      : !user?.token
+        ? "unavailable"
+        : previewDriverStatus;
+  const routePreviewLongOffline =
+    routePreviewStatus === "connection_lost" &&
+    isLongOffline(previewDriverLocationAt, currentTime);
+  const routePreviewDriverLocation =
+    activeRouteDirection &&
+    driverId &&
+    routePreviewStatus === "online"
+      ? previewDriverLocation
+      : null;
+
+  useEffect(() => {
+    if (
+      routeAccessBlocked ||
+      !activeRouteDirection ||
+      !driverId ||
+      !childId ||
+      !user?.token
+    ) {
+      return;
+    }
+
+    let active = true;
+    const loadDriverAndRoute = async () => {
+      setPreviewDriverStatus("loading");
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const locationResponse = await fetch(
+          `${baseUrl}/driver/location/${driverId}?child_id=${childId}&route_id=${encodeURIComponent(child.route.id)}`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!locationResponse.ok) {
+          throw new Error("Unable to read current driver location.");
+        }
+        const location = await locationResponse.json();
+        if (active) {
+          setPreviewDriverLocationAt(location?.recorded_at || null);
+        }
+        const latitude = Number(location?.latitude);
+        const longitude = Number(location?.longitude);
+        const trackingThisRoute =
+          location?.is_tracking === true &&
+          location?.tracking_route_id === child.route.id;
+        if (
+          !active ||
+          !trackingThisRoute ||
+          location?.is_online !== true ||
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude)
+        ) {
+          if (active) {
+            setPreviewDriverLocation(null);
+            setRouteMapStops([]);
+            setPreviewDriverStatus(
+              trackingThisRoute ? "connection_lost" : "offline",
+            );
+          }
+          return;
+        }
+
+        const stopsResponse = await fetch(
+          `${baseUrl}/client/children/${childId}/route-stops?route_id=${encodeURIComponent(child.route.id)}&include_route_stops=true`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!stopsResponse.ok) {
+          throw new Error("Unable to load active driver stops.");
+        }
+        const stops = await stopsResponse.json();
+        if (!active) return;
+        setPreviewDriverLocation({ latitude, longitude });
+        setRouteMapStops(Array.isArray(stops) ? stops : []);
+        setPreviewDriverStatus("online");
+      } catch (error) {
+        if (active) {
+          setPreviewDriverLocation(null);
+          setRouteMapStops([]);
+          setPreviewDriverStatus("unavailable");
+          console.error("Failed to load live route overview", error);
+        }
+      }
+    };
+
+    void loadDriverAndRoute();
+    const interval = setInterval(() => void loadDriverAndRoute(), 10_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [
+    activeRouteDirection,
+    child?.route?.id,
+    driverId,
+    childId,
+    routeAccessBlocked,
+    user?.token,
+  ]);
+
+  useEffect(() => {
+    if (
+      routeAccessBlocked ||
+      !isMapModalVisible ||
+      mapModalTitle !== "Live Trip"
+    ) {
+      return;
+    }
 
     const driverId = child?.vehicle?.driver?.id;
     if (!driverId || !user?.token) return;
@@ -365,6 +668,7 @@ const ChildDetailScreen = () => {
     childId,
     isMapModalVisible,
     mapModalTitle,
+    routeAccessBlocked,
     user?.token,
   ]);
 
@@ -434,11 +738,50 @@ const ChildDetailScreen = () => {
       lastname: child.lastname || "",
       grade: child.grade || "",
       school_name: child.school_name || "",
+      school_address:
+        child.school_address ||
+        child.school_location?.address ||
+        child.dropoff_address ||
+        "",
+      school_latitude:
+        child.dropoff_latitude ??
+        child.school_latitude ??
+        child.school_location?.latitude ??
+        null,
+      school_longitude:
+        child.dropoff_longitude ??
+        child.school_longitude ??
+        child.school_location?.longitude ??
+        null,
     });
   }, [child]);
 
   const handleInputChange = (field: string, value: string) => {
     setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSchoolInputChange = (value: string) => {
+    setEditForm((prev) => ({
+      ...prev,
+      school_name: value,
+      school_address: value,
+      school_latitude: null,
+      school_longitude: null,
+    }));
+  };
+
+  const handleSchoolSelect = (
+    name: string,
+    coordinates: { latitude: number; longitude: number } | null,
+    details?: { address?: string },
+  ) => {
+    setEditForm((prev) => ({
+      ...prev,
+      school_name: name,
+      school_address: details?.address || name,
+      school_latitude: coordinates?.latitude ?? null,
+      school_longitude: coordinates?.longitude ?? null,
+    }));
   };
 
   const handleSaveChild = async () => {
@@ -458,6 +801,12 @@ const ChildDetailScreen = () => {
           lastname: editForm.lastname,
           grade: editForm.grade,
           school_name: editForm.school_name,
+          school_address: editForm.school_address,
+          school_latitude: editForm.school_latitude,
+          school_longitude: editForm.school_longitude,
+          dropoff_address: editForm.school_address,
+          dropoff_latitude: editForm.school_latitude,
+          dropoff_longitude: editForm.school_longitude,
         }),
       });
 
@@ -466,8 +815,24 @@ const ChildDetailScreen = () => {
         throw new Error(data.error || data.message || "Unable to save child.");
       }
 
-      setChild(data.child || data);
+      const updatedChild = {
+        ...child,
+        ...(data.child || data),
+        name: editForm.name,
+        lastname: editForm.lastname,
+        grade: editForm.grade,
+        school_name: editForm.school_name,
+        school_address: editForm.school_address,
+        school_latitude: editForm.school_latitude,
+        school_longitude: editForm.school_longitude,
+        dropoff_address: editForm.school_address,
+        dropoff_latitude: editForm.school_latitude,
+        dropoff_longitude: editForm.school_longitude,
+      };
+      setChild(updatedChild);
+      await cacheChild(updatedChild);
       setIsEditModalVisible(false);
+      void fetchChild(false);
       Alert.alert("Saved", "Child information updated successfully.");
     } catch (err: any) {
       console.error("Save child error:", err);
@@ -593,46 +958,28 @@ const ChildDetailScreen = () => {
   };
 
   const openRouteMap = () => {
-    const pickupLat = child?.pickup_latitude;
-    const pickupLng = child?.pickup_longitude;
-    const dropoffLat = child?.dropoff_latitude;
-    const dropoffLng = child?.dropoff_longitude;
+    const markers: any[] = routePreviewPoints.map((point) => ({
+      id: point.id,
+      title: point.title,
+      coordinate: {
+        latitude: point.latitude,
+        longitude: point.longitude,
+      },
+    }));
+    if (activeRouteWindow && routePreviewDriverLocation) {
+      markers.push({
+        id: "live-driver",
+        title: "Driver live location",
+        coordinate: routePreviewDriverLocation,
+      });
+    }
 
-    const hasPickup =
-      typeof pickupLat === "number" &&
-      Number.isFinite(pickupLat) &&
-      typeof pickupLng === "number" &&
-      Number.isFinite(pickupLng);
-    const hasDropoff =
-      typeof dropoffLat === "number" &&
-      Number.isFinite(dropoffLat) &&
-      typeof dropoffLng === "number" &&
-      Number.isFinite(dropoffLng);
-
-    if (!hasPickup && !hasDropoff) {
+    if (markers.length === 0) {
       Alert.alert(
         "Location unavailable",
         "Pickup and drop-off coordinates are not available for this child.",
       );
       return;
-    }
-
-    const markers: any[] = [];
-    if (hasPickup) {
-      markers.push({
-        id: "pickup",
-        title: "Pickup Location",
-        coordinate: { latitude: pickupLat, longitude: pickupLng },
-        description: pickupAddress,
-      });
-    }
-    if (hasDropoff) {
-      markers.push({
-        id: "dropoff",
-        title: "Drop-off Location",
-        coordinate: { latitude: dropoffLat, longitude: dropoffLng },
-        description: dropoffAddress,
-      });
     }
 
     const latitudes = markers.map((marker) => marker.coordinate.latitude);
@@ -649,7 +996,7 @@ const ChildDetailScreen = () => {
       latitudeDelta: Math.max(...latitudes) - Math.min(...latitudes) || 0.05,
       longitudeDelta: Math.max(...longitudes) - Math.min(...longitudes) || 0.05,
     });
-    setMapModalTitle("Pickup and Drop-off Route");
+    setMapModalTitle(activeRouteWindow ? "Live Trip" : "Pickup and Drop-off Route");
     setIsMapModalVisible(true);
   };
 
@@ -1044,7 +1391,7 @@ const ChildDetailScreen = () => {
         await handlePickChildPhoto();
         break;
       case "trip":
-        await openLiveTrip();
+        if (!routeAccessBlocked) await openLiveTrip();
         break;
       case "attendance":
         router.push("/(client)/pages/attendance" as never);
@@ -1138,90 +1485,121 @@ const ChildDetailScreen = () => {
 
   const tripPickupTime = formatDisplayTime(pickupStartTime) || "—";
   const tripDropoffTime = formatDisplayTime(dropoffStartTime) || "—";
-  const tripStatusText = pickupStartTime
-    ? "On the way to school"
-    : dropoffStartTime
-      ? "School route active"
-      : "Route not assigned";
-
-  const parseClockMinutes = (value?: string) => {
+  const detailNow = new Date(currentTime);
+  const detailCurrentMinutes =
+    detailNow.getHours() * 60 + detailNow.getMinutes();
+  const getClockMinutes = (value?: string) => {
     if (!value) return null;
     const [hours, minutes] = value.slice(0, 5).split(":").map(Number);
-    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
-    return hours * 60 + minutes;
+    return Number.isFinite(hours) && Number.isFinite(minutes)
+        ? hours * 60 + minutes
+        : null;
   };
-  const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  const pickupStartMinutes = parseClockMinutes(pickupStartTime);
-  const pickupEndMinutes = parseClockMinutes(pickupEndTime);
-  const dropoffStartMinutes = parseClockMinutes(dropoffStartTime);
-  const dropoffEndMinutes = parseClockMinutes(dropoffEndTime);
-  let activeTimelineStep = 0;
-  if (pickupStartMinutes !== null && currentMinutes >= pickupStartMinutes) {
-    activeTimelineStep = 1;
-  }
-  if (pickupEndMinutes !== null && currentMinutes > pickupEndMinutes) {
-    activeTimelineStep = 2;
-  }
-  if (dropoffStartMinutes !== null && currentMinutes >= dropoffStartMinutes) {
-    activeTimelineStep = 3;
-  }
-  if (dropoffEndMinutes !== null && currentMinutes > dropoffEndMinutes) {
-    activeTimelineStep = 4;
-  }
+  const pickupMinutes = getClockMinutes(pickupStartTime);
+  const dropoffMinutes = getClockMinutes(dropoffStartTime);
+  const nextWindowLabel =
+    pickupMinutes !== null && pickupMinutes > detailCurrentMinutes
+        ? `Pickup at ${tripPickupTime}`
+        : dropoffMinutes !== null && dropoffMinutes > detailCurrentMinutes
+          ? `Drop-off at ${tripDropoffTime}`
+          : `Pickup at ${tripPickupTime} next school day`;
+  const pickupStop = todayRouteStops.find(
+    (stop) => stop.stop_type === "pickup",
+  );
+  const dropoffStop = todayRouteStops.find(
+    (stop) => stop.stop_type === "dropoff",
+  );
+  const pickupCompleted = isStopCompletedToday(
+    pickupStop,
+    new Date(currentTime),
+  );
+  const dropoffCompleted = isStopCompletedToday(
+    dropoffStop,
+    new Date(currentTime),
+  ) && Boolean(dropoffStop?.handoff_verified_at);
+  const schoolBoarded = isStopBoardedToday(
+    dropoffStop,
+    new Date(currentTime),
+  );
+  const childBoarded = pickupCompleted || schoolBoarded;
+  const tripStatusText = dropoffCompleted
+    ? "Completed · handoff verified"
+    : childBoarded
+      ? dropoffStop?.status === "in_progress"
+        ? "Arrived at destination · handoff pending"
+        : schoolBoarded
+          ? "Picked up · on the way home"
+          : "Picked up · on the way to school"
+      : activeRouteWindow
+        ? pickupStop?.status === "in_progress" ||
+            dropoffStop?.status === "in_progress"
+          ? "Driver arrived · pickup not confirmed"
+          : "Awaiting pickup confirmation"
+        : pickupStartTime || dropoffStartTime
+          ? `Next window · ${nextWindowLabel}`
+          : "Route not assigned";
+  const pickupConfirmed = Boolean(
+    pickupStop &&
+      ["in_progress", "completed"].includes(pickupStop.status || ""),
+  );
+  const formatActivityTime = (value?: string | null, fallback = "—") => {
+    if (!value) return fallback;
+    return formatDisplayTime(value);
+  };
 
   const activityItems = [
     {
       time: tripPickupTime,
       title: "Scheduled",
-      detail: "Transport is scheduled for today",
-      status: activeTimelineStep > 0 ? "done" : "progress",
+      detail: `Pickup planned for ${tripPickupTime}`,
+      status: "pending",
     },
     {
-      time: tripPickupTime,
+      time: formatActivityTime(pickupStop?.status_updated_at, tripPickupTime),
       title: "Driver arriving",
       detail: pickupAddress,
-      status:
-        activeTimelineStep > 1
-          ? "done"
-          : activeTimelineStep === 1
-            ? "progress"
-            : "pending",
+      status: pickupConfirmed ? (pickupCompleted ? "done" : "progress") : "pending",
     },
     {
-      time: pickupEndTime ? formatDisplayTime(pickupEndTime) : tripPickupTime,
+      time: formatActivityTime(
+        schoolBoarded
+          ? dropoffStop?.boarded_at
+          : pickupStop?.status_updated_at,
+        pickupEndTime ? formatDisplayTime(pickupEndTime) : tripPickupTime,
+      ),
       title: "Picked up",
-      detail: `${child?.name || "Your child"} is with the driver`,
-      status:
-        activeTimelineStep > 2
-          ? "done"
-          : activeTimelineStep === 2
-            ? "progress"
-            : "pending",
+      detail: schoolBoarded
+        ? `${child?.name || "Your child"} boarded at school`
+        : `${child?.name || "Your child"} is with the driver`,
+      status: childBoarded ? "done" : "pending",
     },
     {
-      time: dropoffStartTime
-        ? formatDisplayTime(dropoffStartTime)
-        : tripDropoffTime,
+      time: formatActivityTime(
+        dropoffCompleted
+          ? dropoffStop?.handoff_verified_at || dropoffStop?.status_updated_at
+          : null,
+        dropoffStartTime ? formatDisplayTime(dropoffStartTime) : tripDropoffTime,
+      ),
       title: "On route",
       detail: routeInfo?.end_location || "Travelling to school",
-      status:
-        activeTimelineStep > 3
-          ? "done"
-          : activeTimelineStep === 3
-            ? "progress"
-            : "pending",
+      status: dropoffCompleted
+        ? "done"
+        : childBoarded
+          ? "progress"
+          : "pending",
     },
     {
-      time: dropoffEndTime
-        ? formatDisplayTime(dropoffEndTime)
-        : tripDropoffTime,
+      time: formatActivityTime(
+        dropoffStop?.handoff_verified_at || dropoffStop?.status_updated_at,
+        dropoffEndTime ? formatDisplayTime(dropoffEndTime) : tripDropoffTime,
+      ),
       title: "Dropped off",
       detail: dropoffAddress,
-      status: activeTimelineStep === 4 ? "progress" : "pending",
+      status: dropoffCompleted ? "done" : "pending",
     },
   ];
 
-  const routePreviewPoints = [
+  const plannedRoutePoints = [
     {
       id: "pickup",
       latitude: Number(child?.pickup_latitude ?? child?.route?.start_latitude),
@@ -1235,11 +1613,13 @@ const ChildDetailScreen = () => {
       latitude: Number(
         child?.dropoff_latitude ??
           child?.school_latitude ??
+          child?.school_location?.latitude ??
           child?.route?.end_latitude,
       ),
       longitude: Number(
         child?.dropoff_longitude ??
           child?.school_longitude ??
+          child?.school_location?.longitude ??
           child?.route?.end_longitude,
       ),
       title: child?.school_name || "School",
@@ -1248,33 +1628,99 @@ const ChildDetailScreen = () => {
     (point) =>
       Number.isFinite(point.latitude) && Number.isFinite(point.longitude),
   );
+  const activeDriverStopPoints =
+    activeRouteWindow && routePreviewStatus === "online"
+      ? routeMapStops
+          .slice()
+          .sort((first, second) => (first.stop_order || 0) - (second.stop_order || 0))
+          .map((stop, index) => {
+            const isChildStop = String(stop.child_id) === String(childId);
+            const isSchoolStop = stop.stop_type === "dropoff";
+            const childLatitude = Number(
+              isSchoolStop
+                ? (child?.dropoff_latitude ??
+                    child?.school_latitude ??
+                    child?.school_location?.latitude)
+                : child?.pickup_latitude,
+            );
+            const childLongitude = Number(
+              isSchoolStop
+                ? (child?.dropoff_longitude ??
+                    child?.school_longitude ??
+                    child?.school_location?.longitude)
+                : child?.pickup_longitude,
+            );
+            const useUpdatedChildLocation =
+              isChildStop &&
+              Number.isFinite(childLatitude) &&
+              Number.isFinite(childLongitude);
+
+            return {
+              id: `driver-stop-${index}`,
+              latitude: useUpdatedChildLocation
+                ? childLatitude
+                : Number(stop.latitude),
+              longitude: useUpdatedChildLocation
+                ? childLongitude
+                : Number(stop.longitude),
+              title: isChildStop
+                ? isSchoolStop
+                  ? `${child?.school_name || "School"} · ${child?.name || "Child"}`
+                  : `Pickup · ${child?.name || "Child"}`
+                : `Driver stop ${index + 1}`,
+            };
+          })
+          .filter(
+            (point) =>
+              Number.isFinite(point.latitude) &&
+              Number.isFinite(point.longitude),
+          )
+      : [];
+  const routePreviewPoints =
+    activeDriverStopPoints.length > 1
+      ? activeDriverStopPoints
+      : plannedRoutePoints;
+  const previewMapPoints = [
+    ...routePreviewPoints,
+    ...(activeRouteWindow && routePreviewDriverLocation
+      ? [
+          {
+            id: "live-driver",
+            latitude: routePreviewDriverLocation.latitude,
+            longitude: routePreviewDriverLocation.longitude,
+            title: "Driver live location",
+          },
+        ]
+      : []),
+  ];
   const routePreviewRegion =
-    routePreviewPoints.length > 0
+    previewMapPoints.length > 0
       ? {
           latitude:
-            routePreviewPoints.reduce((sum, point) => sum + point.latitude, 0) /
-            routePreviewPoints.length,
+            previewMapPoints.reduce((sum, point) => sum + point.latitude, 0) /
+            previewMapPoints.length,
           longitude:
-            routePreviewPoints.reduce(
+            previewMapPoints.reduce(
               (sum, point) => sum + point.longitude,
               0,
-            ) / routePreviewPoints.length,
+            ) / previewMapPoints.length,
           latitudeDelta:
-            Math.max(...routePreviewPoints.map((point) => point.latitude)) -
-              Math.min(...routePreviewPoints.map((point) => point.latitude)) ||
+            Math.max(...previewMapPoints.map((point) => point.latitude)) -
+              Math.min(...previewMapPoints.map((point) => point.latitude)) ||
             0.02,
           longitudeDelta:
-            Math.max(...routePreviewPoints.map((point) => point.longitude)) -
-              Math.min(...routePreviewPoints.map((point) => point.longitude)) ||
+            Math.max(...previewMapPoints.map((point) => point.longitude)) -
+              Math.min(...previewMapPoints.map((point) => point.longitude)) ||
             0.02,
         }
       : null;
   const visibleLiveLocationStatus =
-    child?.vehicle?.driver?.id && user?.token
+    !routeAccessBlocked && child?.vehicle?.driver?.id && user?.token
       ? liveLocationStatus
       : "unavailable";
 
   const handleDetailTabPress = (tab: string) => {
+    if (routeAccessBlocked && tab !== "attendance") return;
     setSelectedDetailTab(tab);
     switch (tab) {
       case "live":
@@ -1297,10 +1743,20 @@ const ChildDetailScreen = () => {
     }
   };
 
+  const detailTabs = routeAccessBlocked
+    ? [{ key: "attendance", label: "Attendance", icon: "event-note" }]
+    : [
+        { key: "live", label: "Live Tracking", icon: "my-location" },
+        { key: "trip", label: "Trip Details", icon: "route" },
+        { key: "history", label: "History", icon: "history" },
+        { key: "attendance", label: "Attendance", icon: "event-note" },
+      ];
+
   useEffect(() => {
     if (
       params.openLiveTrip !== "true" ||
       !child ||
+      routeAccessBlocked ||
       loading ||
       tripLoading ||
       autoOpenedLiveTripForChild.current === childId
@@ -1311,7 +1767,15 @@ const ChildDetailScreen = () => {
     autoOpenedLiveTripForChild.current = childId;
     setSelectedDetailTab("live");
     void openLiveTrip();
-  }, [child, childId, loading, openLiveTrip, params.openLiveTrip, tripLoading]);
+  }, [
+    child,
+    childId,
+    loading,
+    openLiveTrip,
+    params.openLiveTrip,
+    routeAccessBlocked,
+    tripLoading,
+  ]);
 
   return (
     <SafeAreaView
@@ -1381,12 +1845,7 @@ const ChildDetailScreen = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.detailTabs}
         >
-          {[
-            { key: "live", label: "Live Tracking", icon: "my-location" },
-            { key: "trip", label: "Trip Details", icon: "route" },
-            { key: "history", label: "History", icon: "history" },
-            { key: "attendance", label: "Attendance", icon: "event-note" },
-          ].map((tab) => {
+          {detailTabs.map((tab) => {
             const selected = selectedDetailTab === tab.key;
             return (
               <TouchableOpacity
@@ -1421,7 +1880,7 @@ const ChildDetailScreen = () => {
         }
         scrollEventThrottle={16}
       >
-        {loading ? (
+        {loading && !child ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -1465,7 +1924,7 @@ const ChildDetailScreen = () => {
                   </View>
                   <View style={styles.heroMetaRow}>
                     <View style={styles.heroMetaItem}>
-                      <MaterialIcons name="school" size={16} color="#159B3A" />
+                      <MaterialIcons name="school" size={16} color="#C14BFF" />
                       <Text
                         style={[
                           styles.heroMetaText,
@@ -1480,7 +1939,7 @@ const ChildDetailScreen = () => {
                       <MaterialIcons
                         name="location-city"
                         size={16}
-                        color="#159B3A"
+                        color="#C14BFF"
                       />
                       <Text
                         style={[
@@ -1498,7 +1957,7 @@ const ChildDetailScreen = () => {
                       <MaterialIcons
                         name="calendar-today"
                         size={16}
-                        color="#159B3A"
+                        color="#C14BFF"
                       />
                       <Text
                         style={[
@@ -1515,12 +1974,12 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="fingerprint"
                       size={16}
-                      color="#087C2B"
+                      color="#C14BFF"
                     />
                     <Text style={[styles.childIdLabel, { color: "#527064" }]}>
                       CHILD ID
                     </Text>
-                    <Text style={[styles.childIdValue, { color: "#17365E" }]}>
+                    <Text style={[styles.childIdValue, { color: "#FBF8FF" }]}>
                       {child.id?.slice(0, 8)}
                     </Text>
                   </View>
@@ -1533,7 +1992,7 @@ const ChildDetailScreen = () => {
             >
               <View style={styles.bannerContent}>
                 <View style={styles.bannerIconContainer}>
-                  <MaterialIcons name="shield" size={24} color="#159B3A" />
+                  <MaterialIcons name="shield" size={24} color="#C14BFF" />
                 </View>
                 <View style={styles.bannerText}>
                   <Text
@@ -1554,6 +2013,75 @@ const ChildDetailScreen = () => {
               </View>
             </View>
 
+            {routeAccessBlocked ? (
+              <View
+                style={{
+                  marginBottom: 18,
+                  padding: 16,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "#F59E0B",
+                  backgroundColor: "#2A1B0A",
+                }}
+              >
+                <Text style={{ color: "#FDE68A", fontWeight: "800" }}>
+                  {paymentAccessError
+                    ? "Route details are temporarily hidden"
+                    : paymentAccessVerified
+                      ? "Transport services paused"
+                      : "Checking payment status"}
+                </Text>
+                <Text
+                  style={{
+                    color: "#FCD34D",
+                    fontSize: 12,
+                    lineHeight: 17,
+                    marginTop: 5,
+                  }}
+                >
+                  {paymentAccessError
+                    ? "Route information remains hidden until payment status can be verified."
+                    : paymentAccessVerified
+                      ? "This child has an outstanding owner payment. Route details and trip tracking are hidden; child, school, vehicle, and driver details remain available."
+                      : "Route information is hidden until payment status is verified. Child, school, vehicle, and driver details remain available."}
+                </Text>
+                {paymentAccessBlocked ? (
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push("/(client)/pages/payments" as never)
+                    }
+                    style={{
+                      alignSelf: "flex-start",
+                      marginTop: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: "#F59E0B",
+                    }}
+                  >
+                    <Text style={{ color: "#1C1205", fontWeight: "800" }}>
+                      View payments
+                    </Text>
+                  </TouchableOpacity>
+                ) : paymentAccessError ? (
+                  <TouchableOpacity
+                    onPress={() => void refreshPaymentAccess()}
+                    style={{
+                      alignSelf: "flex-start",
+                      marginTop: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                      backgroundColor: "#F59E0B",
+                    }}
+                  >
+                    <Text style={{ color: "#1C1205", fontWeight: "800" }}>
+                      Retry
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : (
             <View
               style={[
                 styles.locationPreviewCard,
@@ -1593,7 +2121,7 @@ const ChildDetailScreen = () => {
                   onPress={openRouteMap}
                 >
                   <Text style={styles.mapRefreshText}>View route</Text>
-                  <MaterialIcons name="open-in-new" size={14} color="#087C2B" />
+                  <MaterialIcons name="open-in-new" size={14} color="#C14BFF" />
                 </TouchableOpacity>
               </View>
               <TouchableOpacity
@@ -1603,6 +2131,9 @@ const ChildDetailScreen = () => {
               >
                 {routePreviewRegion ? (
                   <MapView
+                    key={routePreviewPoints
+                      .map((point) => `${point.id}:${point.latitude}:${point.longitude}`)
+                      .join("|")}
                     style={styles.routePreviewMap}
                     initialRegion={routePreviewRegion}
                     mapType="standard"
@@ -1621,9 +2152,23 @@ const ChildDetailScreen = () => {
                           longitude: point.longitude,
                         }}
                         title={point.title}
-                        pinColor={point.id === "pickup" ? "#087C2B" : "#159B3A"}
+                        pinColor={
+                          point.id === "pickup" || point.id === "driver-stop-0"
+                            ? "#C14BFF"
+                            : "#C14BFF"
+                        }
                       />
                     ))}
+                    {activeRouteWindow &&
+                    routePreviewStatus === "online" &&
+                    routePreviewDriverLocation ? (
+                      <Marker
+                        key="driver-live"
+                        coordinate={routePreviewDriverLocation}
+                        title="Driver live location"
+                        pinColor="#2563EB"
+                      />
+                    ) : null}
                     {routePreviewPoints.length > 1 && GOOGLE_API_KEY ? (
                       <MapViewDirections
                         origin={{
@@ -1631,18 +2176,26 @@ const ChildDetailScreen = () => {
                           longitude: routePreviewPoints[0].longitude,
                         }}
                         destination={{
-                          latitude: routePreviewPoints[1].latitude,
-                          longitude: routePreviewPoints[1].longitude,
+                          latitude:
+                            routePreviewPoints[routePreviewPoints.length - 1]
+                              .latitude,
+                          longitude:
+                            routePreviewPoints[routePreviewPoints.length - 1]
+                              .longitude,
                         }}
+                        waypoints={routePreviewPoints.slice(1, -1).map((point) => ({
+                          latitude: point.latitude,
+                          longitude: point.longitude,
+                        }))}
                         apikey={GOOGLE_API_KEY}
                         strokeWidth={4}
-                        strokeColor="#159B3A"
+                        strokeColor="#C14BFF"
                       />
                     ) : null}
                   </MapView>
                 ) : (
                   <View style={styles.routePreviewEmpty}>
-                    <MaterialIcons name="map" size={28} color="#607A98" />
+                    <MaterialIcons name="map" size={28} color="#B9AFC4" />
                     <Text style={styles.routePreviewEmptyText}>
                       Route map will appear when locations are available
                     </Text>
@@ -1652,14 +2205,47 @@ const ChildDetailScreen = () => {
                   <View style={styles.mapRoutePill}>
                     <View style={styles.mapRouteDot} />
                     <Text style={styles.mapRoutePillText}>
-                      {routeInfo?.route_name || "School Route"}
+                      {activeRouteWindow && routePreviewStatus === "online"
+                        ? "Live driver route"
+                        : routeInfo?.route_name || "Home to school"}
                     </Text>
                   </View>
                 ) : null}
               </TouchableOpacity>
+              {activeRouteWindow ? (
+                <View style={styles.routeLiveStatus}>
+                  <View
+                    style={[
+                      styles.routeLiveStatusDot,
+                      {
+                        backgroundColor:
+                          routePreviewStatus === "online"
+                            ? "#C14BFF"
+                            : routePreviewStatus === "loading" ||
+                                routePreviewStatus === "connection_lost"
+                              ? routePreviewLongOffline
+                                ? "#B91C1C"
+                                : "#D97706"
+                              : "#DC2626",
+                      },
+                    ]}
+                  />
+                  <Text style={styles.routeLiveStatusText}>
+                    {routePreviewStatus === "online"
+                      ? "Driver is online · all route stops are shown"
+                      : routePreviewStatus === "loading"
+                        ? "Active window · checking driver connection"
+                        : routePreviewStatus === "connection_lost"
+                          ? `${routePreviewLongOffline ? "Warning · no driver location for 10+ min" : "Trip active · driver connection lost"}${formatLastLocation(previewDriverLocationAt) ? ` · last location ${formatLastLocation(previewDriverLocationAt)}` : ""}`
+                        : routePreviewStatus === "offline"
+                          ? "Active window · driver is offline; live tracking is unavailable"
+                          : "Active window · driver location is unavailable"}
+                  </Text>
+                </View>
+              ) : null}
               <View style={styles.nextStopRow}>
                 <View style={styles.nextStopDetails}>
-                  <MaterialIcons name="place" size={17} color="#159B3A" />
+                  <MaterialIcons name="place" size={17} color="#C14BFF" />
                   <View style={styles.nextStopText}>
                     <Text style={styles.nextStopLabel}>Next Stop</Text>
                     <Text
@@ -1669,15 +2255,23 @@ const ChildDetailScreen = () => {
                         { color: colors.text.primary },
                       ]}
                     >
-                      {dropoffAddress}
+                      {activeRouteWindow?.direction === "dropoff"
+                        ? pickupAddress
+                        : dropoffAddress}
                     </Text>
                     <Text style={styles.nextStopTime}>
-                      ETA {formatDisplayTime(dropoffStartTime)}
+                      {activeRouteWindow
+                        ? `ETA ${formatDisplayTime(
+                            activeRouteWindow.direction === "dropoff"
+                              ? dropoffEndTime
+                              : pickupEndTime,
+                          )}`
+                        : `Next window · ${nextWindowLabel}`}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.routeStatusSummary}>
-                  <MaterialIcons name="schedule" size={18} color="#159B3A" />
+                  <MaterialIcons name="schedule" size={18} color="#C14BFF" />
                   <View>
                     <Text style={styles.nextStopLabel}>Route Status</Text>
                     <Text style={styles.routeStatusPillText}>
@@ -1687,10 +2281,11 @@ const ChildDetailScreen = () => {
                 </View>
               </View>
             </View>
+            )}
 
-            {isWeekend && (
+            {!routeAccessBlocked && isWeekend && (
               <View style={styles.weekendBanner}>
-                <MaterialIcons name="event" size={20} color="#087C2B" />
+                <MaterialIcons name="event" size={20} color="#C14BFF" />
                 <View style={styles.weekendBannerContent}>
                   <Text style={styles.weekendBannerTitle}>
                     It&apos;s the weekend
@@ -1706,6 +2301,7 @@ const ChildDetailScreen = () => {
               </View>
             )}
 
+            {!routeAccessBlocked && (
             <View
               onLayout={(event) => {
                 tripCardOffset.current = event.nativeEvent.layout.y;
@@ -1730,7 +2326,7 @@ const ChildDetailScreen = () => {
                   <MaterialIcons
                     name="directions-car"
                     size={14}
-                    color="#159B3A"
+                    color="#C14BFF"
                   />
                   <Text style={styles.tripStatusText}>
                     {isWeekend
@@ -1764,7 +2360,7 @@ const ChildDetailScreen = () => {
                 <View style={styles.tripTimeline}>
                   <View style={styles.tripPoint}>
                     <View
-                      style={[styles.tripDot, { backgroundColor: "#159B3A" }]}
+                      style={[styles.tripDot, { backgroundColor: "#9B2BE7" }]}
                     />
                     <View style={styles.tripPointContent}>
                       <Text
@@ -1821,7 +2417,7 @@ const ChildDetailScreen = () => {
                   <View style={styles.tripSeparator} />
                   <View style={styles.tripPoint}>
                     <View
-                      style={[styles.tripDot, { backgroundColor: "#087C2B" }]}
+                      style={[styles.tripDot, { backgroundColor: "#9B2BE7" }]}
                     />
                     <View style={styles.tripPointContent}>
                       <Text
@@ -1957,6 +2553,7 @@ const ChildDetailScreen = () => {
                 </>
               )}
             </View>
+            )}
 
             <View
               style={[styles.sectionCard, { backgroundColor: colors.surface }]}
@@ -1972,7 +2569,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="directions-car"
                       size={20}
-                      color="#159B3A"
+                      color="#C14BFF"
                     />
                     <View style={styles.vehicleSummaryText}>
                       <Text
@@ -1995,21 +2592,29 @@ const ChildDetailScreen = () => {
                   </View>
                 </View>
               )}
-              <TouchableOpacity
-                onPress={openScanner}
-                style={[styles.scanButton, { backgroundColor: colors.primary }]}
-              >
-                <MaterialIcons name="qr-code-scanner" size={20} color="#fff" />
-                <Text style={styles.scanButtonText}>Scan vehicle QR</Text>
-              </TouchableOpacity>
+              {!routeAccessBlocked ? (
+                <TouchableOpacity
+                  onPress={openScanner}
+                  style={[
+                    styles.scanButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="qr-code-scanner"
+                    size={20}
+                    color="#fff"
+                  />
+                  <Text style={styles.scanButtonText}>Scan vehicle QR</Text>
+                </TouchableOpacity>
+              ) : null}
 
               {linkedVehicle?.name && (
                 <View style={styles.driverSummary}>
-                  {/* <Text>{JSON.stringify(linkedVehicle?.driver)}</Text> */}
                   <View style={styles.driverAvatar}>
                     <Image
                       source={
-                        linkedVehicle.driver.avatar
+                        linkedVehicle.driver?.avatar
                           ? { uri: linkedVehicle?.driver?.avatar }
                           : require("@/assets/images/client.png")
                       }
@@ -2046,6 +2651,7 @@ const ChildDetailScreen = () => {
               )}
             </View>
 
+            {!routeAccessBlocked ? (
             <View
               style={[styles.sectionCard, { backgroundColor: colors.surface }]}
             >
@@ -2063,6 +2669,7 @@ const ChildDetailScreen = () => {
                 </TouchableOpacity>
               </View>
             </View>
+            ) : null}
           </>
         ) : (
           <Text style={[styles.emptyText, { color: colors.text.secondary }]}>
@@ -2072,7 +2679,9 @@ const ChildDetailScreen = () => {
       </ScrollView>
 
       <Modal
-        visible={scanModalVisible}
+        visible={
+          scanModalVisible && paymentAccessVerified && !paymentAccessBlocked
+        }
         animationType="slide"
         onRequestClose={() => setScanModalVisible(false)}
       >
@@ -2166,7 +2775,9 @@ const ChildDetailScreen = () => {
               { key: "notifications", label: "🔔 Notifications" },
               { key: "support", label: "💬 Contact Support" },
               { key: "remove", label: "🗑️ Remove Child", destructive: true },
-            ].map((item) => (
+            ]
+              .filter((item) => !routeAccessBlocked || item.key !== "trip")
+              .map((item) => (
               <TouchableOpacity
                 key={item.key}
                 onPress={() => handleMenuAction(item.key)}
@@ -2257,18 +2868,70 @@ const ChildDetailScreen = () => {
               >
                 School
               </Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  { color: colors.text.primary, borderColor: colors.border },
-                ]}
+              <GooglePlacesAutoComplete
                 value={editForm.school_name}
-                onChangeText={(value) =>
-                  handleInputChange("school_name", value)
-                }
-                placeholder="School name"
-                placeholderTextColor={colors.text.secondary}
+                onChangeText={handleSchoolInputChange}
+                onSelect={handleSchoolSelect}
+                placeholder="Search or select school"
+                suggestionsPlacement="below"
               />
+              <View
+                pointerEvents="none"
+                style={{
+                  height: 160,
+                  marginTop: 10,
+                  overflow: "hidden",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                {editSchoolMapRegion ? (
+                  <MapView
+                    key={`${editSchoolMapRegion.latitude},${editSchoolMapRegion.longitude}`}
+                    style={{ flex: 1 }}
+                    initialRegion={editSchoolMapRegion}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    toolbarEnabled={false}
+                    moveOnMarkerPress={false}
+                  >
+                    <Marker
+                      coordinate={{
+                        latitude: editSchoolMapRegion.latitude,
+                        longitude: editSchoolMapRegion.longitude,
+                      }}
+                      title={editForm.school_name || "School"}
+                    />
+                  </MapView>
+                ) : (
+                  <View
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <MaterialIcons
+                      name="location-on"
+                      size={24}
+                      color={colors.text.secondary}
+                    />
+                    <Text
+                      style={{
+                        marginTop: 4,
+                        color: colors.text.secondary,
+                        fontSize: 12,
+                      }}
+                    >
+                      Select a school to show its location
+                    </Text>
+                  </View>
+                )}
+              </View>
             </KeyboardAvoidingView>
             <TouchableOpacity
               style={[
@@ -2297,7 +2960,9 @@ const ChildDetailScreen = () => {
       </Modal>
 
       <Modal
-        visible={isMapModalVisible}
+        visible={
+          isMapModalVisible && paymentAccessVerified && !paymentAccessBlocked
+        }
         animationType="slide"
         onRequestClose={() => setIsMapModalVisible(false)}
       >
@@ -2320,7 +2985,7 @@ const ChildDetailScreen = () => {
                   coordinate={marker.coordinate}
                   title={marker.title}
                   description={marker.description}
-                  pinColor={marker.id === "live-driver" ? "#159B3A" : undefined}
+                  pinColor={marker.id === "live-driver" ? "#C14BFF" : undefined}
                 />
               ))}
               {mapMarkers.length > 1 && GOOGLE_API_KEY ? (
@@ -2329,14 +2994,14 @@ const ChildDetailScreen = () => {
                   destination={mapMarkers[mapMarkers.length - 1].coordinate}
                   apikey={GOOGLE_API_KEY}
                   strokeWidth={5}
-                  strokeColor="#159B3A"
+                  strokeColor="#C14BFF"
                   optimizeWaypoints
                 />
               ) : null}
             </MapView>
           ) : (
             <View style={styles.mapEmptyState}>
-              <MaterialIcons name="map" size={34} color="#607A98" />
+              <MaterialIcons name="map" size={34} color="#B9AFC4" />
               <Text style={styles.mapEmptyTitle}>Map data unavailable</Text>
             </View>
           )}
@@ -2346,7 +3011,7 @@ const ChildDetailScreen = () => {
               style={styles.mapBackButton}
               onPress={() => setIsMapModalVisible(false)}
             >
-              <MaterialIcons name="arrow-back" size={22} color="#17365E" />
+              <MaterialIcons name="arrow-back" size={22} color="#FBF8FF" />
             </TouchableOpacity>
             <View style={styles.mapHeaderText}>
               <Text style={styles.mapEyebrow}>CHILD ROUTE</Text>
@@ -2370,7 +3035,7 @@ const ChildDetailScreen = () => {
                   borderRadius: 10,
                   backgroundColor:
                     visibleLiveLocationStatus === "live"
-                      ? "#E9F8EE"
+                      ? "#1C1026"
                       : "#F3F4F6",
                 }}
               >
@@ -2381,7 +3046,7 @@ const ChildDetailScreen = () => {
                     borderRadius: 4,
                     backgroundColor:
                       visibleLiveLocationStatus === "live"
-                        ? "#159B3A"
+                        ? "#C14BFF"
                         : "#94A3B8",
                   }}
                 />
@@ -2428,7 +3093,11 @@ const ChildDetailScreen = () => {
       </Modal>
 
       <Modal
-        visible={isWeekendScheduleVisible}
+        visible={
+          isWeekendScheduleVisible &&
+          paymentAccessVerified &&
+          !paymentAccessBlocked
+        }
         animationType="slide"
         transparent
       >
@@ -2461,7 +3130,7 @@ const ChildDetailScreen = () => {
                     <MaterialIcons
                       name="event"
                       size={16}
-                      color={isSelected ? "#fff" : "#159B3A"}
+                      color={isSelected ? "#fff" : "#C14BFF"}
                     />
                     <Text
                       style={[
@@ -2494,7 +3163,7 @@ const ChildDetailScreen = () => {
                 setShowWeekendTimePicker(true);
               }}
             >
-              <MaterialIcons name="schedule" size={18} color="#159B3A" />
+              <MaterialIcons name="schedule" size={18} color="#C14BFF" />
               <Text style={styles.pickerButtonText}>
                 {(weekendTimeType === "pickup"
                   ? weekendPickupTime
@@ -2532,7 +3201,7 @@ const ChildDetailScreen = () => {
                 setShowWeekendTimePicker(true);
               }}
             >
-              <MaterialIcons name="schedule" size={18} color="#159B3A" />
+              <MaterialIcons name="schedule" size={18} color="#C14BFF" />
               <Text style={styles.pickerButtonText}>
                 Drop-off:{" "}
                 {weekendDropoffTime.toLocaleTimeString([], {
@@ -2938,18 +3607,70 @@ const ChildDetailScreen = () => {
               >
                 School
               </Text>
-              <TextInput
-                style={[
-                  styles.inputField,
-                  { color: colors.text.primary, borderColor: colors.border },
-                ]}
+              <GooglePlacesAutoComplete
                 value={editForm.school_name}
-                onChangeText={(value) =>
-                  handleInputChange("school_name", value)
-                }
-                placeholder="School name"
-                placeholderTextColor={colors.text.secondary}
+                onChangeText={handleSchoolInputChange}
+                onSelect={handleSchoolSelect}
+                placeholder="Search or select school"
+                suggestionsPlacement="below"
               />
+              <View
+                pointerEvents="none"
+                style={{
+                  height: 160,
+                  marginTop: 10,
+                  overflow: "hidden",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                {editSchoolMapRegion ? (
+                  <MapView
+                    key={`${editSchoolMapRegion.latitude},${editSchoolMapRegion.longitude}`}
+                    style={{ flex: 1 }}
+                    initialRegion={editSchoolMapRegion}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    toolbarEnabled={false}
+                    moveOnMarkerPress={false}
+                  >
+                    <Marker
+                      coordinate={{
+                        latitude: editSchoolMapRegion.latitude,
+                        longitude: editSchoolMapRegion.longitude,
+                      }}
+                      title={editForm.school_name || "School"}
+                    />
+                  </MapView>
+                ) : (
+                  <View
+                    style={{
+                      flex: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: colors.surface,
+                    }}
+                  >
+                    <MaterialIcons
+                      name="location-on"
+                      size={24}
+                      color={colors.text.secondary}
+                    />
+                    <Text
+                      style={{
+                        marginTop: 4,
+                        color: colors.text.secondary,
+                        fontSize: 12,
+                      }}
+                    >
+                      Select a school to show its location
+                    </Text>
+                  </View>
+                )}
+              </View>
             </KeyboardAvoidingView>
             <TouchableOpacity
               style={[
@@ -2978,7 +3699,9 @@ const ChildDetailScreen = () => {
       </Modal>
 
       <Modal
-        visible={isActivityModalVisible}
+        visible={
+          isActivityModalVisible && paymentAccessVerified && !paymentAccessBlocked
+        }
         animationType="slide"
         onRequestClose={() => setIsActivityModalVisible(false)}
       >
@@ -3114,7 +3837,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
     zIndex: 10,
   },
 
@@ -3141,7 +3864,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   topRowTitle: {
@@ -3150,7 +3873,7 @@ const styles = StyleSheet.create({
   },
 
   pageTitle: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
@@ -3174,7 +3897,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   detailTabs: {
@@ -3192,15 +3915,15 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     borderRadius: 17,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   detailTabSelected: {
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
 
   detailTabText: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 10,
     fontWeight: "600",
   },
@@ -3219,7 +3942,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 11,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     shadowColor: "#24415D",
     shadowOffset: {
       width: 0,
@@ -3235,7 +3958,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 11,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
   },
 
   locationPreviewCard: {
@@ -3271,11 +3994,11 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
 
   locationPreviewTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
   },
 
@@ -3291,11 +4014,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   mapRefreshText: {
-    color: "#087C2B",
+    color: "#C14BFF",
     fontSize: 9,
     fontWeight: "700",
   },
@@ -3304,7 +4027,7 @@ const styles = StyleSheet.create({
     height: 152,
     borderRadius: 11,
     overflow: "hidden",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   routePreviewMap: {
@@ -3318,11 +4041,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 30,
     gap: 7,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   routePreviewEmptyText: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 10,
     textAlign: "center",
   },
@@ -3343,13 +4066,13 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginBottom: 3,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     borderWidth: 2,
     borderColor: "#FFFFFF",
   },
 
   mapRoutePillText: {
-    color: "#17365E",
+    color: "#FBF8FF",
     backgroundColor: "rgba(255,255,255,0.94)",
     overflow: "hidden",
     borderRadius: 11,
@@ -3357,6 +4080,30 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     fontSize: 9,
     fontWeight: "800",
+  },
+
+  routeLiveStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 9,
+    backgroundColor: "#1C1026",
+  },
+
+  routeLiveStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  routeLiveStatusText: {
+    flex: 1,
+    color: "#40566E",
+    fontSize: 10,
+    fontWeight: "600",
   },
 
   nextStopRow: {
@@ -3380,7 +4127,7 @@ const styles = StyleSheet.create({
   },
 
   nextStopLabel: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 8,
   },
 
@@ -3391,7 +4138,7 @@ const styles = StyleSheet.create({
   },
 
   nextStopTime: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 8,
     marginTop: 2,
   },
@@ -3403,11 +4150,11 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingLeft: 9,
     borderLeftWidth: 1,
-    borderLeftColor: "#DCEAF8",
+    borderLeftColor: "#352341",
   },
 
   routeStatusPillText: {
-    color: "#087C2B",
+    color: "#C14BFF",
     fontSize: 8,
     fontWeight: "700",
     marginTop: 3,
@@ -3416,8 +4163,8 @@ const styles = StyleSheet.create({
   weekendBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#E9F8EE",
-    borderColor: "#DCEAF8",
+    backgroundColor: "#1C1026",
+    borderColor: "#352341",
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
@@ -3430,15 +4177,15 @@ const styles = StyleSheet.create({
   },
 
   weekendBannerTitle: {
-    color: "#087C2B",
-    fontSize: 14,
+    color: "#C14BFF",
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 3,
   },
 
   weekendBannerText: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     lineHeight: 18,
   },
 
@@ -3447,7 +4194,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 11,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     shadowColor: "#24415D",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.04,
@@ -3460,7 +4207,7 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 11,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     shadowColor: "#24415D",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.035,
@@ -3483,7 +4230,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   heroAvatar: {
@@ -3501,7 +4248,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
 
   heroInfo: {
@@ -3517,7 +4264,7 @@ const styles = StyleSheet.create({
   },
 
   heroName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
@@ -3526,13 +4273,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
   },
 
   statusPillText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#087C2B",
+    color: "#C14BFF",
   },
 
   heroMetaRow: {
@@ -3550,7 +4297,7 @@ const styles = StyleSheet.create({
   },
 
   heroMetaText: {
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 16,
     flexShrink: 1,
   },
@@ -3566,7 +4313,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#D8EFE0",
-    backgroundColor: "#F1FAF4",
+    backgroundColor: "#1C1026",
   },
 
   childIdLabel: {
@@ -3605,13 +4352,13 @@ const styles = StyleSheet.create({
   },
 
   bannerTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 2,
   },
 
   bannerDescription: {
-    fontSize: 12,
+    fontSize: 11,
     lineHeight: 17,
   },
 
@@ -3627,7 +4374,7 @@ const styles = StyleSheet.create({
   },
 
   tripTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
   },
 
@@ -3638,13 +4385,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
   },
 
   tripStatusText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#087C2B",
+    color: "#C14BFF",
   },
 
   tripTimeline: {
@@ -3669,7 +4416,7 @@ const styles = StyleSheet.create({
   },
 
   tripPointTime: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
 
@@ -3683,7 +4430,7 @@ const styles = StyleSheet.create({
   },
 
   tripPointLocation: {
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 1,
     lineHeight: 17,
   },
@@ -3699,7 +4446,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3709,9 +4456,9 @@ const styles = StyleSheet.create({
   },
 
   liveTripButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
-    color: "#087C2B",
+    color: "#C14BFF",
   },
 
   weekendScheduleButton: {
@@ -3726,7 +4473,7 @@ const styles = StyleSheet.create({
 
   weekendScheduleButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -3740,12 +4487,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#35151D",
   },
 
   cancelWeekendButtonText: {
     color: "#DC2626",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -3764,13 +4511,13 @@ const styles = StyleSheet.create({
   },
 
   scheduledTripRowDate: {
-    color: "#17365E",
-    fontSize: 12,
+    color: "#FBF8FF",
+    fontSize: 11,
     fontWeight: "800",
   },
 
   scheduledTripRowTimes: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 11,
     marginTop: 3,
   },
@@ -3783,13 +4530,13 @@ const styles = StyleSheet.create({
   },
 
   weekendTripMessage: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 20,
     paddingVertical: 10,
   },
 
   scheduledTripTime: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     marginBottom: 10,
   },
@@ -3799,7 +4546,7 @@ const styles = StyleSheet.create({
   ========================= */
 
   sectionHeader: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 14,
     letterSpacing: -0.2,
@@ -3819,11 +4566,11 @@ const styles = StyleSheet.create({
   },
 
   infoLabel: {
-    fontSize: 12,
+    fontSize: 11,
   },
 
   infoValue: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     maxWidth: "60%",
     textAlign: "right",
@@ -3862,12 +4609,12 @@ const styles = StyleSheet.create({
   },
 
   locationTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
   },
 
   locationSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 3,
     lineHeight: 15,
   },
@@ -3880,9 +4627,9 @@ const styles = StyleSheet.create({
   },
 
   locationActionText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
-    color: "#159B3A",
+    color: "#C14BFF",
   },
 
   /* =========================
@@ -3908,12 +4655,12 @@ const styles = StyleSheet.create({
   },
 
   vehicleSummaryTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
   vehicleSummarySubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 3,
   },
 
@@ -3927,7 +4674,7 @@ const styles = StyleSheet.create({
   vehicleViewButtonText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#159B3A",
+    color: "#C14BFF",
   },
 
   scanButton: {
@@ -3943,7 +4690,7 @@ const styles = StyleSheet.create({
 
   scanButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -3957,7 +4704,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 13,
     overflow: "hidden",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -3974,7 +4721,7 @@ const styles = StyleSheet.create({
   },
 
   driverName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -3993,7 +4740,7 @@ const styles = StyleSheet.create({
   driverActionText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#159B3A",
+    color: "#C14BFF",
   },
 
   /* =========================
@@ -4026,7 +4773,7 @@ const styles = StyleSheet.create({
   },
 
   activityModalEyebrow: {
-    color: "#159B3A",
+    color: "#C14BFF",
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1,
@@ -4034,12 +4781,12 @@ const styles = StyleSheet.create({
   },
 
   activityModalTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
   },
 
   activityModalSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 2,
   },
 
@@ -4070,7 +4817,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#159B3A",
+    color: "#C14BFF",
   },
 
   activityRow: {
@@ -4090,15 +4837,15 @@ const styles = StyleSheet.create({
   },
 
   activityMarkerDone: {
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
 
   activityMarkerProgress: {
-    backgroundColor: "#087C2B",
+    backgroundColor: "#9B2BE7",
   },
 
   activityMarkerPending: {
-    backgroundColor: "#607A98",
+    backgroundColor: "#B9AFC4",
   },
 
   activityTextWrap: {
@@ -4111,7 +4858,7 @@ const styles = StyleSheet.create({
   },
 
   activityTitle: {
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
   },
 
@@ -4177,7 +4924,7 @@ const styles = StyleSheet.create({
 
   scanTitle: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     marginTop: 3,
   },
@@ -4251,7 +4998,7 @@ const styles = StyleSheet.create({
   scanPermissionText: {
     color: "#fff",
     textAlign: "center",
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 21,
     marginTop: 14,
     maxWidth: 260,
@@ -4275,7 +5022,7 @@ const styles = StyleSheet.create({
 
   scanInstructionTitle: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
   },
 
@@ -4292,12 +5039,12 @@ const styles = StyleSheet.create({
 
   scanCancelText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
 
   scanInstructions: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
     color: "#CBD5E1",
     textAlign: "center",
@@ -4334,7 +5081,7 @@ const styles = StyleSheet.create({
   },
 
   vehicleScreenTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: "800",
     marginTop: 3,
   },
@@ -4366,7 +5113,7 @@ const styles = StyleSheet.create({
   },
 
   detailSectionTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "800",
     marginBottom: 12,
   },
@@ -4386,7 +5133,7 @@ const styles = StyleSheet.create({
   },
 
   detailValue: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
     maxWidth: "62%",
     textAlign: "right",
@@ -4410,13 +5157,13 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     marginBottom: 14,
   },
 
   scheduleDescription: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
     marginBottom: 8,
   },
@@ -4436,12 +5183,12 @@ const styles = StyleSheet.create({
   },
 
   weekendDateOptionSelected: {
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
   },
 
   weekendDateOptionText: {
-    color: "#159B3A",
-    fontSize: 13,
+    color: "#C14BFF",
+    fontSize: 12,
     fontWeight: "700",
   },
 
@@ -4450,7 +5197,7 @@ const styles = StyleSheet.create({
   },
 
   scheduleTimeLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
     marginTop: 12,
     marginBottom: 2,
@@ -4467,8 +5214,8 @@ const styles = StyleSheet.create({
   },
 
   pickerButtonText: {
-    color: "#159B3A",
-    fontSize: 13,
+    color: "#C14BFF",
+    fontSize: 12,
     fontWeight: "700",
   },
 
@@ -4496,7 +5243,7 @@ const styles = StyleSheet.create({
   },
 
   closeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
@@ -4524,7 +5271,7 @@ const styles = StyleSheet.create({
   },
 
   menuItemText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
 
@@ -4554,7 +5301,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    fontSize: 13,
+    fontSize: 12,
   },
 
   primaryButton: {
@@ -4566,7 +5313,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     color: "#fff",
   },
@@ -4600,7 +5347,7 @@ const styles = StyleSheet.create({
 
   cameraFallbackText: {
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
   },
 
@@ -4618,13 +5365,13 @@ const styles = StyleSheet.create({
   scanLoadingText: {
     color: "#fff",
     marginTop: 10,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
 
   scanError: {
     marginBottom: 12,
-    fontSize: 12,
+    fontSize: 11,
     textAlign: "center",
   },
 
@@ -4638,7 +5385,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     marginTop: 4,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   mapView: {
@@ -4648,7 +5395,7 @@ const styles = StyleSheet.create({
 
   fullScreenMapScreen: {
     flex: 1,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   mapScreenHeader: {
@@ -4675,7 +5422,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   mapHeaderText: {
@@ -4684,15 +5431,15 @@ const styles = StyleSheet.create({
   },
 
   mapEyebrow: {
-    color: "#607A98",
+    color: "#B9AFC4",
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1,
   },
 
   mapScreenTitle: {
-    color: "#17365E",
-    fontSize: 15,
+    color: "#FBF8FF",
+    fontSize: 13,
     fontWeight: "800",
     marginTop: 2,
   },
@@ -4707,7 +5454,7 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    backgroundColor: "#fff",
+    backgroundColor: "#130D1A",
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -4725,8 +5472,8 @@ const styles = StyleSheet.create({
   },
 
   mapPanelTitle: {
-    color: "#17365E",
-    fontSize: 16,
+    color: "#FBF8FF",
+    fontSize: 14,
     fontWeight: "800",
     marginBottom: 8,
   },
@@ -4736,24 +5483,24 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     paddingVertical: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#DCEAF8",
+    borderTopColor: "#352341",
   },
 
   mapLocationDot: {
     width: 11,
     height: 11,
     borderRadius: 6,
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     marginTop: 3,
     marginRight: 12,
   },
 
   mapDropoffDot: {
-    backgroundColor: "#087C2B",
+    backgroundColor: "#9B2BE7",
   },
 
   mapDriverDot: {
-    backgroundColor: "#087C2B",
+    backgroundColor: "#9B2BE7",
   },
 
   mapLocationText: {
@@ -4761,21 +5508,21 @@ const styles = StyleSheet.create({
   },
 
   mapLocationTitle: {
-    color: "#17365E",
-    fontSize: 13,
+    color: "#FBF8FF",
+    fontSize: 12,
     fontWeight: "700",
   },
 
   mapLocationAddress: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     lineHeight: 17,
     marginTop: 2,
   },
 
   mapKeyHint: {
-    color: "#087C2B",
-    backgroundColor: "#E9F8EE",
+    color: "#C14BFF",
+    backgroundColor: "#1C1026",
     borderRadius: 10,
     padding: 10,
     fontSize: 11,
@@ -4787,12 +5534,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
   },
 
   mapEmptyTitle: {
-    color: "#17365E",
-    fontSize: 15,
+    color: "#FBF8FF",
+    fontSize: 13,
     fontWeight: "700",
     marginTop: 10,
   },
@@ -4808,7 +5555,7 @@ const styles = StyleSheet.create({
   },
 
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
     marginTop: 40,

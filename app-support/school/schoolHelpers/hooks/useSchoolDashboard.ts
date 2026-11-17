@@ -41,16 +41,21 @@ const emptyDashboard: SchoolDashboardData = {
   parents: [],
 };
 
+const dashboardMemoryCache = new Map<string, SchoolDashboardData>();
+
 export const useSchoolDashboard = () => {
   const { user } = useContext(AuthContext);
-  const [dashboard, setDashboard] =
-    useState<SchoolDashboardData>(emptyDashboard);
-  const [loading, setLoading] = useState(true);
+  const userId = user?.userData?.id || user?.userData?.user_id || "";
+  const [dashboard, setDashboard] = useState<SchoolDashboardData>(
+    () => dashboardMemoryCache.get(userId) || emptyDashboard,
+  );
+  const [loading, setLoading] = useState(
+    () => !dashboardMemoryCache.has(userId),
+  );
   const [error, setError] = useState<string | null>(null);
   const [assignedTrips, setAssignedTrips] = useState<AssignedSchoolTrip[]>([]);
   const [assignedTripsLoading, setAssignedTripsLoading] = useState(true);
   const channelRef = useRef<any>(null);
-  const userId = user?.userData?.id || user?.userData?.user_id || "";
 
   const refresh = useCallback(
     async (forceRefresh = false) => {
@@ -59,14 +64,18 @@ export const useSchoolDashboard = () => {
         return null;
       }
 
-      let cached: SchoolDashboardData | null = null;
+      let cached: SchoolDashboardData | null =
+        dashboardMemoryCache.get(userId) || null;
       try {
         if (!forceRefresh) {
-          cached = await loadSchoolDashboard(userId);
+          cached = cached || (await loadSchoolDashboard(userId));
           if (cached) {
+            dashboardMemoryCache.set(userId, cached);
             setDashboard(cached);
             setLoading(false);
           }
+        } else if (cached) {
+          setDashboard(cached);
         }
 
         const baseUrl = await resolveWorkingBaseUrl();
@@ -84,12 +93,12 @@ export const useSchoolDashboard = () => {
           drivers: Array.isArray(data.drivers) ? data.drivers : [],
           parents: Array.isArray(data.parents) ? data.parents : [],
         };
+        dashboardMemoryCache.set(userId, fresh);
         setDashboard(fresh);
         await saveSchoolDashboard(userId, fresh);
         return fresh;
       } catch (requestError: any) {
         setError(requestError?.message || "Could not load school data");
-        if (!cached) setDashboard(emptyDashboard);
         return cached;
       } finally {
         setLoading(false);
@@ -99,7 +108,10 @@ export const useSchoolDashboard = () => {
   );
 
   useEffect(() => {
-    refresh();
+    const initialLoad = setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => clearTimeout(initialLoad);
   }, [refresh]);
 
   useEffect(() => {
@@ -156,6 +168,8 @@ export const useSchoolDashboard = () => {
     };
   }, [dashboard.school?.id, refresh, user?.token]);
 
+  const forceRefresh = useCallback(() => refresh(true), [refresh]);
+
   return {
     user: user?.userData || null,
     ...dashboard,
@@ -163,7 +177,7 @@ export const useSchoolDashboard = () => {
     assignedTripsLoading: user?.token ? assignedTripsLoading : false,
     loading,
     error,
-    refresh: () => refresh(true),
+    refresh: forceRefresh,
   };
 };
 

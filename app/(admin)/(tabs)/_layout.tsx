@@ -15,6 +15,7 @@ export default function AdminLayout() {
       <Tabs.Screen name="more" />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="commissions" options={{ href: null }} />
+      <Tabs.Screen name="support-live-chat" options={{ href: null }} />
       <Tabs.Screen name="school-billing" options={{ href: null }} />
       <Tabs.Screen name="school-subscriptions" options={{ href: null }} />
       <Tabs.Screen name="tools/[tool]" options={{ href: null }} />

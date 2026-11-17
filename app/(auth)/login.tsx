@@ -70,12 +70,19 @@ export default function Login({
       router.replace("/" as never);
     } catch (error: any) {
       // console.error("Login error:", error);
+      const errorCode =
+        error?.response?.data?.error || error?.response?.data?.message;
       setNotification({
         visible: true,
         message:
-          error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          "Login failed. Please try again.",
+          errorCode === "INVALID_CREDENTIALS" ||
+          errorCode === "invalid_credentials"
+            ? "Incorrect email or password. Please check your details and try again."
+            : errorCode === "LOGIN_FAILED"
+              ? "We couldn't sign you in right now. Please try again shortly."
+              : errorCode === "OTP_EMAIL_SEND_FAILED"
+                ? "Your password was accepted, but we couldn't email the verification code. Please try signing in again."
+              : errorCode || "Login failed. Please try again.",
         type: "error",
       });
     } finally {
@@ -121,7 +128,9 @@ export default function Login({
       setNotification({
         visible: true,
         message:
-          error.message || "Failed to send reset email. Please try again.",
+          error.message === "PASSWORD_RESET_UNAVAILABLE"
+            ? "Password reset is temporarily unavailable. Please try again later."
+            : error.message || "Failed to send reset email. Please try again.",
         type: "error",
       });
     } finally {
@@ -205,14 +214,18 @@ export default function Login({
           >
             <FloatingInput
               label="Email address"
+              accessibilityLabel="Email address"
               value={email}
               onChangeText={setEmail}
-              leftIcon={<MaterialIcons name="email" size={18} color="#64809C" />}
+              leftIcon={
+                <MaterialIcons name="email" size={18} color="#64809C" />
+              }
               keyboardType="email-address"
               autoCapitalize="none"
             />
             <FloatingInput
               label="Password"
+              accessibilityLabel="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -258,7 +271,6 @@ export default function Login({
                 )}
               </LinearGradient>
             </TouchableOpacity>
-
           </View>
 
           <View style={loginStyles.bottomRow}>
@@ -361,8 +373,8 @@ const loginStyles = StyleSheet.create({
     marginBottom: 12,
   },
   logo: {
-    width: 104,
-    height: 104,
+    width: 200,
+    height: 200,
     resizeMode: "contain",
     marginBottom: 4,
   },

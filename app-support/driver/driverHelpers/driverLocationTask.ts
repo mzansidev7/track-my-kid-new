@@ -19,7 +19,8 @@ if (!TaskManager.isTaskDefined(DRIVER_LOCATION_TASK)) {
       const location = data?.locations?.[data.locations.length - 1];
       if (!location) return;
 
-      const { token } = await getUserFromAsyncStorage();
+      const auth = await getUserFromAsyncStorage();
+      const token = auth?.token;
       if (!token) {
         await Location.stopLocationUpdatesAsync(DRIVER_LOCATION_TASK);
         return;
@@ -38,8 +39,12 @@ if (!TaskManager.isTaskDefined(DRIVER_LOCATION_TASK)) {
           speed: location.coords.speed,
         }),
       });
+      const body = await response.json().catch(() => ({}));
+      if (body.route_ended === true) {
+        await Location.stopLocationUpdatesAsync(DRIVER_LOCATION_TASK);
+        return;
+      }
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
         throw new Error(body.error || "Background location update failed.");
       }
     },

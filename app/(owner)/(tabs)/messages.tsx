@@ -22,6 +22,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -59,6 +60,10 @@ import {
 } from "../../../components/messages/MessageAttachment";
 import EmojiPicker from "../../../components/messages/EmojiPicker";
 import MessageReactions from "../../../components/messages/MessageReactions";
+import GroupChatMenu from "../../../components/messages/GroupChatMenu";
+import GroupSenderAvatar from "../../../components/messages/GroupSenderAvatar";
+import PresenceDot from "../../../components/presence/PresenceDot";
+import PresenceStatus from "../../../components/presence/PresenceStatus";
 
 interface Message {
   id: string;
@@ -76,6 +81,7 @@ interface Message {
   users: {
     name: string;
     role: string;
+    avatar?: string | null;
   };
 }
 
@@ -90,13 +96,14 @@ export default function Messages({ setActiveButton }: any) {
     userRole === "driver"
       ? { primary: "#0A84FF", secondary: "#0066FF" }
       : userRole === "owner"
-        ? { primary: "#1769D2", secondary: "#1557B0" }
+        ? { primary: "#00B894", secondary: "#087A62" }
         : { primary: "#FF9F0A", secondary: "#FF7A00" };
 
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [selectedConversation, setSelectedConversation] =
     useState<ConversationData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [conversationFilter, setConversationFilter] = useState<
@@ -689,11 +696,107 @@ export default function Messages({ setActiveButton }: any) {
     }
   };
 
+  const uploadAndSendAttachments = async (
+    attachments: {
+      uri: string;
+      name: string;
+      mimeType: string;
+      mediaType: "image" | "audio" | "video" | "pdf";
+    }[],
+  ) => {
+    if (attachments.length > 20) {
+      setNotification({
+        visible: true,
+        message: "You can send up to 20 attachments in one message.",
+        type: "warning",
+      });
+      return false;
+    }
+    if (
+      !selectedConversation ||
+      !user?.token ||
+      uploadingAttachment ||
+      sending
+    ) {
+      return false;
+    }
+
+    setUploadingAttachment(true);
+    try {
+      const uploadedAttachments = [];
+      for (const attachment of attachments) {
+        const fileResponse = await fetch(attachment.uri);
+        const fileBlob = await fileResponse.blob();
+        if (!fileBlob.size) {
+          throw new Error(`${attachment.name} is empty or unavailable.`);
+        }
+        if (fileBlob.size > 20 * 1024 * 1024) {
+          throw new Error(`${attachment.name} exceeds the 20 MB limit.`);
+        }
+        const formData = new FormData();
+        formData.append(
+          "file",
+          fileBlob.slice(0, fileBlob.size, attachment.mimeType),
+          attachment.name,
+        );
+        const uploadResponse = await fetch(
+          `${BASE_URL}/owner/conversations/${selectedConversation.id}/attachments`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${user.token}` },
+            body: formData,
+          },
+        );
+        const uploaded = await uploadResponse.json();
+        if (!uploadResponse.ok || !uploaded.url) {
+          throw new Error(uploaded.error || "Attachment upload failed");
+        }
+        uploadedAttachments.push({
+          type: "attachment",
+          mediaType: attachment.mediaType,
+          url: uploaded.url,
+          name: uploaded.name || attachment.name,
+          mimeType: uploaded.mimeType || attachment.mimeType,
+        });
+      }
+
+      const caption = newMessage.trim();
+      const content = JSON.stringify(
+        uploadedAttachments.length === 1
+          ? { ...uploadedAttachments[0], caption }
+          : {
+              type: "attachment_group",
+              attachments: uploadedAttachments,
+              caption,
+            },
+      );
+      const sent = await sendMessage(content);
+      if (sent) {
+        setShowAttachmentActions(false);
+        setShowEmojiPicker(false);
+      }
+      return sent;
+    } catch (error) {
+      console.error("Unable to upload message attachments:", error);
+      setNotification({
+        visible: true,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to upload the attachments.",
+        type: "error",
+      });
+      return false;
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
   const uploadAndSendAttachment = async (
     uri: string,
     name: string,
     mimeType: string,
-    mediaType: "image" | "audio" | "pdf",
+    mediaType: "image" | "audio" | "video" | "pdf",
   ) => {
     if (
       !selectedConversation ||
@@ -760,15 +863,17 @@ export default function Messages({ setActiveButton }: any) {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf"],
+        multiple: true,
         copyToCacheDirectory: true,
       });
       if (result.canceled) return;
-      const document = result.assets[0];
-      await uploadAndSendAttachment(
-        document.uri,
-        document.name,
-        document.mimeType || "application/pdf",
-        "pdf",
+      await uploadAndSendAttachments(
+        result.assets.map((document) => ({
+          uri: document.uri,
+          name: document.name,
+          mimeType: document.mimeType || "application/pdf",
+          mediaType: "pdf",
+        })),
       );
     } catch (error) {
       console.error("Unable to select PDF attachment:", error);
@@ -807,23 +912,74 @@ export default function Messages({ setActiveButton }: any) {
             })
           : await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ["images"],
+              allowsMultipleSelection: true,
+              selectionLimit: 20,
               quality: 0.82,
             });
-      const asset = result.canceled ? null : result.assets?.[0];
-      if (!asset?.uri) return;
-      await uploadAndSendAttachment(
-        asset.uri,
-        asset.fileName ||
-          asset.uri.split("/").pop() ||
-          `image-${Date.now()}.jpg`,
-        asset.mimeType || "image/jpeg",
-        "image",
+      const assets = result.canceled ? [] : result.assets || [];
+      if (!assets.length) return;
+      await uploadAndSendAttachments(
+        assets.map((asset) => ({
+          uri: asset.uri,
+          name:
+            asset.fileName ||
+            asset.uri.split("/").pop() ||
+            `image-${Date.now()}.jpg`,
+          mimeType: asset.mimeType || "image/jpeg",
+          mediaType: "image",
+        })),
       );
     } catch (error) {
       console.error("Unable to select image:", error);
       setNotification({
         visible: true,
         message: "Unable to open the camera or photo library.",
+        type: "error",
+      });
+    }
+  };
+
+  const selectVideo = async () => {
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setNotification({
+          visible: true,
+          message: "Photo library permission is required to choose a video.",
+          type: "warning",
+        });
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        allowsMultipleSelection: true,
+        selectionLimit: 20,
+        quality: 0.82,
+        videoMaxDuration: 120,
+      });
+      const assets = result.canceled ? [] : result.assets || [];
+      if (!assets.length) return;
+      await uploadAndSendAttachments(
+        assets.map((asset) => {
+          const isVideo = asset.type === "video";
+          return {
+            uri: asset.uri,
+            name:
+              asset.fileName ||
+              asset.uri.split("/").pop() ||
+              (isVideo ? "video.mp4" : "image.jpg"),
+            mimeType: asset.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
+            mediaType: isVideo ? "video" : "image",
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Unable to select video:", error);
+      setNotification({
+        visible: true,
+        message:
+          error instanceof Error ? error.message : "Unable to select video.",
         type: "error",
       });
     }
@@ -920,7 +1076,7 @@ export default function Messages({ setActiveButton }: any) {
           </Text>
         </View>
         {!alreadyConversing && (
-          <MaterialIcons name="add-circle-outline" size={24} color="#1769D2" />
+          <MaterialIcons name="add-circle-outline" size={24} color="#35D9B3" />
         )}
       </TouchableOpacity>
     );
@@ -939,7 +1095,7 @@ export default function Messages({ setActiveButton }: any) {
         disabled={alreadyConversing}
       >
         <View style={styles.conversationIcon}>
-          <MaterialIcons name="person" size={24} color="#1769D2" />
+          <MaterialIcons name="person" size={24} color="#35D9B3" />
         </View>
         <View style={styles.conversationInfo}>
           <Text style={styles.conversationName}>{item.name}</Text>
@@ -954,7 +1110,7 @@ export default function Messages({ setActiveButton }: any) {
           ) : null}
         </View>
         {!alreadyConversing && (
-          <MaterialIcons name="add-circle-outline" size={24} color="#1769D2" />
+          <MaterialIcons name="add-circle-outline" size={24} color="#35D9B3" />
         )}
       </TouchableOpacity>
     );
@@ -978,9 +1134,14 @@ export default function Messages({ setActiveButton }: any) {
             style={styles.listAvatarImage}
             resizeMode="contain"
           />
-        ) : item.other_participant.profile?.avatar ? (
+        ) : item.other_participant.avatar ||
+          item.other_participant.profile?.avatar ? (
           <Image
-            source={{ uri: item.other_participant.profile.avatar }}
+            source={{
+              uri:
+                item.other_participant.avatar ||
+                item.other_participant.profile?.avatar,
+            }}
             style={styles.listAvatarImage}
           />
         ) : (
@@ -988,6 +1149,9 @@ export default function Messages({ setActiveButton }: any) {
             {item.other_participant.name.charAt(0).toUpperCase() || "?"}
           </Text>
         )}
+        {item.other_participant.role !== "group" ? (
+          <PresenceDot userId={item.other_participant.id} showOffline />
+        ) : null}
       </View>
       <View style={styles.conversationInfo}>
         <View style={styles.conversationTopLine}>
@@ -1000,6 +1164,15 @@ export default function Messages({ setActiveButton }: any) {
             )}
           </Text>
         </View>
+        {item.other_participant.role === "school" &&
+        item.other_participant.school_name ? (
+          <Text
+            style={[styles.conversationPreview, { fontWeight: "600" }]}
+            numberOfLines={1}
+          >
+            {item.other_participant.school_name}
+          </Text>
+        ) : null}
         <Text style={styles.conversationPreview} numberOfLines={1}>
           {item.last_message
             ? `${item.last_message.sender_id === user?.userData?.id ? "You: " : ""}${getMessagePreview(item.last_message.content)}`
@@ -1008,7 +1181,7 @@ export default function Messages({ setActiveButton }: any) {
               : item.other_participant.role === "driver"
                 ? "Driver"
                 : item.other_participant.role === "school"
-                  ? "School admin"
+                ? "No messages yet"
                   : item.other_participant.role}
         </Text>
       </View>
@@ -1065,8 +1238,12 @@ export default function Messages({ setActiveButton }: any) {
       item.sender_id === selectedConversation.other_participant.id;
     const senderAvatar =
       !isOwnMessage &&
-      item.sender_id === selectedConversation?.other_participant.id
-        ? selectedConversation.other_participant.profile?.avatar
+      item.users?.avatar
+        ? item.users.avatar
+        : !isOwnMessage &&
+          item.sender_id === selectedConversation?.other_participant.id
+        ? selectedConversation.other_participant.avatar ||
+          selectedConversation.other_participant.profile?.avatar
         : drivers.find((driver: any) => driver.id === item.sender_id)?.avatar;
     const currentDate = new Date(item.sent_at).toDateString();
     const previousDate =
@@ -1095,7 +1272,16 @@ export default function Messages({ setActiveButton }: any) {
               : styles.otherMessageContainer,
           ]}
         >
-          {!isOwnMessage && (
+          {!isOwnMessage &&
+          ["admin_group", "school_group"].includes(
+            selectedConversation?.conversation_type || "",
+          ) ? (
+            <GroupSenderAvatar
+              name={item.users?.name}
+              avatar={senderAvatar}
+              userId={item.sender_id}
+            />
+          ) : !isOwnMessage ? (
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 {isSupportSender ? (
@@ -1112,15 +1298,34 @@ export default function Messages({ setActiveButton }: any) {
                 ) : (
                   <Text style={styles.avatarText}>{senderInitial}</Text>
                 )}
+                <PresenceDot userId={item.sender_id} />
               </View>
             </View>
-          )}
+          ) : null}
 
           <View
             style={
               isOwnMessage ? styles.ownMessageGroup : styles.otherMessageGroup
             }
           >
+            {!isOwnMessage &&
+            !["admin_group", "school_group"].includes(
+              selectedConversation?.conversation_type || "",
+            ) &&
+            selectedConversation?.other_participant.role === "school" &&
+            item.sender_id === selectedConversation.other_participant.id ? (
+              <View style={{ marginBottom: 4, paddingHorizontal: 3 }}>
+                <Text style={{ color: "#B1C4BC", fontSize: 11, fontWeight: "700" }}>
+                  {item.users?.name ||
+                    selectedConversation.other_participant.name}
+                </Text>
+                {selectedConversation.other_participant.school_name ? (
+                  <Text style={{ color: "#B1C4BC", fontSize: 10 }}>
+                    {selectedConversation.other_participant.school_name}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
             <View
               style={[
                 styles.messageBubble,
@@ -1130,6 +1335,12 @@ export default function Messages({ setActiveButton }: any) {
                 isOwnMessage ? styles.ownBubble : styles.otherBubble,
                 isOwnMessage && { backgroundColor: bubbleColors.primary },
               ]}
+            >
+            <Pressable
+              onLongPress={() => {
+                if (!isOwnMessage) setReactionPickerMessageId(item.id);
+              }}
+              delayLongPress={250}
             >
               {attachment ? (
                 <MessageAttachment
@@ -1146,7 +1357,7 @@ export default function Messages({ setActiveButton }: any) {
                   {item.content}
                 </Text>
               )}
-            </View>
+            </Pressable>
             {item.deliveryError ? (
               <Text style={styles.messageDeliveryError}>Message not sent</Text>
             ) : null}
@@ -1158,19 +1369,6 @@ export default function Messages({ setActiveButton }: any) {
             >
               <View style={styles.messageMetaRight}>
                 <Text style={styles.messageTime}>{displayTime}</Text>
-                {!item.deliveryError && !isOwnMessage ? (
-                  <MessageReactions
-                    apiBaseUrl={BASE_URL}
-                    role="owner"
-                    conversationId={selectedConversation?.id || ""}
-                    messageId={item.id}
-                    token={user?.token || ""}
-                    currentUserId={user?.userData?.id || ""}
-                    accentColor={bubbleColors.primary}
-                    reactions={item.reactions}
-                    isOwn={false}
-                  />
-                ) : null}
                 {isOwnMessage && (
                   <MaterialIcons
                     name={item.is_read ? "done-all" : "done"}
@@ -1179,22 +1377,27 @@ export default function Messages({ setActiveButton }: any) {
                     style={styles.messageReadIcon}
                   />
                 )}
-                {!item.deliveryError &&
-                isOwnMessage &&
-                item.reactions?.length ? (
-                  <MessageReactions
-                    apiBaseUrl={BASE_URL}
-                    role="owner"
-                    conversationId={selectedConversation?.id || ""}
-                    messageId={item.id}
-                    token={user?.token || ""}
-                    currentUserId={user?.userData?.id || ""}
-                    accentColor={bubbleColors.primary}
-                    reactions={item.reactions}
-                    isOwn
-                  />
-                ) : null}
               </View>
+            </View>
+            {!item.deliveryError &&
+            (!isOwnMessage || item.reactions?.length) ? (
+              <MessageReactions
+                apiBaseUrl={BASE_URL}
+                role="owner"
+                conversationId={selectedConversation?.id || ""}
+                messageId={item.id}
+                token={user?.token || ""}
+                currentUserId={user?.userData?.id || ""}
+                accentColor={bubbleColors.primary}
+                reactions={item.reactions}
+                isOwn={isOwnMessage}
+                longPressToReact
+                pickerOpen={reactionPickerMessageId === item.id}
+                onPickerOpenChange={(open) =>
+                  setReactionPickerMessageId(open ? item.id : "")
+                }
+              />
+            ) : null}
             </View>
           </View>
         </View>
@@ -1223,7 +1426,7 @@ export default function Messages({ setActiveButton }: any) {
       case "driver":
         return "Driver";
       case "school":
-        return "School admin";
+        return conversation.other_participant.school_name || "School";
       case "admin":
         return "Admin";
       default:
@@ -1271,7 +1474,7 @@ export default function Messages({ setActiveButton }: any) {
       <View style={styles.container}>
         {viewMode === "list" ? renderHeader() : null}
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1769D2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.loadingText}>Loading conversations...</Text>
         </View>
       </View>
@@ -1326,7 +1529,7 @@ export default function Messages({ setActiveButton }: any) {
               <MaterialIcons
                 name="filter-list"
                 size={20}
-                color={conversationFilter === "all" ? "#526981" : "#1769D2"}
+                color={conversationFilter === "all" ? "#B1C4BC" : "#00B894"}
               />
               <Text
                 style={[
@@ -1348,7 +1551,7 @@ export default function Messages({ setActiveButton }: any) {
                     : "keyboard-arrow-down"
                 }
                 size={20}
-                color="#526981"
+                color="#B1C4BC"
               />
             </TouchableOpacity>
             {showFilterDropdown ? (
@@ -1376,7 +1579,7 @@ export default function Messages({ setActiveButton }: any) {
                         {option.label}
                       </Text>
                       {selected ? (
-                        <MaterialIcons name="check" size={18} color="#1769D2" />
+                        <MaterialIcons name="check" size={18} color="#35D9B3" />
                       ) : null}
                     </TouchableOpacity>
                   );
@@ -1409,7 +1612,7 @@ export default function Messages({ setActiveButton }: any) {
           {showSchoolsList ? (
             loadingSchools ? (
               <View style={styles.emptyContainer}>
-                <ActivityIndicator size="large" color="#1769D2" />
+                <ActivityIndicator size="large" color="#35D9B3" />
               </View>
             ) : (
               <FlatList
@@ -1422,7 +1625,7 @@ export default function Messages({ setActiveButton }: any) {
                     onPress={() => startConversationWithSchool(item)}
                   >
                     <View style={styles.conversationIcon}>
-                      <MaterialIcons name="school" size={24} color="#1769D2" />
+                      <MaterialIcons name="school" size={24} color="#35D9B3" />
                     </View>
                     <View style={styles.conversationInfo}>
                       <Text style={styles.conversationName}>{item.name}</Text>
@@ -1433,7 +1636,7 @@ export default function Messages({ setActiveButton }: any) {
                     <MaterialIcons
                       name="add-circle-outline"
                       size={24}
-                      color="#1769D2"
+                      color="#35D9B3"
                     />
                   </TouchableOpacity>
                 )}
@@ -1448,7 +1651,7 @@ export default function Messages({ setActiveButton }: any) {
           ) : showDriversList ? (
             loadingDrivers ? (
               <View style={styles.emptyContainer}>
-                <ActivityIndicator size="large" color="#1769D2" />
+                <ActivityIndicator size="large" color="#35D9B3" />
               </View>
             ) : (
               <FlatList
@@ -1467,7 +1670,7 @@ export default function Messages({ setActiveButton }: any) {
           ) : showParentsList ? (
             loadingParents ? (
               <View style={styles.emptyContainer}>
-                <ActivityIndicator size="large" color="#1769D2" />
+                <ActivityIndicator size="large" color="#35D9B3" />
               </View>
             ) : (
               <FlatList
@@ -1539,12 +1742,13 @@ export default function Messages({ setActiveButton }: any) {
                         style={styles.chatHeaderAvatarImage}
                         resizeMode="contain"
                       />
-                    ) : selectedConversation.other_participant.profile
-                        ?.avatar ? (
+                    ) : selectedConversation.other_participant.avatar ||
+                      selectedConversation.other_participant.profile?.avatar ? (
                       <Image
                         source={{
-                          uri: selectedConversation.other_participant.profile
-                            .avatar,
+                          uri:
+                            selectedConversation.other_participant.avatar ||
+                            selectedConversation.other_participant.profile?.avatar,
                         }}
                         style={styles.chatHeaderAvatarImage}
                       />
@@ -1555,6 +1759,11 @@ export default function Messages({ setActiveButton }: any) {
                           .toUpperCase()}
                       </Text>
                     )}
+                    {selectedConversation.other_participant.role !== "group" ? (
+                      <PresenceDot
+                        userId={selectedConversation.other_participant.id}
+                      />
+                    ) : null}
                   </View>
                   <View style={styles.chatHeaderInfo}>
                     <Text style={styles.chatTitle} numberOfLines={1}>
@@ -1563,6 +1772,11 @@ export default function Messages({ setActiveButton }: any) {
                     <Text style={styles.chatSubtitle}>
                       {getConversationParticipantLabel(selectedConversation)}
                     </Text>
+                    {selectedConversation.other_participant.role !== "group" ? (
+                      <PresenceStatus
+                        userId={selectedConversation.other_participant.id}
+                      />
+                    ) : null}
                   </View>
                   {selectedConversation.other_participant.phone ? (
                     <TouchableOpacity
@@ -1584,27 +1798,55 @@ export default function Messages({ setActiveButton }: any) {
                       <MaterialIcons name="call" size={21} color="#FFFFFF" />
                     </TouchableOpacity>
                   ) : null}
-                  <TouchableOpacity
-                    style={styles.chatHeaderAction}
-                    onPress={() =>
-                      Alert.alert(
-                        selectedConversation.other_participant.name,
-                        [
-                          selectedConversation.other_participant.role,
-                          selectedConversation.other_participant.email,
-                          selectedConversation.other_participant.phone,
-                        ]
-                          .filter(Boolean)
-                          .join("\n"),
-                      )
-                    }
-                    accessibilityLabel="Contact details"
-                  >
-                    <MaterialIcons name="more-vert" size={22} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  {["admin_group", "school_group"].includes(
+                    selectedConversation.conversation_type,
+                  ) ? (
+                    <GroupChatMenu
+                      key={selectedConversation.id}
+                      conversation={selectedConversation}
+                      role="owner"
+                      token={user?.token || ""}
+                      currentUserId={user?.userData?.id || ""}
+                      onRemoved={() => {
+                        setSelectedConversation(null);
+                        setMessages([]);
+                        void initializeConversations();
+                      }}
+                      onUpdated={() => void initializeConversations()}
+                      iconColor="#FFFFFF"
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.chatHeaderAction}
+                      onPress={() =>
+                        Alert.alert(
+                          selectedConversation.other_participant.name,
+                          [
+                            selectedConversation.other_participant.role,
+                            selectedConversation.other_participant.email,
+                            selectedConversation.other_participant.phone,
+                          ]
+                            .filter(Boolean)
+                            .join("\n"),
+                        )
+                      }
+                      accessibilityLabel="Contact details"
+                    >
+                      <MaterialIcons
+                        name="more-vert"
+                        size={22}
+                        color="#FFFFFF"
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </SafeAreaView>
 
+              <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={0}
+              >
               <FlatList
                 ref={flatListRef}
                 data={messages}
@@ -1620,14 +1862,10 @@ export default function Messages({ setActiveButton }: any) {
                 }}
               />
 
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={Math.max(insets.bottom, 12)}
+              <View
                 style={[
                   styles.inputContainer,
-                  {
-                    paddingBottom: Math.max(insets.bottom, 12),
-                  },
+                  { paddingBottom: Math.max(insets.bottom, 12) },
                 ]}
               >
                 {showAttachmentActions ? (
@@ -1641,7 +1879,7 @@ export default function Messages({ setActiveButton }: any) {
                       <MaterialIcons
                         name="photo-camera"
                         size={20}
-                        color="#53718F"
+                        color="#82968D"
                       />
                       <Text style={styles.attachmentActionLabel}>Camera</Text>
                     </TouchableOpacity>
@@ -1654,9 +1892,24 @@ export default function Messages({ setActiveButton }: any) {
                       <MaterialIcons
                         name="photo-library"
                         size={20}
-                        color="#53718F"
+                        color="#82968D"
                       />
-                      <Text style={styles.attachmentActionLabel}>Photos</Text>
+                      <Text style={styles.attachmentActionLabel}>Images</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.attachmentAction}
+                      onPress={selectVideo}
+                      disabled={uploadingAttachment || sending}
+                      accessibilityLabel="Choose a video"
+                    >
+                      <MaterialIcons
+                        name="videocam"
+                        size={20}
+                        color="#82968D"
+                      />
+                      <Text style={styles.attachmentActionLabel}>
+                        Images & videos
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.attachmentAction}
@@ -1667,9 +1920,9 @@ export default function Messages({ setActiveButton }: any) {
                       <MaterialIcons
                         name="picture-as-pdf"
                         size={20}
-                        color="#53718F"
+                        color="#82968D"
                       />
-                      <Text style={styles.attachmentActionLabel}>PDF</Text>
+                      <Text style={styles.attachmentActionLabel}>Files</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.attachmentAction}
@@ -1677,7 +1930,7 @@ export default function Messages({ setActiveButton }: any) {
                       disabled={uploadingAttachment || sending}
                       accessibilityLabel="Record a voice message"
                     >
-                      <MaterialIcons name="mic" size={20} color="#53718F" />
+                      <MaterialIcons name="mic" size={20} color="#82968D" />
                       <Text style={styles.attachmentActionLabel}>Voice</Text>
                     </TouchableOpacity>
                   </View>
@@ -1691,66 +1944,62 @@ export default function Messages({ setActiveButton }: any) {
                   onClose={() => setShowEmojiPicker(false)}
                 />
                 <View style={styles.composerRow}>
-                  <TouchableOpacity
-                    style={styles.attachToggle}
-                    onPress={() => setShowEmojiPicker((visible) => !visible)}
-                    disabled={recording || uploadingAttachment || sending}
-                    accessibilityLabel={
-                      showEmojiPicker ? "Hide emoji picker" : "Choose emoji"
-                    }
-                  >
-                    <MaterialIcons
-                      name="sentiment-satisfied-alt"
-                      size={22}
-                      color="#53718F"
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.attachToggle}
-                    onPress={() =>
-                      setShowAttachmentActions((visible) => !visible)
-                    }
-                    disabled={recording || uploadingAttachment || sending}
-                    accessibilityLabel={
-                      showAttachmentActions
-                        ? "Hide attachments"
-                        : "Show attachments"
-                    }
-                  >
-                    <MaterialIcons
-                      name="add"
-                      size={24}
-                      color="#53718F"
-                      style={
+                  <View style={styles.ownerInputBar}>
+                    <TouchableOpacity
+                      style={styles.attachToggle}
+                      onPress={() => setShowEmojiPicker((visible) => !visible)}
+                      disabled={recording || uploadingAttachment || sending}
+                      accessibilityLabel={
+                        showEmojiPicker ? "Hide emoji picker" : "Choose emoji"
+                      }
+                    >
+                      <MaterialIcons
+                        name="sentiment-satisfied-alt"
+                        size={22}
+                        color="#82968D"
+                      />
+                    </TouchableOpacity>
+                    {recording ? (
+                      <View style={styles.recordingStatus}>
+                        <View style={styles.recordingDot} />
+                        <Text style={styles.recordingText}>
+                          Recording voice message
+                        </Text>
+                      </View>
+                    ) : (
+                      <TextInput
+                        style={styles.messageInput}
+                        value={newMessage}
+                        onChangeText={setNewMessage}
+                        multiline
+                        maxLength={500}
+                        editable={!uploadingAttachment && !sending}
+                      />
+                    )}
+                    <TouchableOpacity
+                      style={styles.attachToggle}
+                      onPress={() =>
+                        setShowAttachmentActions((visible) => !visible)
+                      }
+                      disabled={recording || uploadingAttachment || sending}
+                      accessibilityLabel={
                         showAttachmentActions
-                          ? styles.attachIconOpen
-                          : undefined
+                          ? "Hide attachments"
+                          : "Show attachments"
                       }
-                    />
-                  </TouchableOpacity>
-                  {recording ? (
-                    <View style={styles.recordingStatus}>
-                      <View style={styles.recordingDot} />
-                      <Text style={styles.recordingText}>
-                        Recording voice message
-                      </Text>
-                    </View>
-                  ) : (
-                    <TextInput
-                      style={styles.messageInput}
-                      value={newMessage}
-                      onChangeText={setNewMessage}
-                      placeholder={
-                        uploadingAttachment
-                          ? "Uploading attachment..."
-                          : "Write a message..."
-                      }
-                      placeholderTextColor="#8295A8"
-                      multiline
-                      maxLength={500}
-                      editable={!uploadingAttachment && !sending}
-                    />
-                  )}
+                    >
+                      <MaterialIcons
+                        name="add"
+                        size={24}
+                        color="#82968D"
+                        style={
+                          showAttachmentActions
+                            ? styles.attachIconOpen
+                            : undefined
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
                   {uploadingAttachment ? (
                     <View style={styles.sendButton}>
                       <ActivityIndicator size="small" color="#fff" />
@@ -1794,6 +2043,7 @@ export default function Messages({ setActiveButton }: any) {
                     </TouchableOpacity>
                   )}
                 </View>
+              </View>
               </KeyboardAvoidingView>
             </>
           ) : (
@@ -1817,10 +2067,10 @@ export default function Messages({ setActiveButton }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#13231D",
   },
   safeAreaHeader: {
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
   },
   mainHeader: {
     minHeight: 66,
@@ -1828,7 +2078,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 18,
     paddingVertical: 10,
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
   },
   brandIcon: {
     width: 40,
@@ -1870,7 +2120,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 14,
-    color: "#647A90",
+    color: "#82968D",
   },
   content: {
     flex: 1,
@@ -1878,7 +2128,7 @@ const styles = StyleSheet.create({
   },
   conversationsContainer: {
     flex: 1,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#13231D",
   },
   searchBar: {
     minHeight: 46,
@@ -1890,14 +2140,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   searchInput: {
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 9,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
   },
   filterDropdownContainer: {
@@ -1913,21 +2163,21 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#DCE6F0",
+    borderColor: "#294238",
     borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   filterDropdownTriggerActive: {
-    borderColor: "#1769D2",
-    backgroundColor: "#F0F6FD",
+    borderColor: "#00B894",
+    backgroundColor: "#13231D",
   },
   filterDropdownLabel: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 12,
     fontWeight: "700",
   },
   filterDropdownLabelActive: {
-    color: "#1769D2",
+    color: "#35D9B3",
   },
   filterDropdownMenu: {
     position: "absolute",
@@ -1937,9 +2187,9 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#17385F",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.14,
     shadowRadius: 12,
@@ -1953,12 +2203,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   filterDropdownOptionText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 13,
     fontWeight: "600",
   },
   filterDropdownOptionTextSelected: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "700",
   },
   directoryBar: {
@@ -1969,26 +2219,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   directoryTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "700",
   },
   directoryClose: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 13,
     fontWeight: "700",
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#17385F",
+    color: "#F4FBF8",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E1EAF3",
+    borderBottomColor: "#294238",
   },
   conversationsList: {
     paddingHorizontal: 16,
@@ -1997,8 +2247,8 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   tab: {
     flex: 1,
@@ -2010,13 +2260,13 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#8396A9",
+    color: "#B1C4BC",
   },
   tabTextActive: {
-    color: "#1769D2",
+    color: "#35D9B3",
   },
   tabActive: {
-    borderBottomColor: "#1769D2",
+    borderBottomColor: "#00B894",
   },
   conversationItem: {
     flexDirection: "row",
@@ -2025,8 +2275,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#E7EDF3",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   driverListItem: {
     flexDirection: "row",
@@ -2036,25 +2286,26 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   selectedConversation: {
-    backgroundColor: "#F0F6FD",
+    backgroundColor: "#13231D",
   },
   conversationIcon: {
+    position: "relative",
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#E4EDF6",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 13,
-    overflow: "hidden",
   },
   listAvatarImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 24,
   },
   conversationInfo: {
     flex: 1,
@@ -2063,12 +2314,12 @@ const styles = StyleSheet.create({
   conversationName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
     flexShrink: 1,
   },
   conversationRole: {
     fontSize: 12,
-    color: "#647A90",
+    color: "#82968D",
     marginBottom: 4,
   },
   conversationTopLine: {
@@ -2080,11 +2331,11 @@ const styles = StyleSheet.create({
   },
   conversationTime: {
     flexShrink: 0,
-    color: "#8497AA",
+    color: "#B1C4BC",
     fontSize: 11,
   },
   conversationPreview: {
-    color: "#647A90",
+    color: "#82968D",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -2096,24 +2347,24 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   messageCount: {
-    color: "#8497AA",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "600",
   },
   listAvatarText: {
-    color: "#315575",
+    color: "#F4FBF8",
     fontSize: 17,
     fontWeight: "700",
   },
   lastMessage: {
     fontSize: 12,
-    color: "#526981",
+    color: "#B1C4BC",
     marginBottom: 2,
   },
   messageTime: {
     fontSize: 12,
     lineHeight: 16,
-    color: "#8799AB",
+    color: "#B1C4BC",
   },
   messageMetaRight: {
     flexDirection: "row",
@@ -2130,7 +2381,7 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
@@ -2142,12 +2393,12 @@ const styles = StyleSheet.create({
   },
   chatViewContainer: {
     flex: 1,
-    backgroundColor: "#F2F6FA",
+    backgroundColor: "#13231D",
     flexDirection: "column",
     paddingBottom: 0,
   },
   chatSafeAreaHeader: {
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
   },
   chatHeaderWithBack: {
     flexDirection: "row",
@@ -2155,7 +2406,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    backgroundColor: "#173F70",
+    backgroundColor: "#050907",
   },
   chatBackButton: {
     width: 38,
@@ -2166,10 +2417,11 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   chatHeaderAvatar: {
+    position: "relative",
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#D8E6F4",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -2180,7 +2432,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   chatHeaderAvatarText: {
-    color: "#173F70",
+    color: "#F4FBF8",
     fontSize: 16,
     fontWeight: "800",
   },
@@ -2196,13 +2448,13 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#13231D",
   },
   chatHeader: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   chatTitle: {
     fontSize: 16,
@@ -2226,10 +2478,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 16,
-    backgroundColor: "#E7EDF4",
+    backgroundColor: "#13231D",
   },
   dateSeparatorText: {
-    color: "#657A90",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "600",
   },
@@ -2252,7 +2504,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#DCEBFA",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2262,7 +2514,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   avatarText: {
-    color: "#fff",
+    color: "#FFF",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -2288,13 +2540,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   otherBubble: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#E3EAF1",
+    borderColor: "#294238",
     borderBottomLeftRadius: 5,
   },
   ownBubble: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     borderBottomRightRadius: 5,
   },
   messageText: {
@@ -2303,15 +2555,15 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   ownText: {
-    color: "#fff",
+    color: "#FFF",
   },
   otherText: {
-    color: "#29435D",
+    color: "#F4FBF8",
   },
   senderName: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#526981",
+    color: "#B1C4BC",
     marginBottom: 4,
     opacity: 0.7,
   },
@@ -2335,12 +2587,12 @@ const styles = StyleSheet.create({
   },
   //   messageTime: {
   //     fontSize: 11,
-  //     color: "#999",
+  //     color: "#B1C4BC",
   //     fontWeight: "500",
   //   },
   readReceipt: {
     fontSize: 11,
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "700",
     marginLeft: 4,
   },
@@ -2349,8 +2601,8 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 8,
     borderTopWidth: 1,
-    borderTopColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   attachmentActions: {
     flexDirection: "row",
@@ -2367,42 +2619,50 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 7,
     borderRadius: 12,
-    backgroundColor: "#F2F6FA",
+    backgroundColor: "#13231D",
   },
   attachmentActionLabel: {
-    color: "#647A90",
+    color: "#82968D",
     fontSize: 10,
     fontWeight: "600",
   },
   composerRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    minHeight: 46,
+    alignItems: "center",
+    gap: 8,
+    minHeight: 52,
+  },
+  ownerInputBar: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    borderRadius: 28,
+    backgroundColor: "#13231D",
+    borderWidth: 1,
+    borderColor: "#294238",
   },
   attachToggle: {
     width: 36,
-    height: 44,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 7,
   },
   attachIconOpen: {
     transform: [{ rotate: "45deg" }],
   },
   messageInput: {
     flex: 1,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: "#DCE5EE",
-    borderRadius: 22,
-    paddingHorizontal: 15,
+    minWidth: 0,
+    minHeight: 46,
+    maxHeight: 110,
+    paddingHorizontal: 6,
     paddingVertical: 10,
-    marginRight: 9,
-    maxHeight: 120,
-    backgroundColor: "#F5F8FB",
     fontSize: 15,
     fontWeight: "400",
-    color: "#213F5C",
+    color: "#F4FBF8",
   },
   recordButton: {
     width: 44,
@@ -2410,10 +2670,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   recordButtonActive: {
-    backgroundColor: "#D94343",
+    backgroundColor: "#13231D",
   },
   recordingStatus: {
     flex: 1,
@@ -2423,14 +2683,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginRight: 9,
     borderRadius: 22,
-    backgroundColor: "#FFF1F0",
+    backgroundColor: "#35151D",
   },
   recordingDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
     marginRight: 9,
-    backgroundColor: "#D94343",
+    backgroundColor: "#13231D",
   },
   recordingText: {
     color: "#9B3131",
@@ -2441,10 +2701,10 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#1769D2",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
@@ -2464,13 +2724,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#647A90",
+    color: "#82968D",
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubText: {
     fontSize: 14,
-    color: "#8799AB",
+    color: "#B1C4BC",
     textAlign: "center",
     paddingHorizontal: 32,
   },
@@ -2481,7 +2741,7 @@ const styles = StyleSheet.create({
   },
   noChatText: {
     fontSize: 16,
-    color: "#647A90",
+    color: "#82968D",
     marginTop: 16,
     textAlign: "center",
   },

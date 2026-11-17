@@ -33,20 +33,20 @@ const BillingPayments = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>💳 Payment Setup</Text>
             <Text style={styles.bodyText}>
-              1. <Text style={styles.bold}>Stripe Integration:</Text> Connect
-              your Stripe account for payment processing.
+              1. <Text style={styles.bold}>Paystack Payments:</Text> Clients can
+              pay online by card through Paystack checkout.
             </Text>
             <Text style={styles.bodyText}>
               2. <Text style={styles.bold}>Pricing Configuration:</Text> Set
               rates per child and billing cycles.
             </Text>
             <Text style={styles.bodyText}>
-              3. <Text style={styles.bold}>Payment Methods:</Text> Accept credit
-              cards, ACH, and digital wallets.
+              3. <Text style={styles.bold}>Payment Methods:</Text> Clients can
+              use the card payment methods offered during Paystack checkout.
             </Text>
             <Text style={styles.bodyText}>
-              4. <Text style={styles.bold}>Billing Automation:</Text> Set up
-              automatic recurring payments.
+              4. <Text style={styles.bold}>Billing:</Text> Online subscription
+              payments are one-time and must be renewed manually.
             </Text>
           </View>
 
@@ -123,10 +123,10 @@ const BillingPayments = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  container: { flex: 1, backgroundColor: "#0D1713" },
   content: { padding: 16 },
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 20,
     shadowColor: "#000",
@@ -138,12 +138,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 12,
   },
   description: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     marginBottom: 20,
     lineHeight: 20,
   },
@@ -152,16 +152,16 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     fontSize: 14,
-    color: "#555",
+    color: "#B1C4BC",
     marginBottom: 8,
     lineHeight: 20,
   },
   bold: {
     fontWeight: "600",
-    color: "#333",
+    color: "#F4FBF8",
   },
   button: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,

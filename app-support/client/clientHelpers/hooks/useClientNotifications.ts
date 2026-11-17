@@ -1,4 +1,5 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthContext } from "../../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../../url";
 import {
@@ -34,6 +35,8 @@ export const useClientNotifications = () => {
   const [error, setError] = useState<string | null>(null);
 
   const userId = user?.userData?.id || user?.id || null;
+  const cacheKey = userId ? `client_notifications:${userId}` : null;
+  const cacheLoadedFor = useRef<string | null>(null);
 
   const refresh = useCallback(
     async (isRefresh = false) => {
@@ -122,9 +125,42 @@ export const useClientNotifications = () => {
   }, [userId, userToken]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => void refresh(), 0);
-    return () => clearTimeout(timeout);
-  }, [refresh]);
+    let active = true;
+    cacheLoadedFor.current = null;
+    setNotifications([]);
+    if (!cacheKey || !userToken) return undefined;
+
+    const loadCacheAndRefresh = async () => {
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (active && cached !== null) {
+          setLoading(false);
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) setNotifications(parsed);
+        }
+      } catch (cacheError) {
+        console.error("Failed to load client notifications cache:", cacheError);
+      } finally {
+        if (active) {
+          cacheLoadedFor.current = cacheKey;
+          void refresh(true);
+        }
+      }
+    };
+
+    void loadCacheAndRefresh();
+    return () => {
+      active = false;
+    };
+  }, [cacheKey, refresh, userToken]);
+
+  useEffect(() => {
+    if (!cacheKey || cacheLoadedFor.current !== cacheKey) return;
+    AsyncStorage.setItem(cacheKey, JSON.stringify(notifications)).catch(
+      (cacheError) =>
+        console.error("Failed to save client notifications cache:", cacheError),
+    );
+  }, [cacheKey, notifications]);
 
   useEffect(() => {
     if (!userId) return undefined;

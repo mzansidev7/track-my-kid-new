@@ -46,6 +46,17 @@ export default function Index() {
       return;
     }
 
+    if (userData?.must_change_password) {
+      const passwordChangeRoute =
+        role === "pickup_contact"
+          ? "pickup-password-change"
+          : "temporary-password-change";
+      if (currentRoot !== passwordChangeRoute) {
+        router.replace(`/${passwordChangeRoute}` as never);
+      }
+      return;
+    }
+
     if (isInsideGroupedRoute) {
       redirectKeyRef.current = null;
       return;
@@ -63,6 +74,10 @@ export default function Index() {
 
       case "client":
         targetRoute = "/(client)/(tabs)";
+        break;
+
+      case "pickup_contact":
+        targetRoute = "/pickup-contact";
         break;
 
       case "driver":
@@ -95,10 +110,7 @@ export default function Index() {
       <SafeAreaView
         style={[styles.container, { backgroundColor: colors.background }]}
       >
-        <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
-          style={styles.header}
-        >
+        <View style={styles.header}>
           <View style={styles.heroContent}>
             <Image
               source={require("@/assets/images/logo-light.png")}
@@ -120,7 +132,7 @@ export default function Index() {
               </Text>
             </View>
           </View>
-        </LinearGradient>
+        </View>
       </SafeAreaView>
     );
   }

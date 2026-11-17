@@ -365,7 +365,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 }}
                 accessibilityLabel="Choose start and end locations on map"
               >
-                <MaterialIcons name="my-location" size={15} color="#1769D2" />
+                <MaterialIcons name="my-location" size={15} color="#35D9B3" />
               </TouchableOpacity>
             </View>
 
@@ -388,14 +388,14 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 }
                 disabled={viaStops.length >= 20}
               >
-                <MaterialIcons name="add" size={15} color="#1769D2" />
+                <MaterialIcons name="add" size={15} color="#35D9B3" />
                 <Text style={styles.addStopText}>Add Stop</Text>
               </TouchableOpacity>
             </View>
             {viaStops.map((stop, index) => (
               <View key={`via-stop-${index}`} style={styles.viaStopRow}>
                 <View style={styles.viaStopIcon}>
-                  <MaterialIcons name="place" size={14} color="#1769D2" />
+                  <MaterialIcons name="place" size={14} color="#35D9B3" />
                 </View>
                 <View style={styles.routePlaceField}>
                   <GooglePlacesAutoComplete
@@ -445,7 +445,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                   }
                   accessibilityLabel={`Remove via stop ${index + 1}`}
                 >
-                  <MaterialIcons name="close" size={15} color="#64748B" />
+                  <MaterialIcons name="close" size={15} color="#B1C4BC" />
                 </TouchableOpacity>
               </View>
             ))}
@@ -490,7 +490,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 }}
                 accessibilityLabel="Choose route locations on map"
               >
-                <MaterialIcons name="my-location" size={15} color="#1769D2" />
+                <MaterialIcons name="my-location" size={15} color="#35D9B3" />
               </TouchableOpacity>
             </View>
           </>
@@ -517,7 +517,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
               <MaterialIcons
                 name="keyboard-arrow-down"
                 size={16}
-                color="#71869C"
+                color="#B1C4BC"
               />
             </TouchableOpacity>
           </>
@@ -954,7 +954,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
         </View>
       ) : (
         <>
@@ -1022,7 +1022,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                       <MaterialIcons
                         name="alt-route"
                         size={20}
-                        color="#1769D2"
+                        color="#35D9B3"
                       />
                     </View>
                     <View>
@@ -1042,7 +1042,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 <View style={styles.formSection}>
                   <View style={styles.formSectionHeading}>
                     <View style={styles.formSectionIcon}>
-                      <MaterialIcons name="place" size={20} color="#1769D2" />
+                      <MaterialIcons name="place" size={20} color="#35D9B3" />
                     </View>
                     <View>
                       <Text style={styles.formSectionTitle}>Route Stops</Text>
@@ -1069,7 +1069,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                           <MaterialIcons
                             name="near-me"
                             size={17}
-                            color="#1769D2"
+                            color="#35D9B3"
                           />
                           <View>
                             <Text style={styles.estimateLabel}>
@@ -1087,7 +1087,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                           <MaterialIcons
                             name="schedule"
                             size={17}
-                            color="#1769D2"
+                            color="#35D9B3"
                           />
                           <View>
                             <Text style={styles.estimateLabel}>
@@ -1136,7 +1136,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                       <MaterialIcons
                         name="schedule"
                         size={20}
-                        color="#1769D2"
+                        color="#35D9B3"
                       />
                     </View>
                     <View>
@@ -1168,7 +1168,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                     <MaterialIcons
                       name="calendar-today"
                       size={18}
-                      color="#1769D2"
+                      color="#35D9B3"
                     />
                   </TouchableOpacity>
                   {showDepartureDatePicker && (
@@ -1302,7 +1302,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                 <View style={styles.formSection}>
                   <View style={styles.formSectionHeading}>
                     <View style={styles.formSectionIcon}>
-                      <MaterialIcons name="tune" size={20} color="#1769D2" />
+                      <MaterialIcons name="tune" size={20} color="#35D9B3" />
                     </View>
                     <View>
                       <Text style={styles.formSectionTitle}>Route Settings</Text>
@@ -1427,7 +1427,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                     <MaterialIcons
                       name="keyboard-arrow-down"
                       size={17}
-                      color="#71869C"
+                      color="#B1C4BC"
                     />
                   </TouchableOpacity>
                 </View>
@@ -1665,7 +1665,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                     <MaterialIcons
                       name="my-location"
                       size={22}
-                      color="#4A90E2"
+                      color="#35D9B3"
                     />
                   </TouchableOpacity>
                 </View>
@@ -1690,7 +1690,7 @@ const CreateRoutes = ({ setActiveButton }: any) => {
                       <MaterialIcons
                         name="alt-route"
                         size={22}
-                        color="#4A90E2"
+                        color="#35D9B3"
                       />
                     </View>
                   </View>
@@ -2034,7 +2034,7 @@ const locationPickerStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     zIndex: 999,
   },
 
@@ -2054,7 +2054,7 @@ const locationPickerStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     alignItems: "center",
     justifyContent: "center",
 
@@ -2075,7 +2075,7 @@ const locationPickerStyles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     alignItems: "center",
     justifyContent: "center",
 
@@ -2090,7 +2090,7 @@ const locationPickerStyles = StyleSheet.create({
   },
 
   locationPanel: {
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -2113,7 +2113,7 @@ const locationPickerStyles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#D1D5DB",
+    backgroundColor: "#13231D",
     alignSelf: "center",
     marginBottom: 18,
   },
@@ -2128,20 +2128,20 @@ const locationPickerStyles = StyleSheet.create({
   sheetTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   sheetSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   routeIcon: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2166,18 +2166,18 @@ const locationPickerStyles = StyleSheet.create({
   },
 
   pickupDot: {
-    backgroundColor: "#22C55E",
+    backgroundColor: "#13231D",
   },
 
   dropoffDot: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
 
   locationLine: {
     width: 2,
     flex: 1,
     minHeight: 22,
-    backgroundColor: "#D1D5DB",
+    backgroundColor: "#13231D",
     marginVertical: 4,
   },
 
@@ -2195,9 +2195,9 @@ const locationPickerStyles = StyleSheet.create({
   },
 
   inputWrapper: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#294238",
     borderRadius: 14,
     minHeight: 52,
     justifyContent: "center",
@@ -2218,7 +2218,7 @@ const locationPickerStyles = StyleSheet.create({
     flex: 1,
     height: 50,
     borderRadius: 14,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -2226,11 +2226,11 @@ const locationPickerStyles = StyleSheet.create({
   },
 
   disabledButton: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#13231D",
   },
 
   primaryButtonText: {
-    color: "#fff",
+    color: "#FFF",
     fontSize: 15,
     fontWeight: "700",
   },
@@ -2239,7 +2239,7 @@ const locationPickerStyles = StyleSheet.create({
     height: 50,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -2247,13 +2247,13 @@ const locationPickerStyles = StyleSheet.create({
   },
 
   secondaryButtonText: {
-    color: "#4B5563",
+    color: "#B1C4BC",
     fontSize: 14,
     fontWeight: "600",
   },
 
   selectedContainer: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 14,
     marginTop: 2,
@@ -2262,7 +2262,7 @@ const locationPickerStyles = StyleSheet.create({
   selectedTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#6B7280",
+    color: "#B1C4BC",
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -2288,21 +2288,21 @@ const locationPickerStyles = StyleSheet.create({
   selectedType: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#9CA3AF",
+    color: "#82968D",
     marginBottom: 2,
   },
 
   selectedAddress: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F8FC" },
+  container: { flex: 1, backgroundColor: "#050907" },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 46,
@@ -2353,9 +2353,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#17385F",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -2372,32 +2372,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
-    backgroundColor: "#EDF2F7",
+    backgroundColor: "#13231D",
   },
   stepCircleActive: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   stepCircleComplete: {
-    backgroundColor: "#1EA56B",
+    backgroundColor: "#13231D",
   },
   stepLabel: {
-    color: "#8293A8",
+    color: "#B1C4BC",
     fontSize: 10,
     fontWeight: "600",
   },
   stepLabelActive: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontWeight: "700",
   },
   stepLabelComplete: {
-    color: "#1A8059",
+    color: "#35D9B3",
   },
   stepConnector: {
     height: 2,
     flex: 1,
     marginHorizontal: 4,
     marginBottom: 16,
-    backgroundColor: "#E4EAF1",
+    backgroundColor: "#13231D",
   },
   stepConnectorComplete: {
     backgroundColor: "#8ACFB2",
@@ -2411,9 +2411,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#17385F",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
@@ -2431,26 +2431,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 12,
-    backgroundColor: "#EDF5FF",
+    backgroundColor: "#13231D",
   },
   formSectionTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 18,
     fontWeight: "700",
   },
   sectionHint: {
     marginTop: 3,
-    color: "#71849A",
+    color: "#B1C4BC",
     fontSize: 12,
   },
   fieldLabel: {
     marginBottom: 6,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "600",
   },
   optionalText: {
-    color: "#647C95",
+    color: "#B1C4BC",
     fontWeight: "400",
   },
   requiredMark: {
@@ -2462,10 +2462,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    color: "#17385F",
-    backgroundColor: "#FFFFFF",
+    color: "#F4FBF8",
+    backgroundColor: "#0D1713",
     fontSize: 14,
   },
   descriptionInput: {
@@ -2490,7 +2490,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 2,
     borderColor: "#21B56B",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   endLocationDot: {
     width: 11,
@@ -2498,14 +2498,14 @@ const styles = StyleSheet.create({
     marginTop: 15,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#EF4444",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   locationRailLine: {
     width: 1,
     flex: 1,
     marginVertical: 2,
-    backgroundColor: "#C7D8E8",
+    backgroundColor: "#13231D",
   },
   routePlaceField: {
     flex: 1,
@@ -2517,9 +2517,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   viaHeading: {
     flexDirection: "row",
@@ -2534,7 +2534,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   addStopText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -2565,17 +2565,17 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   scheduleDateText: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "600",
   },
   scheduleDatePlaceholder: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontWeight: "400",
   },
   scheduleTimesColumn: {
@@ -2598,16 +2598,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#C9D8E8",
+    borderColor: "#294238",
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   operatingDayOptionSelected: {
-    borderColor: "#1769D2",
-    backgroundColor: "#1769D2",
+    borderColor: "#00B894",
+    backgroundColor: "#00B894",
   },
   operatingDayText: {
-    color: "#64748B",
+    color: "#B1C4BC",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2629,9 +2629,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#DBE9F7",
+    borderColor: "#294238",
     borderRadius: 13,
-    backgroundColor: "#F7FAFE",
+    backgroundColor: "#13231D",
   },
   estimateItem: {
     flex: 1,
@@ -2643,16 +2643,16 @@ const styles = StyleSheet.create({
     width: 1,
     height: 35,
     marginHorizontal: 12,
-    backgroundColor: "#D8E3EF",
+    backgroundColor: "#13231D",
   },
   estimateLabel: {
-    color: "#72849A",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "500",
   },
   estimateValue: {
     marginTop: 3,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 15,
     fontWeight: "700",
   },
@@ -2663,11 +2663,11 @@ const styles = StyleSheet.create({
     marginTop: 11,
     padding: 12,
     borderRadius: 11,
-    backgroundColor: "#F2F6FA",
+    backgroundColor: "#13231D",
   },
   estimatePlaceholderText: {
     flex: 1,
-    color: "#71849A",
+    color: "#B1C4BC",
     fontSize: 12,
     lineHeight: 17,
   },
@@ -2686,9 +2686,9 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 13,
     borderWidth: 1,
-    borderColor: "#DBE9F7",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#F7FAFE",
+    backgroundColor: "#13231D",
   },
   timeReferenceRow: {
     flexDirection: "row",
@@ -2702,16 +2702,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   timeReferenceOptionSelected: {
-    backgroundColor: "#1769D2",
-    borderColor: "#1769D2",
+    backgroundColor: "#00B894",
+    borderColor: "#00B894",
   },
   timeReferenceText: {
-    color: "#31516F",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2726,19 +2726,19 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   assignmentSelectText: {
     flex: 1,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "600",
   },
   assignmentSelectPlaceholder: {
     flex: 1,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 14,
   },
   routeTypeRow: {
@@ -2753,16 +2753,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 21,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeTypeOptionSelected: {
     borderColor: "#8BBEFF",
     backgroundColor: "#8BBEFF",
   },
   routeTypeText: {
-    color: "#31516F",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "500",
   },
@@ -2777,22 +2777,22 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#C9E4FA",
+    borderColor: "#294238",
     borderRadius: 8,
-    backgroundColor: "#F8FBFE",
+    backgroundColor: "#13231D",
   },
   statusDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#20B26B",
+    backgroundColor: "#13231D",
   },
   statusDotInactive: {
     backgroundColor: "#94A3B8",
   },
   statusText: {
     flex: 1,
-    color: "#24415D",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -2802,15 +2802,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 11,
     color: "#1E293B",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     fontSize: 14,
   },
   timeColumnLabel: {
     marginBottom: 6,
-    color: "#64748B",
+    color: "#B1C4BC",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -2824,8 +2824,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 13,
     borderTopWidth: 1,
-    borderTopColor: "#E4EBF3",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   saveRouteButton: {
     flex: 1,
@@ -2835,8 +2835,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 9,
     borderRadius: 12,
-    backgroundColor: "#1769D2",
-    shadowColor: "#1769D2",
+    backgroundColor: "#00B894",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 7,
@@ -2853,12 +2853,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#D8E3EF",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   cancelRouteButtonText: {
-    color: "#526A82",
+    color: "#B1C4BC",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -2870,22 +2870,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 7,
     borderWidth: 1,
-    borderColor: "#D8E3EF",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   previousButtonText: {
-    color: "#23476D",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "600",
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 24,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
@@ -2900,23 +2900,23 @@ const styles = StyleSheet.create({
   },
   labelSubtext: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#B1C4BC",
     marginBottom: 14,
     lineHeight: 20,
   },
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#13231D",
     marginVertical: 22,
   },
   input: {
-    backgroundColor: "#F9F9F9",
+    backgroundColor: "#13231D",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#DDD",
+    borderColor: "#294238",
     padding: 14,
     fontSize: 16,
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 16,
   },
   textArea: {
@@ -2927,12 +2927,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#DDD",
-    backgroundColor: "#F9F9F9",
+    borderColor: "#294238",
+    backgroundColor: "#13231D",
   },
   picker: {
     height: 50,
-    color: "#333",
+    color: "#F4FBF8",
   },
   disabledPickerContainer: {
     opacity: 0.65,
@@ -2941,58 +2941,58 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
-    backgroundColor: "#F9F9F9",
+    borderBottomColor: "#294238",
+    backgroundColor: "#13231D",
   },
   driverOptionSelected: {
-    backgroundColor: "#E3F2FD",
+    backgroundColor: "#13231D",
   },
   driverOptionText: {
     fontSize: 14,
-    color: "#333",
+    color: "#F4FBF8",
   },
   driverOptionTextSelected: {
     fontWeight: "600",
-    color: "#4A90E2",
+    color: "#35D9B3",
   },
   childOption: {
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
-    backgroundColor: "#F9F9F9",
+    borderBottomColor: "#294238",
+    backgroundColor: "#13231D",
     flexDirection: "row",
     alignItems: "center",
   },
   childOptionSelected: {
-    backgroundColor: "#E3F2FD",
+    backgroundColor: "#13231D",
   },
   childOptionText: {
     fontSize: 15,
-    color: "#333",
+    color: "#F4FBF8",
     fontWeight: "600",
   },
   childOptionTextSelected: {
-    color: "#1E88E5",
+    color: "#35D9B3",
   },
   childInfo: {
     flex: 1,
   },
   childDetails: {
     fontSize: 13,
-    color: "#666",
+    color: "#B1C4BC",
     marginTop: 4,
   },
   childAddresses: {
     fontSize: 12,
-    color: "#777",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   stepTitle: {
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 8,
-    color: "#0F172A",
+    color: "#F4FBF8",
     letterSpacing: 0.2,
   },
   windowRow: {
@@ -3011,7 +3011,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 12,
@@ -3020,35 +3020,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
-    backgroundColor: "#F9F9F9",
+    borderBottomColor: "#294238",
+    backgroundColor: "#13231D",
   },
   vehicleOptionSelected: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#13231D",
   },
   vehicleOptionText: {
     fontSize: 14,
-    color: "#333",
+    color: "#F4FBF8",
   },
   vehicleOptionTextSelected: {
     fontWeight: "600",
-    color: "#4CAF50",
+    color: "#35D9B3",
   },
   noDriversText: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     padding: 14,
     textAlign: "center",
   },
   noChildrenText: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     padding: 14,
     textAlign: "center",
   },
   noVehiclesText: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     padding: 14,
     textAlign: "center",
   },
@@ -3064,27 +3064,27 @@ const styles = StyleSheet.create({
   },
   bsContent: {
     padding: 12,
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     flex: 1,
   },
   mapTop: {
     height: "55%",
-    backgroundColor: "#fff",
+    backgroundColor: "#0D1713",
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     borderBottomWidth: 0,
   },
   overlayBottom: {
     height: "45%",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     padding: 18,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     borderBottomWidth: 0,
     elevation: 8,
     shadowColor: "#0F172A",
@@ -3096,14 +3096,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     marginBottom: 8,
-    color: "#0F172A",
+    color: "#F4FBF8",
   },
-  sheetSubtitle: { fontSize: 13, color: "#6B7280", marginBottom: 12 },
+  sheetSubtitle: { fontSize: 13, color: "#B1C4BC", marginBottom: 12 },
   sheetHandle: {
     width: 48,
     height: 6,
     borderRadius: 4,
-    backgroundColor: "#E6EEF8",
+    backgroundColor: "#13231D",
     alignSelf: "center",
     marginBottom: 10,
   },
@@ -3115,17 +3115,17 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
-  selectedText: { color: "#333", marginBottom: 4 },
+  selectedText: { color: "#F4FBF8", marginBottom: 4 },
   inputLabel: {
     fontSize: 12,
-    color: "#64748B",
+    color: "#B1C4BC",
     fontWeight: "700",
     marginBottom: 8,
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
   selectedChip: {
-    backgroundColor: "#E0F2FE",
+    backgroundColor: "#13231D",
     borderWidth: 1,
     borderColor: "#BAE6FD",
     paddingHorizontal: 12,
@@ -3135,7 +3135,7 @@ const styles = StyleSheet.create({
   useButton: {
     flex: 1,
     marginTop: 16,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
@@ -3145,7 +3145,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 4,
   },
-  useButtonText: { color: "#fff", fontWeight: "800", letterSpacing: 0.2 },
+  useButtonText: { color: "#FFF", fontWeight: "800", letterSpacing: 0.2 },
   confirmRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -3154,7 +3154,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   confirmButton: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#13231D",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -3172,9 +3172,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#13231D",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
   },
   clearButtonText: { color: "#334155", fontWeight: "700" },
   useButtonDisabled: {
@@ -3186,12 +3186,12 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     marginBottom: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.03,
@@ -3204,17 +3204,17 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   bsDone: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     marginRight: 8,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#E6EEF8",
+    borderColor: "#294238",
   },
   selectedChipText: {
-    color: "#0F172A",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -3222,10 +3222,10 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#13231D",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E6EAF0",
+    borderColor: "#294238",
     marginHorizontal: 10,
   },
   emptyStateIcon: {
@@ -3234,18 +3234,18 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 8,
     textAlign: "center",
   },
   emptyStateText: {
     fontSize: 14,
-    color: "#7A7A7A",
+    color: "#B1C4BC",
     textAlign: "center",
     lineHeight: 20,
   },
   button: {
-    backgroundColor: "#EC4899",
+    backgroundColor: "#13231D",
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
@@ -3260,7 +3260,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   infoCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 20,
     elevation: 2,
@@ -3273,11 +3273,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 12,
-    color: "#333",
+    color: "#F4FBF8",
   },
   infoText: {
     fontSize: 14,
-    color: "#666",
+    color: "#B1C4BC",
     lineHeight: 20,
     marginBottom: 8,
   },
@@ -3294,23 +3294,23 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: "#4A90E2",
+    borderColor: "#00B894",
     borderRadius: 4,
     marginRight: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
   },
   checkboxChecked: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
   },
   checkboxLabel: {
     fontSize: 14,
-    color: "#333",
+    color: "#F4FBF8",
     flex: 1,
   },
   saveDefaultButton: {
-    backgroundColor: "#28A745",
+    backgroundColor: "#13231D",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -3329,7 +3329,7 @@ const styles = StyleSheet.create({
   },
   defaultTimeInfo: {
     fontSize: 12,
-    color: "#666",
+    color: "#B1C4BC",
     fontStyle: "italic",
     marginTop: 4,
   },
@@ -3345,7 +3345,7 @@ const styles = StyleSheet.create({
     width: "100%",
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: "#B1C4BC",
     marginBottom: 2,
   },
   scopeOption: {
@@ -3356,45 +3356,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 17,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   scopeOptionSelected: {
-    borderColor: "#1769D2",
-    backgroundColor: "#1769D2",
+    borderColor: "#00B894",
+    backgroundColor: "#00B894",
   },
   radioButton: {
     width: 20,
     height: 20,
     borderWidth: 2,
-    borderColor: "#C7D2FE",
+    borderColor: "#294238",
     borderRadius: 10,
     marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   radioButtonSelected: {
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
+    borderColor: "#00B894",
+    backgroundColor: "#13231D",
   },
   radioButtonInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
   },
   scopeOptionText: {
     fontSize: 12,
-    color: "#475569",
+    color: "#B1C4BC",
     fontWeight: "600",
   },
   scopeOptionTextSelected: {
     color: "#FFFFFF",
   },
   savePreferenceButton: {
-    backgroundColor: "#28A745",
+    backgroundColor: "#13231D",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -3412,7 +3412,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   preferencesContainer: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#13231D",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -3429,12 +3429,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   previewCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     borderRadius: 22,
     padding: 18,
     marginTop: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.04,
@@ -3450,14 +3450,14 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   previewSubtitle: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 20,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
 
   previewContent: {
@@ -3476,7 +3476,7 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: 45,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     marginBottom: 12,
   },
 
@@ -3489,7 +3489,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 24,
     fontWeight: "700",
-    color: "#4A90E2",
+    color: "#35D9B3",
     textAlign: "center",
     lineHeight: 90,
   },
@@ -3499,7 +3499,7 @@ const styles = StyleSheet.create({
     height: 90,
     borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     marginBottom: 12,
   },
 
@@ -3511,20 +3511,20 @@ const styles = StyleSheet.create({
   previewItemTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
 
   previewItemSubtext: {
     marginTop: 4,
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     textAlign: "center",
   },
 
   previewDivider: {
     width: 1,
     alignSelf: "stretch",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     marginHorizontal: 16,
   },
   selectorButton: {
@@ -3532,9 +3532,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 11,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     paddingHorizontal: 13,
     paddingVertical: 12,
     marginBottom: 10,
@@ -3546,7 +3546,7 @@ const styles = StyleSheet.create({
   },
   selectorPlaceholderText: {
     fontSize: 13,
-    color: "#64748B",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   stepperHeader: {
@@ -3555,12 +3555,12 @@ const styles = StyleSheet.create({
   stepperTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   stepperSubtitle: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
   stepperProgress: {
     flexDirection: "row",
@@ -3571,11 +3571,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     marginRight: 8,
   },
   stepperDotActive: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
   },
   stepperNavRow: {
     flexDirection: "row",
@@ -3585,7 +3585,7 @@ const styles = StyleSheet.create({
   },
   stepperNavButton: {
     flex: 1,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
     paddingVertical: 15,
     borderRadius: 16,
     alignItems: "center",
@@ -3597,7 +3597,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   stepperNavButtonDisabled: {
-    backgroundColor: "#CBD5E1",
+    backgroundColor: "#13231D",
   },
   stepperNavButtonText: {
     color: "#FFF",
@@ -3618,7 +3618,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     maxHeight: "72%",
@@ -3627,7 +3627,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#222",
+    color: "#F4FBF8",
     marginBottom: 12,
   },
   optionsList: {
@@ -3642,12 +3642,12 @@ const styles = StyleSheet.create({
   driverOptionName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#333",
+    color: "#F4FBF8",
     marginBottom: 2,
   },
   driverOptionLicense: {
     fontSize: 13,
-    color: "#666",
+    color: "#B1C4BC",
   },
   assignmentRow: {
     flexDirection: "row",
@@ -3669,13 +3669,13 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 15,
-    color: "#4A90E2",
+    color: "#35D9B3",
     fontWeight: "700",
   },
   sectionDivider: {
     paddingVertical: 8,
     paddingHorizontal: 4,
-    backgroundColor: "#F4F6F8",
+    backgroundColor: "#13231D",
     marginTop: 16,
     marginBottom: 8,
     borderRadius: 8,
@@ -3683,11 +3683,11 @@ const styles = StyleSheet.create({
   sectionDividerText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#555",
+    color: "#B1C4BC",
   },
   selectedLocationText: {
     fontSize: 13,
-    color: "#28A745",
+    color: "#35D9B3",
     fontWeight: "600",
     marginBottom: 16,
     marginTop: -8,

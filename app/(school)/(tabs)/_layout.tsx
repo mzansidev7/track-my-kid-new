@@ -1,5 +1,4 @@
-import { Tabs } from "expo-router";
-import { useFocusEffect, useRouter, useSegments } from "expo-router";
+import { Tabs, useFocusEffect, useRouter, useSegments } from "expo-router";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import SchoolTabBar from "../components/SchoolTabBar";
@@ -9,7 +8,6 @@ import {
   EXPIRED_TRIAL_SAFETY_TABS,
   isSchoolTrialExpiredWithoutPaidSubscription,
   SchoolBillingAccessContext,
-  type SchoolBillingAccess,
 } from "@/app-support/school/schoolBillingAccess";
 
 export default function SchoolLayout() {
@@ -17,13 +15,14 @@ export default function SchoolLayout() {
   const segments = useSegments();
   const { user } = useContext(AuthContext);
   const token = user?.token;
+  const isDriver = user?.userData?.admin_profile?.role === "driver";
   const [trialExpired, setTrialExpired] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      if (!token) {
+      if (!token || isDriver) {
         setTrialExpired(false);
         setLoading(false);
         return () => {
@@ -52,24 +51,37 @@ export default function SchoolLayout() {
         }
       };
 
-      setLoading(true);
       void checkBillingAccess();
       return () => {
         active = false;
       };
-    }, [token]),
+    }, [isDriver, token]),
   );
 
   const currentScreen = String(segments[segments.length - 1] || "index");
   useEffect(() => {
+    if (isDriver && currentScreen === "index") {
+      router.replace("/(school)/(tabs)/trips" as never);
+      return;
+    }
+    if (
+      isDriver &&
+      !["trips", "messages", "more", "settings", "notifications"].includes(
+        currentScreen,
+      )
+    ) {
+      router.replace("/(school)/(tabs)/trips" as never);
+      return;
+    }
     if (
       !loading &&
+      !isDriver &&
       trialExpired &&
       !EXPIRED_TRIAL_SAFETY_TABS.has(currentScreen)
     ) {
       router.replace("/(school)/billing" as never);
     }
-  }, [currentScreen, loading, router, trialExpired]);
+  }, [currentScreen, isDriver, loading, router, trialExpired]);
 
   if (loading) {
     return (
@@ -93,6 +105,7 @@ export default function SchoolLayout() {
         <Tabs.Screen name="trips" />
         <Tabs.Screen name="messages" />
         <Tabs.Screen name="more" />
+        <Tabs.Screen name="parents" options={{ href: null }} />
         <Tabs.Screen name="incidents" options={{ href: null }} />
         <Tabs.Screen name="settings" options={{ href: null }} />
       </Tabs>

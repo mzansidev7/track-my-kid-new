@@ -13,11 +13,11 @@ import {
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { File as ExpoFile } from "expo-file-system";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
 import { resolveWorkingBaseUrl } from "@/url";
@@ -78,9 +78,24 @@ const createAddressValue = (value: unknown): AddressFormData => {
   };
 };
 
+const ensureIso = (value?: string | null) => {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+
+  const date = new Date(normalized);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  const parsed = Date.parse(normalized);
+  return Number.isNaN(parsed)
+    ? null
+    : new Date(parsed).toISOString().slice(0, 10);
+};
+
 const EditDriverProfile = () => {
-  const router = useRouter();
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const { user } = useContext(AuthContext);
   const { driver, loading, refreshDriver } = useDriverProfile();
   const [formData, setFormData] = useState<DriverFormData>({
@@ -103,6 +118,7 @@ const EditDriverProfile = () => {
   });
 
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedAvatarUri, setSelectedAvatarUri] = useState<string | null>(
     null,
   );
@@ -197,20 +213,61 @@ const EditDriverProfile = () => {
     });
   };
 
-  const ensureIso = (value?: string | null) => {
-    if (!value) return null;
-    const v = value.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    // Try Date parse
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) {
-      return d.toISOString().slice(0, 10);
-    }
-    // Try parsing DD MMM YYYY e.g. 10 Sep 1990
-    const alt = Date.parse(v);
-    if (!isNaN(alt)) return new Date(alt).toISOString().slice(0, 10);
-    return null;
+  const restoreDriverForm = () => {
+    if (!driver) return;
+
+    const resolvedAddress = createAddressValue(driver.address);
+    setFormData({
+      name: driver.user?.name || "",
+      phone: driver.user?.phone || "",
+      email: driver.user?.email || "",
+      dob: ensureIso(driver.date_of_birth) || driver.date_of_birth || "",
+      idNumber: driver.id_number || "",
+      licenseNumber: driver.vehicle_plate_number || "",
+      licenseExpiry:
+        ensureIso(driver.licence_expiry) || driver.licence_expiry || "",
+      address: resolvedAddress,
+      experience: driver.experience || "",
+    });
+
+    const avatar =
+      typeof driver.avatar === "string"
+        ? driver.avatar
+        : driver.avatar?.url || driver.avatar?.avatar_url || null;
+    setAvatarPreviewUri(avatar);
+    setSelectedAvatarUri(null);
   };
+
+  const renderProfileDetail = (
+    icon: keyof typeof MaterialIcons.glyphMap,
+    label: string,
+    value: string,
+  ) => (
+    <View
+      key={label}
+      style={[
+        localStyles.detailRow,
+        { borderBottomColor: colors.border },
+      ]}
+    >
+      <View
+        style={[
+          localStyles.detailIcon,
+          { backgroundColor: `${colors.primary}16` },
+        ]}
+      >
+        <MaterialIcons name={icon} size={17} color={colors.primary} />
+      </View>
+      <View style={localStyles.detailCopy}>
+        <Text style={[localStyles.detailLabel, { color: colors.text.secondary }]}>
+          {label}
+        </Text>
+        <Text style={[localStyles.detailValue, { color: colors.text.primary }]}>
+          {value.trim() || "Not provided"}
+        </Text>
+      </View>
+    </View>
+  );
 
   const validateRequiredFields = () => {
     const missingFields: string[] = [];
@@ -281,7 +338,7 @@ const EditDriverProfile = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -345,16 +402,12 @@ const EditDriverProfile = () => {
       if (selectedAvatarUri) {
         const avatarFileName =
           selectedAvatarUri.split("/").pop() || "avatar.jpg";
-        const avatarFileType = avatarFileName.toLowerCase().endsWith("png")
-          ? "image/png"
-          : "image/jpeg";
-
         const avatarFormData = new FormData();
-        avatarFormData.append("avatar", {
-          uri: selectedAvatarUri,
-          name: avatarFileName,
-          type: avatarFileType,
-        } as any);
+        avatarFormData.append(
+          "avatar",
+          new ExpoFile(selectedAvatarUri),
+          avatarFileName,
+        );
 
         const avatarResponse = await fetch(`${baseUrl}/driver/avatar`, {
           method: "PUT",
@@ -376,7 +429,7 @@ const EditDriverProfile = () => {
       setNotifType("success");
       setNotifMessage("Profile updated successfully!");
       setNotifVisible(true);
-      setTimeout(() => router.push("/(driver)/(tabs)/profile"), 800);
+      setIsEditing(false);
     } catch (error) {
       const msg =
         error instanceof Error ? error.message : "Failed to update profile.";
@@ -394,6 +447,215 @@ const EditDriverProfile = () => {
       <View style={[localStyles.container, localStyles.loadingContainer]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
+    );
+  }
+
+  if (!isEditing) {
+    const address = [
+      formData.address.street,
+      formData.address.suburb,
+      formData.address.city,
+      formData.address.province,
+      formData.address.postalCode,
+      formData.address.country,
+    ]
+      .filter((part) => part.trim())
+      .join(", ");
+
+    return (
+      <SafeAreaView
+        style={[localStyles.container, { backgroundColor: colors.background }]}
+      >
+        <DriverHeader
+          title="Driver Profile"
+          subtitle="Review your personal details"
+          showBackButton
+          rightComponent={
+            <TouchableOpacity
+              style={localStyles.headerEditButton}
+              onPress={() => setIsEditing(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Edit driver profile"
+              activeOpacity={0.75}
+            >
+              <MaterialIcons name="edit" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          }
+        />
+        <ScrollView
+          contentContainerStyle={localStyles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <LinearGradient
+            colors={[colors.primaryDark, colors.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={localStyles.profileHero}
+          >
+            <View style={localStyles.profileAvatar}>
+              <Image
+                source={
+                  avatarPreviewUri
+                    ? { uri: avatarPreviewUri }
+                    : require("@/assets/images/driver.png")
+                }
+                style={localStyles.avatarImage}
+              />
+            </View>
+            <Text style={localStyles.profileName}>
+              {formData.name || "Driver"}
+            </Text>
+            <Text style={localStyles.profileEmail}>
+              {formData.email || "Driver account"}
+            </Text>
+            <Text style={localStyles.profileHint}>
+              Your details are visible to your school and connected families.
+            </Text>
+          </LinearGradient>
+
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons
+                  name="person-outline"
+                  size={19}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Personal information
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Identity and home address
+                </Text>
+              </View>
+            </View>
+            {renderProfileDetail("badge", "Full name", formData.name)}
+            {renderProfileDetail(
+              "cake",
+              "Date of birth",
+              formData.dob ? formatDate(formData.dob) : "",
+            )}
+            {renderProfileDetail("fingerprint", "ID number", formData.idNumber)}
+            {renderProfileDetail("home", "Address", address)}
+          </View>
+
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons
+                  name="contact-phone"
+                  size={19}
+                  color={colors.primary}
+                />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Contact information
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  How your school and families can reach you
+                </Text>
+              </View>
+            </View>
+            {renderProfileDetail("phone", "Phone number", formData.phone)}
+            {renderProfileDetail("email", "Email address", formData.email)}
+          </View>
+
+          <View
+            style={[
+              localStyles.section,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={localStyles.sectionHeading}>
+              <View
+                style={[
+                  localStyles.sectionIcon,
+                  { backgroundColor: `${colors.primary}16` },
+                ]}
+              >
+                <MaterialIcons name="badge" size={19} color={colors.primary} />
+              </View>
+              <View style={localStyles.sectionHeadingCopy}>
+                <Text
+                  style={[
+                    localStyles.sectionTitle,
+                    { color: colors.text.primary },
+                  ]}
+                >
+                  Driving credentials
+                </Text>
+                <Text
+                  style={[
+                    localStyles.sectionDescription,
+                    { color: colors.text.secondary },
+                  ]}
+                >
+                  Licence and experience
+                </Text>
+              </View>
+            </View>
+            {renderProfileDetail(
+              "event",
+              "Licence expiry",
+              formData.licenseExpiry ? formatDate(formData.licenseExpiry) : "",
+            )}
+            {renderProfileDetail(
+              "timeline",
+              "Driving experience",
+              formData.experience,
+            )}
+          </View>
+        </ScrollView>
+        <AppNotification
+          message={notifMessage ?? ""}
+          type={notifType}
+          visible={notifVisible}
+          onHide={() => setNotifVisible(false)}
+        />
+      </SafeAreaView>
     );
   }
 
@@ -900,7 +1162,10 @@ const EditDriverProfile = () => {
                 localStyles.cancelButton,
                 { borderColor: colors.primary },
               ]}
-              onPress={() => router.back()}
+              onPress={() => {
+                restoreDriverForm();
+                setIsEditing(false);
+              }}
               disabled={saving}
             >
               <Text
@@ -1046,6 +1311,52 @@ const localStyles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 44,
   },
+  headerEditButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  profileHero: {
+    alignItems: "center",
+    paddingHorizontal: 22,
+    paddingVertical: 26,
+    marginBottom: 16,
+    borderRadius: 22,
+  },
+  profileAvatar: {
+    width: 92,
+    height: 92,
+    borderRadius: 32,
+    marginBottom: 14,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.65)",
+  },
+  profileName: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    textAlign: "center",
+  },
+  profileEmail: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 13,
+    marginTop: 5,
+    textAlign: "center",
+  },
+  profileHint: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 14,
+    textAlign: "center",
+  },
   avatarSection: {
     borderWidth: 1,
     borderRadius: 22,
@@ -1138,6 +1449,34 @@ const localStyles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 3,
   },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  detailIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  detailCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 3,
+  },
+  detailValue: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
   formGroup: {
     marginBottom: 17,
   },
@@ -1214,7 +1553,7 @@ const localStyles = StyleSheet.create({
     maxWidth: 520,
     borderRadius: 14,
     padding: 18,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     borderWidth: 1,
   },
   modalTitle: {

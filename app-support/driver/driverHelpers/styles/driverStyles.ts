@@ -1,8 +1,8 @@
 import { StyleSheet } from "react-native";
-import { useTheme } from "../../../../styles/theme";
+import { useDriverTheme } from "../../../../styles/theme";
 
 export const useDriverStyles = () => {
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useDriverTheme();
 
   return StyleSheet.create({
     container: {

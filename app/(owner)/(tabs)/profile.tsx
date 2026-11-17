@@ -51,8 +51,8 @@ const OwnerProfile = () => {
       <LinearGradient
         colors={
           profileUser?.company_avatar
-            ? ["rgba(23, 56, 95, 0.88)", "rgba(23, 56, 95, 0.88)"]
-            : ["#17385F", "#17385F"]
+            ? ["rgba(5, 9, 7, 0.92)", "rgba(5, 9, 7, 0.92)"]
+            : ["#050907", "#050907"]
         }
         style={ownersProfileStyles.pageHeader}
       >
@@ -272,7 +272,7 @@ const OwnerProfile = () => {
                 Business Owner
               </Text>
               <View style={ownersProfileStyles.ownerBadge}>
-                <Ionicons name="briefcase" size={13} color="#1769D2" />
+                <Ionicons name="briefcase" size={13} color="#35D9B3" />
                 <Text style={ownersProfileStyles.ownerBadgeText}>Owner</Text>
               </View>
             </View>
@@ -291,7 +291,7 @@ const OwnerProfile = () => {
               <Ionicons
                 name="mail-outline"
                 size={21}
-                color="#1769D2"
+                color="#35D9B3"
                 style={ownersProfileStyles.detailIcon}
               />
               <View style={ownersProfileStyles.profileDetailText}>
@@ -309,7 +309,7 @@ const OwnerProfile = () => {
               <Ionicons
                 name="call-outline"
                 size={21}
-                color="#1769D2"
+                color="#35D9B3"
                 style={ownersProfileStyles.detailIcon}
               />
               <View style={ownersProfileStyles.profileDetailText}>
@@ -327,7 +327,7 @@ const OwnerProfile = () => {
               <Ionicons
                 name="location-outline"
                 size={21}
-                color="#1769D2"
+                color="#35D9B3"
                 style={ownersProfileStyles.detailIcon}
               />
               <View style={ownersProfileStyles.profileDetailText}>
@@ -347,7 +347,7 @@ const OwnerProfile = () => {
               <Ionicons
                 name="calendar-outline"
                 size={21}
-                color="#1769D2"
+                color="#35D9B3"
                 style={ownersProfileStyles.detailIcon}
               />
               <View style={ownersProfileStyles.profileDetailText}>
@@ -368,7 +368,7 @@ const OwnerProfile = () => {
             ]}
           >
             <View style={ownersProfileStyles.overviewHeading}>
-              <Ionicons name="business-outline" size={21} color="#1769D2" />
+              <Ionicons name="business-outline" size={21} color="#35D9B3" />
               <Text style={ownersProfileStyles.sectionTitle}>
                 Business Overview
               </Text>
@@ -385,7 +385,7 @@ const OwnerProfile = () => {
               ]}
             >
               <View style={ownersProfileStyles.statItem}>
-                <Ionicons name="people-outline" size={19} color="#1769D2" />
+                <Ionicons name="people-outline" size={19} color="#35D9B3" />
                 <Text style={ownersProfileStyles.statValue}>
                   {drivers.length}
                 </Text>
@@ -393,7 +393,7 @@ const OwnerProfile = () => {
               </View>
               <View style={ownersProfileStyles.statDivider} />
               <View style={ownersProfileStyles.statItem}>
-                <Ionicons name="car-outline" size={19} color="#1769D2" />
+                <Ionicons name="car-outline" size={19} color="#35D9B3" />
                 <Text style={ownersProfileStyles.statValue}>
                   {vehicles.length}
                 </Text>
@@ -401,7 +401,7 @@ const OwnerProfile = () => {
               </View>
               <View style={ownersProfileStyles.statDivider} />
               <View style={ownersProfileStyles.statItem}>
-                <Ionicons name="git-branch-outline" size={19} color="#1769D2" />
+                <Ionicons name="git-branch-outline" size={19} color="#35D9B3" />
                 <Text style={ownersProfileStyles.statValue}>
                   {allRoutes.length}
                 </Text>
@@ -434,7 +434,7 @@ const OwnerProfile = () => {
               <Switch
                 value={driverMode}
                 onValueChange={toggleDriverMode}
-                thumbColor={driverMode ? "#1769D2" : "#f4f3f4"}
+                thumbColor={driverMode ? "#00B894" : "#82968D"}
                 trackColor={{ false: "#AAB8C5", true: "#8BB8E8" }}
               />
             </View>
@@ -524,7 +524,7 @@ const OwnerProfile = () => {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              <Ionicons name="chevron-forward" size={20} color="#82968D" />
             </TouchableOpacity>
             <TouchableOpacity
               style={ownersProfileStyles.settingRow}
@@ -538,7 +538,7 @@ const OwnerProfile = () => {
                   Review dispatches, compliance, billing, and client workflows
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              <Ionicons name="chevron-forward" size={20} color="#82968D" />
             </TouchableOpacity>
             <TouchableOpacity
               style={ownersProfileStyles.settingRow}
@@ -546,13 +546,13 @@ const OwnerProfile = () => {
             >
               <View>
                 <Text style={ownersProfileStyles.settingRowTitle}>
-                  Manage Payouts
+                  Payments
                 </Text>
                 <Text style={ownersProfileStyles.settingRowSubtitle}>
-                  Connect Stripe and receive client payments
+                  View client payments and payout information
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              <Ionicons name="chevron-forward" size={20} color="#82968D" />
             </TouchableOpacity>
           </View>
 
@@ -575,7 +575,7 @@ const OwnerProfile = () => {
               <Switch
                 value={pickupNotifications}
                 onValueChange={setPickupNotifications}
-                thumbColor={pickupNotifications ? "#1769D2" : "#f4f3f4"}
+                thumbColor={pickupNotifications ? "#00B894" : "#82968D"}
                 trackColor={{ false: "#AAB8C5", true: "#8BB8E8" }}
               />
             </View>
@@ -592,7 +592,7 @@ const OwnerProfile = () => {
               <Switch
                 value={dropOffNotifications}
                 onValueChange={setDropOffNotifications}
-                thumbColor={dropOffNotifications ? "#1769D2" : "#f4f3f4"}
+                thumbColor={dropOffNotifications ? "#00B894" : "#82968D"}
                 trackColor={{ false: "#AAB8C5", true: "#8BB8E8" }}
               />
             </View>
@@ -609,7 +609,7 @@ const OwnerProfile = () => {
               <Switch
                 value={delayAlerts}
                 onValueChange={setDelayAlerts}
-                thumbColor={delayAlerts ? "#1769D2" : "#f4f3f4"}
+                thumbColor={delayAlerts ? "#00B894" : "#82968D"}
                 trackColor={{ false: "#AAB8C5", true: "#8BB8E8" }}
               />
             </View>
@@ -626,7 +626,7 @@ const OwnerProfile = () => {
               <Switch
                 value={emergencyAlerts}
                 onValueChange={setEmergencyAlerts}
-                thumbColor={emergencyAlerts ? "#1769D2" : "#f4f3f4"}
+                thumbColor={emergencyAlerts ? "#00B894" : "#82968D"}
                 trackColor={{ false: "#AAB8C5", true: "#8BB8E8" }}
               />
             </View>

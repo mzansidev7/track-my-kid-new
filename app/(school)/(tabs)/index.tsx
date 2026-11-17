@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Image,
+  ImageBackground,
   View,
   Text,
   StyleSheet,
@@ -15,10 +17,12 @@ import {
   MaterialIcons,
 } from "@expo/vector-icons";
 import { useAuth } from "../../../context/authContext/auth-context";
+import { resolveWorkingBaseUrl } from "../../../url";
 import {
   useRecentTrips,
   useSchoolDashboard,
 } from "@/app-support/school/schoolHelpers/hooks/useSchoolDashboard";
+import { useSchoolNotifications } from "@/app-support/school/schoolHelpers/hooks/useSchoolNotifications";
 import { RecentTrip } from "@/types/school/client.interfaces";
 import {
   getUserName,
@@ -29,41 +33,210 @@ import {
 const SchoolDashboard = () => {
   const router = useRouter();
   const { user } = useAuth();
-  const { school, routes, drivers, loading, assignedTrips } =
+  const { school, students, routes, drivers, loading, assignedTrips } =
     useSchoolDashboard();
+  const [adminAvatar, setAdminAvatar] = useState<string | null>(null);
+  const [attendance, setAttendance] = useState<{
+    present: number;
+    absent: number;
+    total: number;
+    pending: number;
+  } | null>(null);
+  const [attendanceError, setAttendanceError] = useState("");
+  const { unreadCount: unreadNotificationCount } = useSchoolNotifications();
   const quickActions = schoolQuickActions();
-  const stats = schoolStats(school, routes, drivers);
+  const stats = schoolStats(students, routes, drivers);
   const userName = getUserName(user);
+  const avatar = user?.userData?.avatar;
+  const userAvatar =
+    (typeof avatar === "string" ? avatar : avatar?.avatar_url || avatar?.url) ||
+    adminAvatar ||
+    (typeof user?.userData?.admin_profile?.avatar === "string"
+      ? user.userData.admin_profile.avatar
+      : user?.userData?.admin_profile?.avatar?.avatar_url ||
+        user?.userData?.admin_profile?.avatar?.url) ||
+    user?.userData?.avatar_url ||
+    user?.userData?.profile_photo_url;
+
   const recentTrips = useRecentTrips(routes);
+
+  useEffect(() => {
+    if (!user?.token) return undefined;
+
+    let active = true;
+    const loadAdminAvatar = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/school/admin/profile`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        const profile = await response.json();
+        if (!response.ok) {
+          throw new Error(profile.error || "Unable to load admin profile.");
+        }
+        if (!active) return;
+
+        const profileAvatar = profile.avatar;
+        setAdminAvatar(
+          typeof profileAvatar === "string"
+            ? profileAvatar
+            : profileAvatar?.avatar_url || profileAvatar?.url || null,
+        );
+      } catch (error) {
+        console.error("Could not load school admin avatar:", error);
+      }
+    };
+
+    void loadAdminAvatar();
+    return () => {
+      active = false;
+    };
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (!user?.token) return undefined;
+
+    let active = true;
+    const loadAttendance = async () => {
+      const today = new Date();
+      const date = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, "0"),
+        String(today.getDate()).padStart(2, "0"),
+      ].join("-");
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/school/attendance?date=${date}`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to load today's attendance.");
+        }
+        if (!active) return;
+
+        const records = Array.isArray(data.records) ? data.records : [];
+        const absenceReports = Array.isArray(data.absenceReports)
+          ? data.absenceReports
+          : [];
+        const students = Array.isArray(data.students) ? data.students : [];
+        const handledStudentIds = new Set([
+          ...records.map((record: { child_id: string | number }) =>
+            String(record.child_id),
+          ),
+          ...absenceReports.map((report: { child_id: string | number }) =>
+            String(report.child_id),
+          ),
+        ]);
+        const absentStudentIds = new Set([
+          ...records
+            .filter((record: { status: string }) => record.status === "absent")
+            .map((record: { child_id: string | number }) =>
+              String(record.child_id),
+            ),
+          ...absenceReports.map((report: { child_id: string | number }) =>
+            String(report.child_id),
+          ),
+        ]);
+        setAttendance({
+          present: records.filter(
+            (record: { status: string }) =>
+              record.status === "present" || record.status === "late",
+          ).length,
+          absent: absentStudentIds.size,
+          total: students.length,
+          pending: students.filter(
+            (student: { id: string | number }) =>
+              !handledStudentIds.has(String(student.id)),
+          ).length,
+        });
+        setAttendanceError("");
+      } catch (requestError: any) {
+        console.error("Could not load mobile school attendance:", requestError);
+        if (active) {
+          setAttendanceError("Today's attendance reminder is unavailable.");
+        }
+      }
+    };
+
+    void loadAttendance();
+    const interval = setInterval(() => void loadAttendance(), 300000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [user?.token]);
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <ImageBackground
+        source={school?.logo ? { uri: school.logo } : undefined}
+        resizeMode="cover"
+        imageStyle={styles.headerBackgroundImage}
+        style={styles.header}
+      >
+        <View style={styles.headerLeft}>
+          <Text style={styles.greeting}>
+            {new Date().getHours() < 12
+              ? "Good morning"
+              : new Date().getHours() < 17
+                ? "Good afternoon"
+                : "Good evening"}
+          </Text>
+          <Text style={styles.welcomeName}>{userName}</Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadNotificationCount > 0
+              ? `Notifications, ${unreadNotificationCount} unread`
+              : "Notifications"
+          }
+          activeOpacity={0.75}
+          onPress={() => router.push("/(school)/pages/notifications" as never)}
+          style={styles.headerNotification}
+        >
+          <Ionicons name="notifications-outline" size={23} color="#FFFFFF" />
+          {unreadNotificationCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+              </Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+        <View style={styles.headerAvatar}>
+          {userAvatar ? (
+            <Image
+              source={{ uri: userAvatar }}
+              style={styles.headerAvatarImage}
+            />
+          ) : (
+            <Ionicons name="school-outline" size={23} color="#FFFFFF" />
+          )}
+        </View>
+      </ImageBackground>
+      {/* Devider */}
+      <View
+        style={{
+          height: 1,
+          backgroundColor: "#E2E8F0",
+          marginVertical: 10,
+        }}
+      />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Good morning,</Text>
-            <Text style={styles.greeting}>{userName}</Text>
-
-            <Text style={styles.schoolName}>
-              {school?.name || "School Dashboard"}
-            </Text>
-          </View>
-
-          <TouchableOpacity style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={21} color="#222" />
-
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
-        </View>
-
-        {/* School Card */}
         <View style={styles.schoolCard}>
           <View style={styles.schoolIcon}>
-            <Ionicons name="school-outline" size={24} color="#fff" />
+            {school?.logo ? (
+              <Image source={{ uri: school.logo }} style={styles.schoolLogo} />
+            ) : (
+              <Ionicons name="school-outline" size={24} color="#FFFFFF" />
+            )}
           </View>
 
           <View style={styles.schoolInfo}>
@@ -75,24 +248,15 @@ const SchoolDashboard = () => {
                 ? `EMIS: ${school.emis_number}`
                 : loading
                   ? "Loading school information..."
-                  : "EMIS not set"}
+                  : "School profile"}
             </Text>
           </View>
-          <View style={styles.activeBadge}>
-            {school?.is_active ? (
-              <View style={styles.activeDot} />
-            ) : (
-              <View style={styles.notActiveDot} />
-            )}
-
-            {school?.is_active ? (
-              <Text style={styles.activeText}>Active</Text>
-            ) : (
-              <Text style={styles.inActiveText}>Inactive</Text>
-            )}
-          </View>
+          <MaterialIcons
+            name="verified"
+            size={22}
+            color={school?.is_active ? "#86EFAC" : "#CBD5E1"}
+          />
         </View>
-        {/* <Text>{JSON.stringify(school)}</Text> */}
 
         {assignedTrips.length > 0 && (
           <TouchableOpacity
@@ -117,57 +281,37 @@ const SchoolDashboard = () => {
           </TouchableOpacity>
         )}
 
-        {school?.is_active && school?.status === "pending" ? (
-          <View
-            style={{
-              backgroundColor: "#FFF3CD",
-              padding: 10,
-              borderRadius: 8,
-              marginBottom: 10,
-            }}
-          >
-            <Text style={{ color: "#856404", fontSize: 12 }}>
-              Your school is currently pending approval. Some features may be
-              limited until approval is granted.
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={{
-              backgroundColor: "#D4EDDA",
-              padding: 10,
-              borderRadius: 8,
-              marginBottom: 10,
-            }}
-          >
-            <Text style={{ color: "#155724", fontSize: 12 }}>
-              Your school is approved and active. You have full access to all
-              features.
-            </Text>
-            <Text style={{ color: "#155724", fontSize: 12 }}>
-              Approved by: {school?.approved_by}
-            </Text>
-          </View>
-        )}
+        {school &&
+          (["pending", "needs_info", "rejected"].includes(school.status) ||
+            school.is_active === false) && (
+            <View style={styles.schoolStatusNotice}>
+              <MaterialIcons
+                name={school.status === "pending" ? "schedule" : "info-outline"}
+                size={19}
+                color="#B45309"
+              />
+              <Text style={styles.schoolStatusText}>
+                {school.status === "pending"
+                  ? "Your school registration is awaiting approval."
+                  : school.status === "needs_info"
+                    ? "More information is needed to complete your school registration."
+                    : school.status === "rejected"
+                      ? "Your school registration was not approved. Please contact support."
+                      : "Some school features may be limited while your account is inactive."}
+              </Text>
+            </View>
+          )}
 
-        {/* Overview */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Overview</Text>
-
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View all</Text>
-          </TouchableOpacity>
+          <View>
+            <Text style={styles.sectionTitle}>School overview</Text>
+            <Text style={styles.sectionSubtitle}>Your school at a glance</Text>
+          </View>
         </View>
 
-        {/* Statistics */}
         <View style={styles.statsGrid}>
           {stats.map((item) => (
-            <TouchableOpacity
-              key={item.title}
-              style={styles.statCard}
-              activeOpacity={0.8}
-              // onPress={() => handleNavigate(item.screen)}
-            >
+            <View key={item.title} style={styles.statCard}>
               <View
                 style={[
                   styles.statIcon,
@@ -178,27 +322,33 @@ const SchoolDashboard = () => {
               </View>
 
               <Text style={styles.statValue}>{item.value}</Text>
-
               <Text style={styles.statLabel}>{item.title}</Text>
-            </TouchableOpacity>
+            </View>
           ))}
         </View>
 
-        {/* Quick Actions */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <View>
+            <Text style={styles.sectionTitle}>Quick actions</Text>
+            <Text style={styles.sectionSubtitle}>Common school tasks</Text>
+          </View>
         </View>
 
         <View style={styles.actionsCard}>
-          {quickActions.map((item, index) => (
+          {quickActions.map((item) => (
             <TouchableOpacity
               key={item.title}
-              style={[
-                styles.actionItem,
-                index !== quickActions.length - 1 && styles.actionBorder,
-              ]}
-              // onPress={() => handleNavigate(item.screen)}
-              activeOpacity={0.7}
+              style={styles.actionItem}
+              activeOpacity={0.82}
+              onPress={() => {
+                if (item.screen === "Students") {
+                  router.push("/(school)/(tabs)/students" as never);
+                } else if (item.screen === "Routes") {
+                  router.push("/(school)/(tabs)/routes" as never);
+                } else {
+                  router.push("/(school)/(tabs)/more" as never);
+                }
+              }}
             >
               <View
                 style={[
@@ -208,91 +358,102 @@ const SchoolDashboard = () => {
               >
                 <Ionicons name={item.icon} size={18} color={item.color} />
               </View>
-
               <Text style={styles.actionText}>{item.title}</Text>
-
-              <Ionicons name="chevron-forward" size={16} color="#A0A0A0" />
+              <MaterialIcons name="arrow-outward" size={16} color="#94A3B8" />
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Transport Overview */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Transport today</Text>
-
+          <View>
+            <Text style={styles.sectionTitle}>Transport overview</Text>
+            <Text style={styles.sectionSubtitle}>
+              Current school operations
+            </Text>
+          </View>
           <TouchableOpacity
-          // onPress={() => handleNavigate("Trips")}
+            style={styles.sectionAction}
+            onPress={() => router.push("/(school)/(tabs)/trips" as never)}
           >
-            <Text style={styles.viewAll}>View trips</Text>
+            <Text style={styles.viewAll}>Trips</Text>
+            <MaterialIcons name="chevron-right" size={17} color="#2563EB" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.transportCard}>
           <View style={styles.transportRow}>
             <View style={styles.transportItem}>
-              <Text style={styles.transportNumber}>12</Text>
-              <Text style={styles.transportLabel}>Trips</Text>
+              <Text style={styles.transportNumber}>{assignedTrips.length}</Text>
+              <Text style={styles.transportLabel}>Assigned trips</Text>
             </View>
-
             <View style={styles.verticalLine} />
-
             <View style={styles.transportItem}>
-              <Text style={styles.transportNumber}>218</Text>
+              <Text style={styles.transportNumber}>{students.length}</Text>
               <Text style={styles.transportLabel}>Students</Text>
             </View>
-
             <View style={styles.verticalLine} />
-
             <View style={styles.transportItem}>
-              <Text style={styles.transportNumber}>9</Text>
-              <Text style={styles.transportLabel}>Active</Text>
+              <Text style={styles.transportNumber}>{routes.length}</Text>
+              <Text style={styles.transportLabel}>Routes</Text>
             </View>
           </View>
         </View>
 
-        {/* Recent Trips */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent trips</Text>
-
+          <View>
+            <Text style={styles.sectionTitle}>Recent routes</Text>
+            <Text style={styles.sectionSubtitle}>
+              Latest routes configured for your school
+            </Text>
+          </View>
           <TouchableOpacity
-          // onPress={() => handleNavigate("Trips")}
+            style={styles.sectionAction}
+            onPress={() => router.push("/(school)/(tabs)/routes" as never)}
           >
             <Text style={styles.viewAll}>See all</Text>
+            <MaterialIcons name="chevron-right" size={17} color="#2563EB" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.tripsCard}>
-          {recentTrips.map((trip: RecentTrip, index: number) => (
-            <TouchableOpacity
-              key={trip.id}
-              style={[
-                styles.tripItem,
-                index !== recentTrips.length - 1 && styles.tripBorder,
-              ]}
-              activeOpacity={0.7}
-              // onPress={() => handleNavigate("Trips")}
-            >
+          {recentTrips.length === 0 ? (
+            <View style={styles.emptyRoutes}>
               <View style={styles.tripIcon}>
-                <MaterialCommunityIcons name="bus" size={18} color="#4285F4" />
+                <MaterialCommunityIcons name="bus" size={19} color="#2563EB" />
               </View>
-
               <View style={styles.tripInfo}>
-                <Text style={styles.tripRoute}>{trip.route}</Text>
-
+                <Text style={styles.tripRoute}>No routes yet</Text>
                 <Text style={styles.tripDetails}>
-                  {trip.vehicle} • {trip.driver}
+                  School routes will appear here when added.
                 </Text>
               </View>
-
-              <View style={styles.tripRight}>
-                <Text style={styles.tripTime}>{trip.time}</Text>
-
+            </View>
+          ) : (
+            recentTrips.map((trip: RecentTrip, index: number) => (
+              <View
+                key={trip.id}
+                style={[
+                  styles.tripItem,
+                  index !== recentTrips.length - 1 && styles.tripBorder,
+                ]}
+              >
+                <View style={styles.tripIcon}>
+                  <MaterialCommunityIcons
+                    name="bus"
+                    size={18}
+                    color="#2563EB"
+                  />
+                </View>
+                <View style={styles.tripInfo}>
+                  <Text style={styles.tripRoute}>{trip.route}</Text>
+                  <Text style={styles.tripDetails}>
+                    {trip.vehicle} · {trip.driver}
+                  </Text>
+                </View>
                 <View
                   style={[
                     styles.tripStatus,
-                    {
-                      backgroundColor: `${trip.statusColor}15`,
-                    },
+                    { backgroundColor: `${trip.statusColor}15` },
                   ]}
                 >
                   <View
@@ -301,7 +462,6 @@ const SchoolDashboard = () => {
                       { backgroundColor: trip.statusColor },
                     ]}
                   />
-
                   <Text
                     style={[styles.statusText, { color: trip.statusColor }]}
                   >
@@ -309,19 +469,25 @@ const SchoolDashboard = () => {
                   </Text>
                 </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            ))
+          )}
         </View>
 
-        {/* Attendance */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Attendance</Text>
-
-          <TouchableOpacity
-          // onPress={() => handleNavigate("Attendance")}
-          >
-            <Text style={styles.viewAll}>Details</Text>
-          </TouchableOpacity>
+          <View>
+            <Text style={styles.sectionTitle}>Attendance</Text>
+            <Text style={styles.sectionSubtitle}>
+              Today&apos;s student register
+            </Text>
+          </View>
+          <View style={styles.datePill}>
+            <Text style={styles.datePillText}>
+              {new Date().toLocaleDateString([], {
+                month: "short",
+                day: "numeric",
+              })}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.attendanceCard}>
@@ -329,32 +495,73 @@ const SchoolDashboard = () => {
             <View>
               <Text style={styles.attendanceTitle}>{`Today's attendance`}</Text>
 
-              <Text style={styles.attendanceSubtitle}>21 August 2026</Text>
+              <Text style={styles.attendanceSubtitle}>
+                {attendance
+                  ? `${attendance.present} present or late out of ${attendance.total} students`
+                  : "Attendance summary"}
+              </Text>
             </View>
 
-            <Text style={styles.attendancePercentage}>94%</Text>
+            <Text style={styles.attendancePercentage}>
+              {attendance
+                ? `${Math.round(
+                    attendance.total
+                      ? (attendance.present / attendance.total) * 100
+                      : 0,
+                  )}%`
+                : "--"}
+            </Text>
           </View>
 
           <View style={styles.progressBackground}>
-            <View style={styles.progressFill} />
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: `${Math.round(
+                    attendance?.total
+                      ? (attendance.present / attendance.total) * 100
+                      : 0,
+                  )}%`,
+                },
+              ]}
+            />
           </View>
 
           <View style={styles.attendanceStats}>
             <View>
-              <Text style={styles.attendanceNumber}>230</Text>
-              <Text style={styles.attendanceLabel}>Present</Text>
+              <Text style={styles.attendanceNumber}>
+                {attendance?.present ?? "--"}
+              </Text>
+              <Text style={styles.attendanceLabel}>Present / late</Text>
             </View>
 
             <View>
-              <Text style={styles.attendanceNumber}>15</Text>
+              <Text style={styles.attendanceNumber}>
+                {attendance?.absent ?? "--"}
+              </Text>
               <Text style={styles.attendanceLabel}>Absent</Text>
             </View>
 
             <View>
-              <Text style={styles.attendanceNumber}>245</Text>
-              <Text style={styles.attendanceLabel}>Total</Text>
+              <Text style={styles.attendanceNumber}>
+                {attendance?.pending ?? "--"}
+              </Text>
+              <Text style={styles.attendanceLabel}>Still to mark</Text>
             </View>
           </View>
+          {attendanceError ? (
+            <Text style={styles.attendanceError}>{attendanceError}</Text>
+          ) : attendance && attendance.pending > 0 ? (
+            <View style={styles.attendanceReminder}>
+              <Ionicons name="alert-circle" size={18} color="#B45309" />
+              <Text style={styles.attendanceReminderText}>
+                {attendance.pending} student
+                {attendance.pending === 1 ? " still needs" : "s still need"} an
+                attendance status today.
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Bottom spacing */}
@@ -369,7 +576,7 @@ export default SchoolDashboard;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
+    backgroundColor: "#F4F7FB",
   },
 
   container: {
@@ -377,17 +584,23 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 132,
   },
 
-  /* Header */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 18,
+    padding: 15,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  headerBackgroundImage: {
+    opacity: 0.4,
+    borderRadius: 16,
   },
 
   headerLeft: {
@@ -395,90 +608,153 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    fontSize: 11,
-    color: "#888",
-    marginBottom: 2,
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "600",
+    marginBottom: 3,
+  },
+
+  welcomeName: {
+    color: "#14213D",
+    fontSize: 25,
+    fontWeight: "800",
+    letterSpacing: -0.4,
   },
 
   schoolName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#202124",
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#64748B",
+    marginTop: 4,
   },
 
-  notificationButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+  headerNotification: {
+    width: 46,
+    height: 46,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#EEEEEE",
-    position: "relative",
+    borderColor: "#FFFFFF",
+    marginRight: 10,
+    backgroundColor: "#2c3444",
   },
-
-  notificationDot: {
+  notificationBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#EA4335",
+    top: -6,
+    right: -6,
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#DC2626",
+    zIndex: 1,
+    elevation: 2,
+  },
+  notificationBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  headerAvatar: {
+    width: 46,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+    overflow: "hidden",
+    backgroundColor: "#2c3444",
+  },
+  headerAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
 
-  /* School card */
   schoolCard: {
-    backgroundColor: "#4285F4",
-    borderRadius: 14,
-    padding: 13,
+    backgroundColor: "#122957",
+    borderRadius: 18,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: 16,
+    shadowColor: "#122957",
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
   tripStartAlert: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    padding: 12,
-    marginTop: -8,
+    padding: 14,
     marginBottom: 16,
-    borderRadius: 13,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: "#BBF7D0",
     backgroundColor: "#F0FDF4",
   },
   tripStartIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#16A34A",
   },
   tripStartCopy: { flex: 1, gap: 3 },
-  tripStartTitle: { color: "#166534", fontSize: 12, fontWeight: "800" },
-  tripStartText: { color: "#3F644C", fontSize: 10, lineHeight: 15 },
+  tripStartTitle: { color: "#166534", fontSize: 13, fontWeight: "800" },
+  tripStartText: { color: "#3F644C", fontSize: 11, lineHeight: 16 },
+
+  schoolStatusNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    borderRadius: 14,
+    backgroundColor: "#FFFBEB",
+  },
+  schoolStatusText: {
+    flex: 1,
+    color: "#92400E",
+    fontSize: 11,
+    lineHeight: 16,
+  },
 
   schoolIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 11,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
+  schoolLogo: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+  },
 
   schoolInfo: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
+    marginRight: 8,
   },
 
   schoolTitle: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#FFFFFF",
   },
 
@@ -524,112 +800,137 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
-  /* Sections */
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 11,
   },
 
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#222",
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#172033",
+    letterSpacing: -0.2,
+  },
+
+  sectionSubtitle: {
+    marginTop: 3,
+    color: "#718096",
+    fontSize: 11,
   },
 
   viewAll: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#4285F4",
+    fontWeight: "700",
+    color: "#2563EB",
   },
 
-  /* Stats */
+  sectionAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+  },
+
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 4,
+    marginBottom: 10,
   },
 
   statCard: {
-    width: "48.5%",
+    width: "48.2%",
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 11,
-    minHeight: 100,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 112,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#EEEEEE",
+    borderColor: "#E7ECF3",
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+    width: 35,
+    height: 35,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 7,
   },
 
   statValue: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#222",
+    fontSize: 23,
+    fontWeight: "800",
+    color: "#172033",
   },
 
   statLabel: {
-    fontSize: 10,
-    color: "#777",
-    marginTop: 1,
+    fontSize: 11,
+    color: "#64748B",
+    marginTop: 2,
   },
 
-  /* Quick actions */
   actionsCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#EEEEEE",
-    marginBottom: 4,
-    overflow: "hidden",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 10,
+    marginBottom: 12,
   },
 
   actionItem: {
-    minHeight: 50,
-    paddingHorizontal: 11,
+    width: "48.2%",
+    minHeight: 82,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-  },
-
-  actionBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    gap: 9,
+    borderWidth: 1,
+    borderColor: "#E7ECF3",
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
   actionIcon: {
-    width: 31,
-    height: 31,
-    borderRadius: 9,
+    width: 34,
+    height: 34,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: 0,
   },
 
   actionText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#27364B",
     flex: 1,
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
   },
 
-  /* Transport */
   transportCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#EEEEEE",
-    paddingVertical: 14,
-    marginBottom: 4,
+    borderColor: "#E7ECF3",
+    paddingVertical: 17,
+    marginBottom: 12,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    elevation: 1,
   },
 
   transportRow: {
@@ -644,54 +945,65 @@ const styles = StyleSheet.create({
   },
 
   transportNumber: {
-    fontSize: 19,
-    fontWeight: "700",
-    color: "#222",
+    fontSize: 21,
+    fontWeight: "800",
+    color: "#172033",
   },
 
   transportLabel: {
-    fontSize: 10,
-    color: "#888",
-    marginTop: 2,
+    fontSize: 9,
+    color: "#64748B",
+    marginTop: 4,
+    textAlign: "center",
   },
 
   verticalLine: {
     width: 1,
     height: 32,
-    backgroundColor: "#EEEEEE",
+    backgroundColor: "#E8EDF4",
   },
 
-  /* Trips */
   tripsCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#EEEEEE",
+    borderColor: "#E7ECF3",
     overflow: "hidden",
-    marginBottom: 4,
+    marginBottom: 12,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    elevation: 1,
   },
 
   tripItem: {
-    minHeight: 68,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    minHeight: 72,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
   },
 
   tripBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: "#EEF2F6",
+  },
+  emptyRoutes: {
+    minHeight: 76,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   tripIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: "#EEF5FF",
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 9,
+    marginRight: 11,
   },
 
   tripInfo: {
@@ -701,12 +1013,12 @@ const styles = StyleSheet.create({
   tripRoute: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#222",
+    color: "#172033",
   },
 
   tripDetails: {
-    fontSize: 9,
-    color: "#888",
+    fontSize: 10,
+    color: "#718096",
     marginTop: 3,
   },
 
@@ -714,39 +1026,57 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
 
-  tripTime: {
-    fontSize: 9,
-    color: "#777",
-    marginBottom: 4,
-  },
-
   tripStatus: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
 
   statusDot: {
-    width: 5,
-    height: 5,
+    width: 6,
+    height: 6,
     borderRadius: 3,
-    marginRight: 4,
+    marginRight: 5,
   },
 
   statusText: {
-    fontSize: 8,
-    fontWeight: "600",
+    fontSize: 9,
+    fontWeight: "700",
   },
 
-  /* Attendance */
   attendanceCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#EEEEEE",
-    padding: 13,
+    borderColor: "#E7ECF3",
+    padding: 16,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  attendanceReminder: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#FFF7ED",
+  },
+  attendanceError: {
+    marginTop: 12,
+    color: "#B91C1C",
+    fontSize: 11,
+  },
+  attendanceReminderText: {
+    flex: 1,
+    color: "#9A3412",
+    fontSize: 10,
+    lineHeight: 15,
   },
 
   attendanceTop: {
@@ -756,53 +1086,60 @@ const styles = StyleSheet.create({
   },
 
   attendanceTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#222",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#172033",
   },
 
   attendanceSubtitle: {
-    fontSize: 9,
-    color: "#888",
+    fontSize: 10,
+    color: "#64748B",
     marginTop: 3,
   },
 
   attendancePercentage: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#34A853",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#16834A",
   },
+  datePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+  },
+  datePillText: { color: "#2563EB", fontSize: 10, fontWeight: "700" },
 
   progressBackground: {
-    height: 6,
-    backgroundColor: "#EAEAEA",
+    height: 8,
+    backgroundColor: "#E8EDF4",
     borderRadius: 5,
-    marginTop: 12,
+    marginTop: 14,
     overflow: "hidden",
   },
 
   progressFill: {
-    width: "94%",
+    width: "0%",
     height: "100%",
-    backgroundColor: "#34A853",
+    backgroundColor: "#22A064",
     borderRadius: 5,
   },
 
   attendanceStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: 15,
   },
 
   attendanceNumber: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#222",
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#172033",
   },
 
   attendanceLabel: {
     fontSize: 9,
-    color: "#888",
-    marginTop: 2,
+    color: "#64748B",
+    marginTop: 3,
   },
 });

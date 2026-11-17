@@ -311,7 +311,7 @@ export default function SchoolBilling() {
     (invoice) => invoice.status === "awaiting_payment",
   );
   const canResumeCheckout =
-    current?.billing_status === "pending" && current.billing_provider === "stripe";
+    current?.billing_status === "pending" && current.billing_provider === "paystack";
   const isSelectedCheckout =
     canResumeCheckout &&
     current?.plan_slug === selectedPlan &&

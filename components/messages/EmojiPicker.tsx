@@ -192,8 +192,6 @@ const EmojiPicker = ({
                 style={styles.emojiButton}
                 onPress={() => {
                   onSelect(emoji);
-                  setSearch("");
-                  onClose();
                 }}
                 accessibilityLabel={`Insert ${emoji}`}
               >

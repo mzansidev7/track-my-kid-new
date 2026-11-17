@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useContext, useEffect, useState, useCallback } from "react";
-import { useTheme } from "@/styles/theme";
+import { useOwnerTheme } from "@/styles/theme";
 import {
   ActivityIndicator,
   Alert,
@@ -119,11 +119,30 @@ interface RouteDetails {
     children: {
       id: string;
       name: string;
+      grade?: string | null;
       school_name: string;
+      school_location?: {
+        latitude?: number | null;
+        longitude?: number | null;
+        address?: string | null;
+      } | null;
       pickup_latitude: number;
       pickup_longitude: number;
       dropoff_latitude: number;
       dropoff_longitude: number;
+      pickup_address?: string | null;
+      dropoff_address?: string | null;
+      clients?: {
+        first_name?: string | null;
+        last_name?: string | null;
+        phone?: string | null;
+        users?: { name?: string | null; phone?: string | null } | null;
+      } | {
+        first_name?: string | null;
+        last_name?: string | null;
+        phone?: string | null;
+        users?: { name?: string | null; phone?: string | null } | null;
+      }[] | null;
       avatar?: string | { url?: string; avatar_url?: string } | null;
     };
   }[];
@@ -151,6 +170,20 @@ interface RouteDetails {
   }[];
 }
 
+interface RouteHistoryEntry {
+  id: string;
+  route_id: string | null;
+  route_type: string;
+  status: string;
+  start_time: string;
+  end_time?: string | null;
+  duration_seconds?: number | null;
+  distance_meters?: number | null;
+  drivers?: {
+    users?: { name?: string | null } | null;
+  } | null;
+}
+
 const RouteDetailsScreen = () => {
   const router = useRouter();
   const { routeId, vehicleId, returnTo } = useLocalSearchParams<{
@@ -159,7 +192,7 @@ const RouteDetailsScreen = () => {
     returnTo?: string;
   }>();
   const { user } = useContext(AuthContext);
-  const { colors, getBrandColors } = useTheme();
+  const { colors, getBrandColors } = useOwnerTheme();
   const ownerColors = getBrandColors("owner");
   const styles: Record<string, any> = {
     ...baseStyles,
@@ -178,8 +211,8 @@ const RouteDetailsScreen = () => {
       baseStyles.retryButton,
       { backgroundColor: ownerColors.primary },
     ],
-    routeTitle: [baseStyles.routeTitle, { color: "#16365E" }],
-    routeSubtitle: [baseStyles.routeSubtitle, { color: "#607A98" }],
+    routeTitle: [baseStyles.routeTitle, { color: "#F4FBF8" }],
+    routeSubtitle: [baseStyles.routeSubtitle, { color: "#B1C4BC" }],
     section: [baseStyles.section, { backgroundColor: colors.surface }],
     sectionTitle: [baseStyles.sectionTitle, { color: colors.text.primary }],
     sectionDescription: [
@@ -212,7 +245,7 @@ const RouteDetailsScreen = () => {
     ],
     assignmentButton: [
       baseStyles.assignmentButton,
-      { backgroundColor: "#1769D2" },
+      { backgroundColor: "#00B894" },
     ],
     assignmentCardImage: [
       baseStyles.assignmentCardImage,
@@ -247,8 +280,8 @@ const RouteDetailsScreen = () => {
     selectionItemSelected: [
       baseStyles.selectionItemSelected,
       {
-        borderColor: "#1769D2",
-        backgroundColor: "#EDF6FF",
+        borderColor: "#00B894",
+        backgroundColor: "#13231D",
       },
     ],
     selectionItemDisabled: [
@@ -257,7 +290,7 @@ const RouteDetailsScreen = () => {
     ],
     vehicleIconSmall: [
       baseStyles.vehicleIconSmall,
-      { backgroundColor: "#1769D2" },
+      { backgroundColor: "#00B894" },
     ],
     vehicleDriverName: [
       baseStyles.vehicleDriverName,
@@ -281,7 +314,7 @@ const RouteDetailsScreen = () => {
     ],
     modalSaveButton: [
       baseStyles.modalSaveButton,
-      { backgroundColor: "#1769D2" },
+      { backgroundColor: "#00B894" },
     ],
     modalButtonText: [
       baseStyles.modalButtonText,
@@ -302,7 +335,7 @@ const RouteDetailsScreen = () => {
     stopType: [baseStyles.stopType, { color: colors.text.primary }],
     stopAddress: [baseStyles.stopAddress, { color: colors.text.primary }],
     stopStudent: [baseStyles.stopStudent, { color: colors.text.secondary }],
-    stopOrder: [baseStyles.stopOrder, { backgroundColor: "#1769D2" }],
+    stopOrder: [baseStyles.stopOrder, { backgroundColor: "#00B894" }],
     locationItem: [
       baseStyles.locationItem,
       { backgroundColor: colors.surface },
@@ -332,12 +365,19 @@ const RouteDetailsScreen = () => {
     ],
     viewAllStudentsButton: [
       baseStyles.viewAllStudentsButton,
-      { backgroundColor: "#1769D2" },
+      { backgroundColor: "#00B894" },
     ],
   };
   const [route, setRoute] = useState<RouteDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [routeHistory, setRouteHistory] = useState<RouteHistoryEntry[]>([]);
+  const [routeHistoryLoading, setRouteHistoryLoading] = useState(false);
+  const [routeHistoryError, setRouteHistoryError] = useState<string | null>(
+    null,
+  );
+  const [showAllRouteHistory, setShowAllRouteHistory] = useState(false);
+  const [routeHistoryRefreshKey, setRouteHistoryRefreshKey] = useState(0);
   const [mapFullScreen, setMapFullScreen] = useState(false);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -455,6 +495,78 @@ const RouteDetailsScreen = () => {
 
     fetchRouteDetails();
   }, [fetchRouteDetails, routeId, user?.token]);
+
+  useEffect(() => {
+    let active = true;
+
+    const fetchRouteHistory = async () => {
+      if (!route?.id || !user?.token) {
+        setRouteHistory([]);
+        setRouteHistoryError(null);
+        setRouteHistoryLoading(false);
+        return;
+      }
+
+      setRouteHistoryLoading(true);
+      setRouteHistory([]);
+      setRouteHistoryError(null);
+
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/owner/route-history?route_id=${encodeURIComponent(String(route.id))}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${user.token}`,
+            },
+          },
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "Unable to load route history right now.",
+          );
+        }
+        if (!Array.isArray(data)) {
+          throw new Error("Route history response was invalid.");
+        }
+
+        if (active) {
+          setRouteHistory(
+            data
+              .filter(
+                (entry: RouteHistoryEntry) =>
+                  String(entry.route_id) === String(route.id),
+              )
+              .sort(
+                (first: RouteHistoryEntry, second: RouteHistoryEntry) =>
+                  new Date(second.start_time || 0).getTime() -
+                  new Date(first.start_time || 0).getTime(),
+              ),
+          );
+        }
+      } catch (historyError) {
+        console.error("Failed to load owner route history:", historyError);
+        if (active) {
+          setRouteHistoryError(
+            historyError instanceof Error
+              ? historyError.message
+              : "Unable to load route history right now.",
+          );
+        }
+      } finally {
+        if (active) setRouteHistoryLoading(false);
+      }
+    };
+
+    void fetchRouteHistory();
+    return () => {
+      active = false;
+    };
+  }, [route?.id, user?.token, routeHistoryRefreshKey]);
 
   useEffect(() => {
     const loadPrefs = async () => {
@@ -727,6 +839,41 @@ const RouteDetailsScreen = () => {
     const date = new Date(normalized);
     if (isNaN(date.getTime())) return "Invalid Time";
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const formatHistoryDate = (value?: string | null) => {
+    if (!value) return "Date unavailable";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
+    return date.toLocaleString();
+  };
+
+  const formatHistoryDuration = (entry: RouteHistoryEntry) => {
+    const rawSeconds = entry.duration_seconds;
+    let seconds = rawSeconds != null ? Number(rawSeconds) : NaN;
+    if (!Number.isFinite(seconds) && entry.start_time && entry.end_time) {
+      seconds =
+        (new Date(entry.end_time).getTime() -
+          new Date(entry.start_time).getTime()) /
+        1000;
+    }
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return entry.status === "started" ? "In progress" : "—";
+    }
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (hours > 0) return `${hours}h ${remainingMinutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${Math.floor(seconds)}s`;
+  };
+
+  const formatHistoryDistance = (value: unknown) => {
+    const meters = Number(value);
+    if (!Number.isFinite(meters) || meters <= 0) return "—";
+    return meters >= 1000
+      ? `${(meters / 1000).toFixed(1)} km`
+      : `${Math.round(meters)} m`;
   };
 
   const getTimeOnly = (value: string | null | undefined) => {
@@ -1244,7 +1391,7 @@ const RouteDetailsScreen = () => {
             </View>
             <View style={styles.legendItem}>
               <View
-                style={[styles.legendDot, { backgroundColor: "#FF6B6B" }]}
+                style={[styles.legendDot, { backgroundColor: "#13231D" }]}
               />
               <Text
                 style={styles.legendText}
@@ -1316,7 +1463,7 @@ const RouteDetailsScreen = () => {
         <View style={styles.routeHeader}>
           <View style={styles.routeSummaryTop}>
             <View style={styles.routeIconContainer}>
-              <MaterialIcons name="alt-route" size={22} color="#1769D2" />
+              <MaterialIcons name="alt-route" size={22} color="#35D9B3" />
             </View>
             <View style={styles.routeHeaderInfo}>
               <Text style={styles.routeEyebrow} maxFontSizeMultiplier={1.2}>
@@ -1455,7 +1602,7 @@ const RouteDetailsScreen = () => {
             ].map((stat) => (
               <View key={stat.label} style={styles.routeSummaryStat}>
                 <View style={styles.routeSummaryStatIcon}>
-                  <MaterialIcons name={stat.icon} size={16} color="#1769D2" />
+                  <MaterialIcons name={stat.icon} size={16} color="#35D9B3" />
                 </View>
                 <View style={styles.routeSummaryStatText}>
                   <Text
@@ -1597,7 +1744,7 @@ const RouteDetailsScreen = () => {
             <View style={styles.routeDetailPills}>
               {route.route_type ? (
                 <View style={styles.routeDetailPill}>
-                  <MaterialIcons name="alt-route" size={14} color="#1769D2" />
+                  <MaterialIcons name="alt-route" size={14} color="#35D9B3" />
                   <Text
                     style={styles.routeDetailPillText}
                     maxFontSizeMultiplier={1.2}
@@ -1612,7 +1759,7 @@ const RouteDetailsScreen = () => {
                 </View>
               ) : null}
               <View style={styles.routeDetailPill}>
-                <MaterialIcons name="payments" size={14} color="#1769D2" />
+                <MaterialIcons name="payments" size={14} color="#35D9B3" />
                 <Text
                   style={styles.routeDetailPillText}
                   maxFontSizeMultiplier={1.2}
@@ -1624,7 +1771,7 @@ const RouteDetailsScreen = () => {
                 </Text>
               </View>
               <View style={styles.routeDetailPill}>
-                <MaterialIcons name="schedule" size={14} color="#1769D2" />
+                <MaterialIcons name="schedule" size={14} color="#35D9B3" />
                 <Text
                   style={styles.routeDetailPillText}
                   maxFontSizeMultiplier={1.2}
@@ -1639,7 +1786,7 @@ const RouteDetailsScreen = () => {
         <View style={styles.assignmentCards}>
           <View style={styles.assignmentOverviewCard}>
             <View style={styles.assignmentOverviewHeading}>
-              <MaterialIcons name="directions-bus" size={16} color="#1769D2" />
+              <MaterialIcons name="directions-bus" size={16} color="#35D9B3" />
               <Text style={styles.assignmentOverviewLabel}>
                 Assigned Vehicle
               </Text>
@@ -1656,7 +1803,7 @@ const RouteDetailsScreen = () => {
                   <MaterialIcons
                     name="airport-shuttle"
                     size={27}
-                    color="#1769D2"
+                    color="#35D9B3"
                   />
                 )}
               </View>
@@ -1675,7 +1822,7 @@ const RouteDetailsScreen = () => {
           </View>
           <View style={styles.assignmentOverviewCard}>
             <View style={styles.assignmentOverviewHeading}>
-              <MaterialIcons name="person" size={16} color="#1769D2" />
+              <MaterialIcons name="person" size={16} color="#35D9B3" />
               <Text style={styles.assignmentOverviewLabel}>Driver</Text>
             </View>
             <View style={styles.assignmentOverviewContent}>
@@ -1799,6 +1946,94 @@ const RouteDetailsScreen = () => {
           ) : null}
         </View>
 
+        <View style={styles.section}>
+          <View style={styles.sectionHeadingRow}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+              Route History ({routeHistory.length})
+            </Text>
+            {routeHistory.length > 5 ? (
+              <TouchableOpacity
+                style={styles.sectionAction}
+                onPress={() => setShowAllRouteHistory((current) => !current)}
+              >
+                <Text style={styles.sectionActionText}>
+                  {showAllRouteHistory ? "Show less" : "Show all"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {routeHistoryLoading ? (
+            <View style={styles.historyState}>
+              <ActivityIndicator size="small" color="#35D9B3" />
+              <Text style={styles.historyStateText}>
+                Loading route history...
+              </Text>
+            </View>
+          ) : routeHistoryError ? (
+            <View style={styles.historyState}>
+              <Text style={styles.historyErrorText}>{routeHistoryError}</Text>
+              <TouchableOpacity
+                style={styles.sectionAction}
+                onPress={() =>
+                  setRouteHistoryRefreshKey((current) => current + 1)
+                }
+              >
+                <Text style={styles.sectionActionText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : routeHistory.length === 0 ? (
+            <Text style={styles.historyStateText}>
+              No trips have been recorded for this route yet.
+            </Text>
+          ) : (
+            (showAllRouteHistory
+              ? routeHistory
+              : routeHistory.slice(0, 5)
+            ).map((entry: RouteHistoryEntry) => {
+              const status = String(entry.status || "unknown");
+              const driverName =
+                entry.drivers?.users?.name || "Driver unavailable";
+              const routeType =
+                entry.route_type === "pickup" ? "Pickup" : "Drop-off";
+
+              return (
+                <View key={entry.id} style={styles.historyItem}>
+                  <View style={styles.historyItemHeader}>
+                    <View style={styles.historyItemTitleGroup}>
+                      <Text style={styles.historyDate}>
+                        {formatHistoryDate(entry.start_time)}
+                      </Text>
+                      <Text style={styles.historyType}>
+                        {routeType} · {driverName}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.historyStatus,
+                        status === "completed"
+                          ? styles.historyStatusCompleted
+                          : status === "started"
+                            ? styles.historyStatusStarted
+                            : styles.historyStatusOther,
+                      ]}
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Text>
+                  </View>
+                  <View style={styles.historyMetrics}>
+                    <Text style={styles.historyMetric}>
+                      Duration: {formatHistoryDuration(entry)}
+                    </Text>
+                    <Text style={styles.historyMetric}>
+                      Distance: {formatHistoryDistance(entry.distance_meters)}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {route.pickup_start_time ||
         route.pickup_end_time ||
         route.dropoff_start_time ||
@@ -1819,7 +2054,7 @@ const RouteDetailsScreen = () => {
                 <MaterialIcons
                   name="schedule"
                   size={24}
-                  color="#4A90E2"
+                  color="#35D9B3"
                   style={styles.timeIcon}
                 />
                 <View style={styles.timeContent}>
@@ -1835,7 +2070,7 @@ const RouteDetailsScreen = () => {
                 <MaterialIcons
                   name="access-time"
                   size={24}
-                  color="#4A90E2"
+                  color="#35D9B3"
                   style={styles.timeIcon}
                 />
                 <View style={styles.timeContent}>
@@ -1913,8 +2148,14 @@ const RouteDetailsScreen = () => {
                       {routeChild.children?.name || "Unknown"}
                     </Text>
                     <Text style={styles.studentSchool}>
-                      {routeChild.children?.school_name ||
-                        "School not specified"}
+                      {[
+                        routeChild.children?.school_name || "School not specified",
+                        routeChild.children?.grade
+                          ? `Grade ${routeChild.children.grade}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </Text>
                   </View>
                   <MaterialIcons
@@ -1972,7 +2213,7 @@ const RouteDetailsScreen = () => {
                 activeOpacity={0.75}
               >
                 <View style={styles.routeActionIcon}>
-                  <MaterialIcons name="refresh" size={20} color="#1769D2" />
+                  <MaterialIcons name="refresh" size={20} color="#35D9B3" />
                 </View>
                 <View style={styles.routeActionText}>
                   <Text style={styles.routeActionTitle}>Refresh route</Text>
@@ -1994,7 +2235,7 @@ const RouteDetailsScreen = () => {
                   <MaterialIcons
                     name="assignment-ind"
                     size={20}
-                    color="#1769D2"
+                    color="#35D9B3"
                   />
                 </View>
                 <View style={styles.routeActionText}>
@@ -2016,7 +2257,7 @@ const RouteDetailsScreen = () => {
                 activeOpacity={0.75}
               >
                 <View style={styles.routeActionIcon}>
-                  <MaterialIcons name="edit" size={20} color="#1769D2" />
+                  <MaterialIcons name="edit" size={20} color="#35D9B3" />
                 </View>
                 <View style={styles.routeActionText}>
                   <Text style={styles.routeActionTitle}>Edit route</Text>
@@ -2038,7 +2279,7 @@ const RouteDetailsScreen = () => {
                 activeOpacity={0.75}
               >
                 <View style={styles.routeActionIcon}>
-                  <MaterialIcons name="place" size={20} color="#1769D2" />
+                  <MaterialIcons name="place" size={20} color="#35D9B3" />
                 </View>
                 <View style={styles.routeActionText}>
                   <Text style={styles.routeActionTitle}>View stops</Text>
@@ -2060,7 +2301,7 @@ const RouteDetailsScreen = () => {
                 activeOpacity={0.75}
               >
                 <View style={styles.routeActionIcon}>
-                  <MaterialIcons name="groups" size={20} color="#1769D2" />
+                  <MaterialIcons name="groups" size={20} color="#35D9B3" />
                 </View>
                 <View style={styles.routeActionText}>
                   <Text style={styles.routeActionTitle}>
@@ -2377,7 +2618,7 @@ const RouteDetailsScreen = () => {
                             <MaterialIcons
                               name="check-circle"
                               size={20}
-                              color="#1769D2"
+                              color="#35D9B3"
                             />
                           ) : null}
                         </View>
@@ -2455,14 +2696,14 @@ const RouteDetailsScreen = () => {
                               <MaterialIcons
                                 name="check-circle"
                                 size={20}
-                                color="#1769D2"
+                                color="#35D9B3"
                               />
                             ) : null}
                             {isOnRoute ? (
                               <Text
                                 style={[
                                   styles.selectionItemSubtitle,
-                                  { color: "#9CA3AF", marginTop: 4 },
+                                  { color: "#82968D", marginTop: 4 },
                                 ]}
                               >
                                 Already added
@@ -2517,10 +2758,10 @@ const RouteDetailsScreen = () => {
 const baseStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#0D1713",
   },
   headerSafeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
   },
   pageHeader: {
     minHeight: 52,
@@ -2551,12 +2792,12 @@ const baseStyles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#0D1713",
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: "#666",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   errorContainer: {
@@ -2564,11 +2805,11 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#0D1713",
   },
   errorText: {
     fontSize: 18,
-    color: "#666",
+    color: "#B1C4BC",
     marginTop: 16,
     marginBottom: 20,
     textAlign: "center",
@@ -2597,9 +2838,9 @@ const baseStyles = StyleSheet.create({
     padding: 16,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E1EAF3",
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#17385F",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
     shadowRadius: 12,
@@ -2614,7 +2855,7 @@ const baseStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#EDF5FF",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2633,12 +2874,12 @@ const baseStyles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 21,
     fontWeight: "800",
-    color: "#16365E",
+    color: "#F4FBF8",
   },
   routeSubtitle: {
     marginTop: 3,
     fontSize: 11,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontWeight: "500",
     flexShrink: 1,
   },
@@ -2650,22 +2891,22 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: "#E9F8F0",
+    backgroundColor: "#13231D",
   },
   routeStatusBadgeInactive: {
-    backgroundColor: "#F0F3F6",
+    backgroundColor: "#13231D",
   },
   routeStatusDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "#21885A",
+    backgroundColor: "#13231D",
   },
   routeStatusDotInactive: {
     backgroundColor: "#7B8794",
   },
   routeStatus: {
-    color: "#21885A",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -2681,9 +2922,9 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "#E5EEF7",
+    borderColor: "#294238",
     borderRadius: 13,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeProgressRing: {
     width: 78,
@@ -2700,10 +2941,10 @@ const baseStyles = StyleSheet.create({
     borderRadius: 2,
   },
   routeProgressSegmentComplete: {
-    backgroundColor: "#16A66A",
+    backgroundColor: "#13231D",
   },
   routeProgressSegmentRemaining: {
-    backgroundColor: "#DDE8F0",
+    backgroundColor: "#13231D",
   },
   routeProgressCenter: {
     width: 53,
@@ -2711,16 +2952,16 @@ const baseStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 27,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeProgressValue: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 15,
     fontWeight: "800",
   },
   routeProgressCaption: {
     marginTop: 1,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 8,
     fontWeight: "600",
   },
@@ -2740,23 +2981,23 @@ const baseStyles = StyleSheet.create({
     borderRadius: 4,
   },
   routeStopCountCompleted: {
-    backgroundColor: "#16A66A",
+    backgroundColor: "#13231D",
   },
   routeStopCountInProgress: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#13231D",
   },
   routeStopCountSkipped: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
   routeStopCountLabel: {
     flex: 1,
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 10,
     fontWeight: "500",
   },
   routeStopCountValue: {
     minWidth: 14,
-    color: "#24415D",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "700",
     textAlign: "right",
@@ -2767,7 +3008,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 16,
     padding: 12,
     borderRadius: 13,
-    backgroundColor: "#F6F9FC",
+    backgroundColor: "#13231D",
   },
   routeEndpoint: {
     flex: 1,
@@ -2775,13 +3016,13 @@ const baseStyles = StyleSheet.create({
   },
   routeEndpointLabel: {
     marginBottom: 5,
-    color: "#8293A5",
+    color: "#B1C4BC",
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 0.7,
   },
   routeEndpointText: {
-    color: "#24415D",
+    color: "#F4FBF8",
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "600",
@@ -2793,7 +3034,7 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     marginHorizontal: 10,
     borderRadius: 15,
-    backgroundColor: "#E7F1FC",
+    backgroundColor: "#13231D",
   },
   routeSummaryStats: {
     flexDirection: "row",
@@ -2809,9 +3050,9 @@ const baseStyles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#E7EEF5",
+    borderColor: "#294238",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeSummaryStatIcon: {
     width: 31,
@@ -2819,38 +3060,107 @@ const baseStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "#EDF5FF",
+    backgroundColor: "#13231D",
   },
   routeSummaryStatText: {
     flex: 1,
     minWidth: 0,
   },
   routeSummaryStatLabel: {
-    color: "#8293A5",
+    color: "#B1C4BC",
     fontSize: 8,
     fontWeight: "700",
     letterSpacing: 0.6,
   },
   routeSummaryStatValue: {
     marginTop: 3,
-    color: "#24415D",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "700",
   },
   section: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     marginHorizontal: 10,
     marginBottom: 8,
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
   sectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 8,
+  },
+  historyState: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  historyStateText: {
+    color: "#B1C4BC",
+    fontSize: 11,
+  },
+  historyErrorText: {
+    flex: 1,
+    color: "#FF7777",
+    fontSize: 11,
+  },
+  historyItem: {
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#294238",
+  },
+  historyItemHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  historyItemTitleGroup: {
+    flex: 1,
+  },
+  historyDate: {
+    color: "#F4FBF8",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  historyType: {
+    marginTop: 3,
+    color: "#B1C4BC",
+    fontSize: 10,
+  },
+  historyStatus: {
+    overflow: "hidden",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  historyStatusCompleted: {
+    color: "#35D9B3",
+    backgroundColor: "#12342F",
+  },
+  historyStatusStarted: {
+    color: "#F2B84B",
+    backgroundColor: "#382D1B",
+  },
+  historyStatusOther: {
+    color: "#B1C4BC",
+    backgroundColor: "#13231D",
+  },
+  historyMetrics: {
+    flexDirection: "row",
+    gap: 14,
+    marginTop: 7,
+  },
+  historyMetric: {
+    color: "#82968D",
+    fontSize: 10,
   },
   sectionHeadingRow: {
     flexDirection: "row",
@@ -2872,24 +3182,24 @@ const baseStyles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     borderWidth: 2,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   timelineStartDot: {
     borderColor: "#24A56A",
   },
   timelineEndDot: {
-    borderColor: "#E44752",
+    borderColor: "#294238",
   },
   timelineStopDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   timelineLine: {
     width: 1,
     height: 25,
-    backgroundColor: "#C7DDF3",
+    backgroundColor: "#13231D",
   },
   timelineContent: {
     flex: 1,
@@ -2901,7 +3211,7 @@ const baseStyles = StyleSheet.create({
     paddingBottom: 6,
     marginBottom: 5,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5EDF5",
+    borderBottomColor: "#294238",
   },
   timelineLast: {
     marginBottom: 0,
@@ -2909,7 +3219,7 @@ const baseStyles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   timelineLabel: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "700",
   },
@@ -2927,23 +3237,23 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 11,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E5EDF5",
+    borderTopColor: "#294238",
     gap: 9,
   },
   routeDescriptionCard: {
     padding: 11,
     borderRadius: 11,
-    backgroundColor: "#F5F8FC",
+    backgroundColor: "#13231D",
   },
   routeAdditionalLabel: {
-    color: "#8293A5",
+    color: "#B1C4BC",
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 0.7,
   },
   routeDescription: {
     marginTop: 4,
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 12,
     lineHeight: 18,
   },
@@ -2959,12 +3269,12 @@ const baseStyles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#DFEAF5",
+    borderColor: "#294238",
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeDetailPillText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 11,
     fontWeight: "600",
     textTransform: "capitalize",
@@ -2980,8 +3290,8 @@ const baseStyles = StyleSheet.create({
     padding: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   assignmentOverviewHeading: {
     flexDirection: "row",
@@ -2990,7 +3300,7 @@ const baseStyles = StyleSheet.create({
     marginBottom: 6,
   },
   assignmentOverviewLabel: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 9,
     fontWeight: "700",
   },
@@ -3003,7 +3313,7 @@ const baseStyles = StyleSheet.create({
     width: 38,
     height: 34,
     borderRadius: 7,
-    backgroundColor: "#EDF5FD",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -3012,7 +3322,7 @@ const baseStyles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -3022,12 +3332,12 @@ const baseStyles = StyleSheet.create({
     minWidth: 0,
   },
   assignmentOverviewName: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "700",
   },
   assignmentOverviewSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 8,
     marginTop: 2,
   },
@@ -3042,8 +3352,8 @@ const baseStyles = StyleSheet.create({
     padding: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
-    backgroundColor: "#FFFFFF",
+    borderColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   routeStopRow: {
     flexDirection: "row",
@@ -3051,7 +3361,7 @@ const baseStyles = StyleSheet.create({
     minHeight: 42,
     gap: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5EDF5",
+    borderBottomColor: "#294238",
   },
   routeStopBadge: {
     width: 20,
@@ -3061,13 +3371,13 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
   },
   routeStopPickup: {
-    backgroundColor: "#24A56A",
+    backgroundColor: "#13231D",
   },
   routeStopDropoff: {
-    backgroundColor: "#E44752",
+    backgroundColor: "#13231D",
   },
   routeStopWaypointBadge: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   routeStopBadgeText: {
     color: "#FFFFFF",
@@ -3079,33 +3389,33 @@ const baseStyles = StyleSheet.create({
     minWidth: 0,
   },
   routeStopAddress: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 10,
     fontWeight: "600",
   },
   routeStopSubtext: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 8,
     marginTop: 2,
   },
   routeStopDistance: {
-    color: "#68829D",
+    color: "#82968D",
     fontSize: 9,
   },
   sectionAction: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: "#EAF4FF",
+    backgroundColor: "#13231D",
   },
   sectionActionText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#1769D2",
+    color: "#35D9B3",
   },
   sectionDescription: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
     marginBottom: 12,
   },
@@ -3117,15 +3427,15 @@ const baseStyles = StyleSheet.create({
   infoItem: {
     flex: 1,
     minWidth: "45%",
-    backgroundColor: "#F5F9FE",
-    borderColor: "#E4EFFA",
+    backgroundColor: "#13231D",
+    borderColor: "#294238",
     borderWidth: 1,
     borderRadius: 12,
     padding: 10,
   },
   infoLabel: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.7,
@@ -3134,12 +3444,12 @@ const baseStyles = StyleSheet.create({
   infoValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   infoSubValue: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   driverInfoRow: {
@@ -3151,7 +3461,7 @@ const baseStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -3165,7 +3475,7 @@ const baseStyles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#7C3AED",
+    backgroundColor: "#00B894",
   },
   driverAvatarFallbackText: {
     color: "#FFF",
@@ -3185,7 +3495,7 @@ const baseStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -3199,7 +3509,7 @@ const baseStyles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
   },
   vehicleInfoText: {
     flex: 1,
@@ -3209,7 +3519,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
   },
   assignmentButton: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     paddingVertical: 9,
     paddingHorizontal: 18,
     borderRadius: 10,
@@ -3243,7 +3553,7 @@ const baseStyles = StyleSheet.create({
     height: 64,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3256,7 +3566,7 @@ const baseStyles = StyleSheet.create({
     marginRight: 12,
     padding: 10,
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
@@ -3268,7 +3578,7 @@ const baseStyles = StyleSheet.create({
     height: 120,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3280,12 +3590,12 @@ const baseStyles = StyleSheet.create({
   assignmentCardTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginTop: 6,
   },
   assignmentCardSubtitle: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   routeActionsOverlay: {
@@ -3306,7 +3616,7 @@ const baseStyles = StyleSheet.create({
     paddingBottom: 20,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     maxHeight: "90%",
   },
   routeActionsHandle: {
@@ -3315,7 +3625,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 16,
-    backgroundColor: "#D8E1EA",
+    backgroundColor: "#13231D",
   },
   routeActionsHeader: {
     flexDirection: "row",
@@ -3324,12 +3634,12 @@ const baseStyles = StyleSheet.create({
     marginBottom: 10,
   },
   routeActionsTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 17,
     fontWeight: "700",
   },
   routeActionsSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     marginTop: 3,
   },
@@ -3339,7 +3649,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#13231D",
   },
   routeActionItem: {
     minHeight: 58,
@@ -3347,7 +3657,7 @@ const baseStyles = StyleSheet.create({
     alignItems: "center",
     gap: 11,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5EDF5",
+    borderBottomColor: "#294238",
   },
   routeActionIcon: {
     width: 38,
@@ -3355,7 +3665,7 @@ const baseStyles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EDF5FD",
+    backgroundColor: "#13231D",
   },
   routeDeleteAction: {
     borderBottomWidth: 0,
@@ -3366,18 +3676,18 @@ const baseStyles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FDEEEF",
+    backgroundColor: "#35151D",
   },
   routeActionText: {
     flex: 1,
   },
   routeActionTitle: {
-    color: "#243B53",
+    color: "#F4FBF8",
     fontSize: 13,
     fontWeight: "600",
   },
   routeActionDescription: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 11,
     marginTop: 3,
   },
@@ -3387,10 +3697,10 @@ const baseStyles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 12,
     borderRadius: 11,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#13231D",
   },
   routeActionsCancelText: {
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -3399,7 +3709,7 @@ const baseStyles = StyleSheet.create({
     maxHeight: "90%",
     padding: 20,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeEditFields: {
     maxHeight: 440,
@@ -3407,7 +3717,7 @@ const baseStyles = StyleSheet.create({
   routeEditLabel: {
     marginTop: 10,
     marginBottom: 5,
-    color: "#526981",
+    color: "#B1C4BC",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -3423,16 +3733,16 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#C9D8E8",
+    borderColor: "#294238",
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   routeEditOperatingDaySelected: {
-    borderColor: "#1769D2",
-    backgroundColor: "#1769D2",
+    borderColor: "#00B894",
+    backgroundColor: "#00B894",
   },
   routeEditOperatingDayText: {
-    color: "#64748B",
+    color: "#B1C4BC",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -3441,7 +3751,7 @@ const baseStyles = StyleSheet.create({
   },
   routeEditHint: {
     marginTop: 6,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 11,
   },
   routeEditInput: {
@@ -3449,10 +3759,10 @@ const baseStyles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 9,
-    color: "#243B53",
-    backgroundColor: "#FAFCFE",
+    color: "#F4FBF8",
+    backgroundColor: "#13231D",
     fontSize: 13,
   },
   routeEditTimeRow: {
@@ -3464,7 +3774,7 @@ const baseStyles = StyleSheet.create({
     flex: 1,
   },
   routeEditTimeSeparator: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
   },
   routeEditError: {
@@ -3473,7 +3783,7 @@ const baseStyles = StyleSheet.create({
     fontSize: 12,
   },
   routeEditSaveButton: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   routeEditSaveText: {
     color: "#FFFFFF",
@@ -3485,7 +3795,7 @@ const baseStyles = StyleSheet.create({
     padding: 22,
     borderRadius: 20,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
   },
   deleteConfirmIcon: {
     width: 50,
@@ -3493,11 +3803,11 @@ const baseStyles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FDEEEF",
+    backgroundColor: "#35151D",
     marginBottom: 12,
   },
   deleteConfirmTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
@@ -3505,13 +3815,13 @@ const baseStyles = StyleSheet.create({
   deleteConfirmDescription: {
     marginTop: 7,
     marginBottom: 18,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
   },
   deleteConfirmButton: {
-    backgroundColor: "#C43B46",
+    backgroundColor: "#13231D",
   },
   deleteConfirmButtonText: {
     color: "#FFFFFF",
@@ -3528,37 +3838,37 @@ const baseStyles = StyleSheet.create({
   modalContent: {
     width: "100%",
     maxHeight: "90%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderRadius: 24,
     padding: 22,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 8,
   },
   modalDescription: {
     fontSize: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginBottom: 20,
   },
   modalLabel: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "700",
     marginBottom: 10,
   },
   selectionList: {
     borderRadius: 18,
-    backgroundColor: "#F5F7FF",
+    backgroundColor: "#13231D",
     padding: 12,
     marginBottom: 18,
   },
   modalSelectionScroll: {
     maxHeight: 150,
     borderRadius: 14,
-    backgroundColor: "#F5F9FE",
+    backgroundColor: "#13231D",
     padding: 8,
     marginBottom: 12,
   },
@@ -3566,17 +3876,17 @@ const baseStyles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#294238",
     marginBottom: 12,
   },
   selectionItemSelected: {
     borderColor: "#7ED321",
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#13231D",
   },
   selectionItemDisabled: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
     opacity: 0.9,
   },
   selectionItemRow: {
@@ -3590,7 +3900,7 @@ const baseStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#00B894",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -3617,12 +3927,12 @@ const baseStyles = StyleSheet.create({
   selectionItemTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   selectionItemSubtitle: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
   assignmentErrorText: {
     color: "#DC2626",
@@ -3642,24 +3952,24 @@ const baseStyles = StyleSheet.create({
     alignItems: "center",
   },
   modalCancelButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#13231D",
   },
   modalSaveButton: {
-    backgroundColor: "#7C3AED",
+    backgroundColor: "#00B894",
   },
   modalButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   timeGrid: {
     gap: 9,
   },
   timeItem: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#E4EFFA",
+    borderColor: "#294238",
     padding: 13,
     flexDirection: "row",
     alignItems: "center",
@@ -3677,30 +3987,30 @@ const baseStyles = StyleSheet.create({
   },
   timeLabel: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "700",
     marginBottom: 4,
   },
   timeValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   studentCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 10,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0EDFA",
+    borderColor: "#294238",
     marginBottom: 8,
   },
   studentAvatar: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
@@ -3717,29 +4027,29 @@ const baseStyles = StyleSheet.create({
   studentName: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 4,
   },
   studentSchool: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   stopCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 10,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0EDFA",
+    borderColor: "#294238",
     marginBottom: 8,
   },
   stopIcon: {
     width: 38,
     height: 38,
     borderRadius: 13,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -3750,26 +4060,26 @@ const baseStyles = StyleSheet.create({
   stopType: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
     marginBottom: 3,
     textTransform: "capitalize",
   },
   stopAddress: {
     fontSize: 11,
-    color: "#4B5563",
+    color: "#B1C4BC",
     marginBottom: 4,
     fontWeight: "600",
   },
   stopStudent: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   stopOrder: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3782,7 +4092,7 @@ const baseStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     padding: 16,
     borderRadius: 18,
     shadowColor: "#000",
@@ -3793,14 +4103,14 @@ const baseStyles = StyleSheet.create({
   },
   locationText: {
     fontSize: 15,
-    color: "#111827",
+    color: "#F4FBF8",
     marginLeft: 12,
     fontWeight: "600",
     lineHeight: 22,
   },
   locationLabel: {
     fontWeight: "800",
-    color: "#4A90E2",
+    color: "#35D9B3",
   },
   mapPreviewContainer: {
     marginHorizontal: 10,
@@ -3811,13 +4121,13 @@ const baseStyles = StyleSheet.create({
   mapPreview: {
     height: 195,
     width: "100%",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
   },
   mapFullScreen: {
     flex: 1,
     width: "100%",
     height: "100%",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
   },
   mapFullScreenButton: {
     position: "absolute",
@@ -3848,7 +4158,7 @@ const baseStyles = StyleSheet.create({
     zIndex: 10,
   },
   mapLegend: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     minHeight: 42,
     paddingVertical: 9,
     paddingHorizontal: 13,
@@ -3871,19 +4181,19 @@ const baseStyles = StyleSheet.create({
   },
   legendText: {
     fontSize: 11,
-    color: "#4B5563",
+    color: "#B1C4BC",
     fontWeight: "600",
   },
   emptyState: {
     alignItems: "center",
     padding: 28,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#0D1713",
     borderRadius: 18,
     marginTop: 8,
   },
   emptyStateText: {
     fontSize: 15,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   viewAllStopsContainer: {
@@ -3891,7 +4201,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
   },
   viewAllStopsButton: {
-    backgroundColor: "#7C3AED",
+    backgroundColor: "#00B894",
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 18,
@@ -3906,7 +4216,7 @@ const baseStyles = StyleSheet.create({
     marginTop: 12,
   },
   viewAllStudentsButton: {
-    backgroundColor: "#7C3AED",
+    backgroundColor: "#00B894",
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 18,

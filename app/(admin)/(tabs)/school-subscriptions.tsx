@@ -41,7 +41,7 @@ type SubscriptionRow = {
     plan_slug: string;
     billing_interval: "monthly" | "annual";
     billing_status: SubscriptionStatus;
-    billing_provider: "stripe" | "bank_transfer";
+    billing_provider: "paystack" | "bank_transfer" | "legacy";
     price_cents: number;
     currency: string;
     current_period_start: string | null;
@@ -452,8 +452,10 @@ function SubscriptionCard({ row }: { row: SubscriptionRow }) {
         <Detail
           label="Payment method"
           value={
-            provider === "stripe"
-              ? "Card · Stripe"
+            provider === "paystack"
+              ? "Card · Paystack"
+              : provider === "legacy"
+                ? "Legacy card payment"
               : provider === "bank_transfer"
                 ? "Bank transfer · EFT"
                 : "—"
@@ -475,7 +477,7 @@ function SubscriptionCard({ row }: { row: SubscriptionRow }) {
         <Detail
           label="Auto-renewal"
           value={
-            subscription?.billing_provider === "stripe"
+            subscription?.billing_provider === "paystack"
               ? subscription.auto_renew
                 ? "On"
                 : "Off"

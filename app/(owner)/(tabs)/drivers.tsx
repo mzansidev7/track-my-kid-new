@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useTheme } from "../../../styles/theme";
+import { useOwnerTheme } from "../../../styles/theme";
 import { useDrivers } from "@/app-support/owner/ownerHelpers/hooks/useDrivers";
 import { driversPageStyles as baseDriversPageStyles } from "@/app-support/owner/ownerHelpers/styles/ownerStyles";
 import {
@@ -34,7 +34,7 @@ const getDriverStatus = (driver: any) => {
 
 const DriversScreen = () => {
   const router = useRouter();
-  const { colors, getBrandColors, shadows } = useTheme();
+  const { colors, getBrandColors, shadows } = useOwnerTheme();
   const ownerColors = getBrandColors("owner");
   const driversPageStyles: Record<string, any> = {
     ...baseDriversPageStyles,
@@ -57,7 +57,7 @@ const DriversScreen = () => {
     ],
     searchContainer: [
       baseDriversPageStyles.searchContainer,
-      { backgroundColor: colors.surface, borderColor: "#D8E7F6" },
+      { backgroundColor: colors.surface, borderColor: "#294238" },
       baseDriversPageStyles.searchContainerCompact,
     ],
     searchInput: [
@@ -72,7 +72,7 @@ const DriversScreen = () => {
     subText: [baseDriversPageStyles.subText, { color: colors.text.secondary }],
     avatarCircle: [
       baseDriversPageStyles.avatarCircle,
-      { backgroundColor: "#E9F2FC" },
+      { backgroundColor: "#13231D" },
     ],
     avatarText: [
       baseDriversPageStyles.avatarText,
@@ -156,7 +156,7 @@ const DriversScreen = () => {
       baseDriversPageStyles.modalText,
       { color: colors.text.secondary },
     ],
-    closeBtn: [baseDriversPageStyles.closeBtn, { backgroundColor: "#1769D2" }],
+    closeBtn: [baseDriversPageStyles.closeBtn, { backgroundColor: "#00B894" }],
   };
   const { drivers, loadingDrivers, error, refreshDrivers } = useDrivers();
 
@@ -310,7 +310,7 @@ const DriversScreen = () => {
               {phone || "No phone number"}
             </Text>
             <View style={driversPageStyles.iconRow}>
-              <MaterialIcons name="directions-car" size={13} color="#71869C" />
+              <MaterialIcons name="directions-car" size={13} color="#B1C4BC" />
               <Text style={driversPageStyles.subText} numberOfLines={1}>
                 {item.vehicle?.license_plate ||
                   item.vehicles?.[0]?.license_plate ||
@@ -356,7 +356,7 @@ const DriversScreen = () => {
             <Text style={driversPageStyles.statNumber}>{students}</Text>
             <Text style={driversPageStyles.statLabel}>Students</Text>
           </View>
-          <MaterialIcons name="chevron-right" size={21} color="#71869C" />
+          <MaterialIcons name="chevron-right" size={21} color="#B1C4BC" />
         </View>
       </TouchableOpacity>
     );
@@ -436,7 +436,7 @@ const DriversScreen = () => {
           }
           accessibilityLabel={`Filter drivers, currently showing ${statusFilter.toLowerCase()}`}
         >
-          <MaterialIcons name="filter-list" size={20} color="#1769D2" />
+          <MaterialIcons name="filter-list" size={20} color="#35D9B3" />
         </TouchableOpacity>
       </View>
       <View style={driversPageStyles.filterRow}>

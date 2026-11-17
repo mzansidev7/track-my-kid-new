@@ -1,5 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
+import { useRouter, type Href } from "expo-router";
 import {
   Platform,
   StyleSheet,
@@ -7,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DRIVER_COLORS } from "@/styles/theme";
 
 export default function DriversTabBar({
   state,
@@ -15,6 +17,7 @@ export default function DriversTabBar({
   state: any;
   navigation: any;
 }) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const getIcon = (routeName: string) => {
@@ -41,7 +44,7 @@ export default function DriversTabBar({
         styles.container,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: "#17385F",
+          backgroundColor: DRIVER_COLORS.background,
         },
       ]}
     >
@@ -49,7 +52,7 @@ export default function DriversTabBar({
         style={[
           styles.tabBar,
           {
-            backgroundColor: "#17385F",
+            backgroundColor: DRIVER_COLORS.card,
           },
         ]}
       >
@@ -57,15 +60,23 @@ export default function DriversTabBar({
           const focused = state.index === index;
 
           const onPress = () => {
-            const event = navigation.emit({
+            const event = navigation?.emit?.({
               type: "tabPress",
               target: route.key,
               canPreventDefault: true,
             });
 
-            if (!focused && !event.defaultPrevented) {
+            if (focused || event?.defaultPrevented) return;
+
+            if (typeof navigation?.navigate === "function") {
               navigation.navigate(route.name as never);
+              return;
             }
+
+            const href = route.name === "index"
+              ? "/(driver)/(tabs)"
+              : `/(driver)/(tabs)/${route.name}`;
+            router.navigate(href as Href);
           };
 
           return (
@@ -79,14 +90,14 @@ export default function DriversTabBar({
                 style={[
                   styles.iconContainer,
                   focused && {
-                    backgroundColor: "white",
+                    backgroundColor: DRIVER_COLORS.primary,
                   },
                 ]}
               >
                 <MaterialIcons
                   name={getIcon(route.name) as any}
                   size={focused ? 23 : 22}
-                  color={focused ? "#17385F" : "white"}
+                  color={focused ? DRIVER_COLORS.background : DRIVER_COLORS.white}
                 />
               </View>
 
@@ -94,7 +105,7 @@ export default function DriversTabBar({
                 <View
                   style={[
                     styles.activeIndicator,
-                    { backgroundColor: "white" },
+                    { backgroundColor: DRIVER_COLORS.cyan },
                   ]}
                 />
               )}

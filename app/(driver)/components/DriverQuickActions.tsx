@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ActivityIndicator,
   Animated,
   View,
   Text,
@@ -15,6 +16,8 @@ type Action = {
   onPress: () => void;
   blinking?: boolean;
   blinkAnim?: Animated.Value | null;
+  disabled?: boolean;
+  loading?: boolean;
 };
 
 type Props = {
@@ -50,9 +53,22 @@ const DriverQuickActions = ({ actions }: Props) => {
             ]}
           >
             <TouchableOpacity
-              style={[styles.action, action.blinking && styles.actionBlinking]}
+              style={[
+                styles.action,
+                action.blinking && styles.actionBlinking,
+                action.disabled && styles.actionDisabled,
+              ]}
               onPress={action.onPress}
-              activeOpacity={0.75}
+              activeOpacity={action.disabled ? 1 : 0.75}
+              disabled={action.disabled}
+              accessibilityRole="button"
+              accessibilityState={{
+                disabled: Boolean(action.disabled),
+                busy: Boolean(action.loading),
+              }}
+              accessibilityLabel={
+                action.loading ? "Sending SOS" : action.label
+              }
             >
               <View
                 style={[
@@ -60,28 +76,34 @@ const DriverQuickActions = ({ actions }: Props) => {
                     styles.iconContainer,
                     {
                       backgroundColor:
-                        action.label === "SOS" ? "#FCE9E7" : "#EAF2ED",
+                        action.label === "SOS"
+                          ? DRIVER_COLORS.dangerSurface
+                          : DRIVER_COLORS.successSurface,
                     },
                   ],
                   action.blinking && styles.iconContainerBlinking,
                 ]}
               >
-                <MaterialIcons
-                  name={action.icon}
-                  size={22}
-                  color={
-                    action.label === "SOS"
-                      ? DRIVER_COLORS.danger
-                      : DRIVER_COLORS.primary
-                  }
-                />
+                {action.loading ? (
+                  <ActivityIndicator size="small" color={DRIVER_COLORS.danger} />
+                ) : (
+                  <MaterialIcons
+                    name={action.icon}
+                    size={22}
+                    color={
+                      action.label === "SOS"
+                        ? DRIVER_COLORS.danger
+                        : DRIVER_COLORS.primary
+                    }
+                  />
+                )}
               </View>
 
               <Text
                 style={[styles.label, { color: DRIVER_COLORS.text }]}
                 numberOfLines={1}
               >
-                {action.label}
+                {action.loading ? "Sending..." : action.label}
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -93,7 +115,7 @@ const DriverQuickActions = ({ actions }: Props) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DRIVER_COLORS.card,
     borderRadius: 22,
     paddingVertical: 17,
     paddingHorizontal: 6,
@@ -111,6 +133,10 @@ const styles = StyleSheet.create({
 
   actionBlinking: {
     padding: 8,
+  },
+
+  actionDisabled: {
+    opacity: 0.6,
   },
 
   iconContainer: {

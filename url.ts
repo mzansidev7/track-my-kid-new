@@ -10,6 +10,11 @@ const PRODUCTION_API = "https://track-my-kid-server-production.up.railway.app";
 const LOCAL_API_ANDROID = "http://10.0.2.2:4000";
 const LOCAL_API_IOS = "http://localhost:4000";
 
+const isValidBaseUrl = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(value.trim()) &&
+  !/^https?:\/\/(?:undefined|null)(?:[/:]|$)/i.test(value.trim());
+
 const extra =
   ((Constants.expoConfig as any)?.extra as Record<
     string,
@@ -22,19 +27,21 @@ const normalizeBaseUrl = (url: string) => {
   const trimmed = url.trim();
 
   if (!trimmed) {
-    return trimmed;
+    return undefined;
   }
 
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return `http://${trimmed}`;
+  const normalized = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `http://${trimmed}`;
+  return isValidBaseUrl(normalized) ? normalized.replace(/\/+$/, "") : undefined;
 };
 
 const fromEnvRaw =
   process.env.EXPO_PUBLIC_API_URL?.trim() || extra.EXPO_PUBLIC_API_URL?.trim();
-const fromEnv = fromEnvRaw ? normalizeBaseUrl(fromEnvRaw) : undefined;
+const fromEnv =
+  fromEnvRaw && fromEnvRaw.toLowerCase() !== "undefined"
+    ? normalizeBaseUrl(fromEnvRaw)
+    : undefined;
 
 const getDevHostUrl = () => {
   const hostUri =
@@ -58,12 +65,16 @@ const getDevHostUrl = () => {
   return `http://${host}:4000`;
 };
 
+const detectedDevHostUrl = getDevHostUrl();
 const localFallback =
-  getDevHostUrl() ||
-  (Platform.OS === "android" ? LOCAL_API_ANDROID : LOCAL_API_IOS);
+  detectedDevHostUrl && isValidBaseUrl(detectedDevHostUrl)
+    ? detectedDevHostUrl
+    : Platform.OS === "android"
+      ? LOCAL_API_ANDROID
+      : LOCAL_API_IOS;
 
 const resolvedBaseUrl =
-  fromEnv && fromEnv.length > 0
+  fromEnv
     ? fromEnv
     : __DEV__
       ? localFallback
@@ -72,7 +83,7 @@ const resolvedBaseUrl =
 const getCandidateUrls = () => {
   const candidates = new Set<string>();
 
-  if (fromEnv && fromEnv.length > 0) {
+  if (fromEnv) {
     candidates.add(fromEnv);
   }
 
@@ -97,22 +108,31 @@ export const API_BASE_URL_CANDIDATES = getCandidateUrls();
 
 export const resolveWorkingBaseUrl = async () => {
   for (const candidate of API_BASE_URL_CANDIDATES) {
+    if (!isValidBaseUrl(candidate)) {
+      continue;
+    }
+
     try {
       const response = await axios.get(
-        `${candidate.replace(/\/$/, "")}/health`,
+        `${candidate}/health`,
         {
           timeout: 1200,
         },
       );
 
       if (response?.status && response.status < 500) {
-        return candidate.replace(/\/$/, "");
+        return candidate;
       }
     } catch {
       // Try the next candidate.
     }
   }
 
+  if (!isValidBaseUrl(BASE_URL)) {
+    throw new Error(
+      "The API base URL is missing or invalid. Configure EXPO_PUBLIC_API_URL and restart the app.",
+    );
+  }
   return BASE_URL;
 };
 

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
+import { DRIVER_COLORS } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
 import {
@@ -189,7 +190,7 @@ const SupportChatPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: DRIVER_COLORS.background,
   },
   chatArea: {
     flex: 1,
@@ -206,22 +207,22 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
   },
   supportBubble: {
     alignSelf: "flex-start",
-    backgroundColor: "#E5E7EB",
+    backgroundColor: DRIVER_COLORS.card,
   },
   messageText: {
     fontSize: 14,
-    color: "#111827",
+    color: DRIVER_COLORS.text,
   },
   userText: {
     color: "#fff",
   },
   emptyState: {
     fontSize: 14,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     textAlign: "center",
     marginTop: 24,
   },
@@ -230,22 +231,24 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     padding: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    backgroundColor: "#fff",
+    borderTopColor: DRIVER_COLORS.cardBorder,
+    backgroundColor: DRIVER_COLORS.card,
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 100,
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
+    color: DRIVER_COLORS.text,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: DRIVER_COLORS.cardBorder,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginRight: 8,
   },
   sendButton: {
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,

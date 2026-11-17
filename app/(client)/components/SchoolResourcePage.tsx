@@ -22,10 +22,10 @@ const RESOURCE_CONFIG: Record<
   Resource,
   { title: string; icon: keyof typeof MaterialIcons.glyphMap; color: string }
 > = {
-  attendance: { title: "Attendance", icon: "pie-chart", color: "#159B3A" },
-  documents: { title: "Documents", icon: "description", color: "#159B3A" },
-  teachers: { title: "Teachers", icon: "people", color: "#159B3A" },
-  "school-info": { title: "School Info", icon: "info", color: "#159B3A" },
+  attendance: { title: "Attendance", icon: "pie-chart", color: "#C14BFF" },
+  documents: { title: "Documents", icon: "description", color: "#C14BFF" },
+  teachers: { title: "Teachers", icon: "people", color: "#C14BFF" },
+  "school-info": { title: "School Info", icon: "info", color: "#C14BFF" },
 };
 
 const SchoolResourcePage = ({ resource }: Props) => {
@@ -135,7 +135,7 @@ const SchoolResourcePage = ({ resource }: Props) => {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <MaterialIcons name="arrow-back" size={24} color="#17365E" />
+          <MaterialIcons name="arrow-back" size={24} color="#FBF8FF" />
         </TouchableOpacity>
         <View style={styles.titleRow}>
           <MaterialIcons name={config.icon} size={21} color={config.color} />
@@ -177,7 +177,7 @@ const InfoRow = ({
   value: string;
 }) => (
   <View style={styles.infoRow}>
-    <MaterialIcons name={icon} size={20} color="#159B3A" />
+    <MaterialIcons name={icon} size={20} color="#C14BFF" />
     <View style={styles.infoCopy}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
@@ -195,18 +195,18 @@ const EmptyState = ({
   message: string;
 }) => (
   <View style={styles.empty}>
-    <MaterialIcons name={icon} size={34} color="#159B3A" />
+    <MaterialIcons name={icon} size={34} color="#C14BFF" />
     <Text style={styles.emptyTitle}>{title}</Text>
     <Text style={styles.muted}>{message}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F9FF" },
+  safe: { flex: 1, backgroundColor: "#07040B" },
   header: {
     height: 64,
     paddingHorizontal: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -219,19 +219,19 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   title: {
-    color: "#17365E",
-    fontSize: 22,
+    color: "#FBF8FF",
+    fontSize: 18,
     fontWeight: "800",
     letterSpacing: -0.4,
   },
   content: { padding: 16, paddingBottom: 40 },
-  schoolName: { color: "#17365E", fontSize: 22, fontWeight: "800" },
-  muted: { color: "#607A98", fontSize: 13, marginTop: 4 },
+  schoolName: { color: "#FBF8FF", fontSize: 20, fontWeight: "800" },
+  muted: { color: "#B9AFC4", fontSize: 12, marginTop: 4 },
   body: { marginTop: 18 },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -243,10 +243,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   infoCopy: { flex: 1 },
-  infoLabel: { color: "#607A98", fontSize: 11 },
+  infoLabel: { color: "#B9AFC4", fontSize: 11 },
   infoValue: {
-    color: "#17365E",
-    fontSize: 14,
+    color: "#FBF8FF",
+    fontSize: 13,
     fontWeight: "700",
     marginTop: 2,
   },
@@ -255,25 +255,25 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: "#1C1026",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#087C2B", fontSize: 20, fontWeight: "800" },
+  avatarText: { color: "#C14BFF", fontSize: 18, fontWeight: "800" },
   childCopy: { flex: 1 },
-  childName: { color: "#17365E", fontSize: 15, fontWeight: "800" },
-  present: { color: "#607A98", fontSize: 11, fontWeight: "700" },
+  childName: { color: "#FBF8FF", fontSize: 14, fontWeight: "800" },
+  present: { color: "#B9AFC4", fontSize: 11, fontWeight: "700" },
   empty: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     borderRadius: 16,
     padding: 28,
   },
   emptyTitle: {
-    color: "#17365E",
-    fontSize: 16,
+    color: "#FBF8FF",
+    fontSize: 14,
     fontWeight: "800",
     marginTop: 10,
   },

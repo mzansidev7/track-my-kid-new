@@ -1,5 +1,5 @@
-import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import {
@@ -16,11 +16,6 @@ import {
 } from "react-native";
 import { AuthContext } from "../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../url";
-import {
-  initStripe,
-  initPaymentSheet,
-  presentPaymentSheet,
-} from "@stripe/stripe-react-native";
 
 export default function OwnerSubscriptions() {
   const router = useRouter();
@@ -43,23 +38,17 @@ export default function OwnerSubscriptions() {
     message: string;
   }>({ visible: false, type: "success", message: "" });
 
-  const [stripePublishableKey, setStripePublishableKey] = useState<
-    string | null
-  >(null);
-  const [isStripeTestMode, setIsStripeTestMode] = useState(false);
-  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paystack">(
-    "stripe",
-  );
-
   const currentPlanId =
     ownerSubscription?.subscription_plan_id ||
     ownerSubscription?.subscription_plans?.id;
 
+  const isFreePlan = (plan: any) =>
+    Number(plan?.monthly_price_cents) === 0 ||
+    plan?.slug === "free" ||
+    /free|starter/i.test(plan?.name || "");
+
   const freeFallback = plans.find(
-    (plan) =>
-      plan.monthly_price_cents === 0 ||
-      plan.name?.toLowerCase().includes("free") ||
-      plan.name?.toLowerCase().includes("starter"),
+    isFreePlan,
   );
 
   const currentPlan = plans.find((plan) => plan.id === currentPlanId) ||
@@ -152,32 +141,6 @@ export default function OwnerSubscriptions() {
 
       setPlans(data.plans || []);
       setOwnerSubscription(data.subscription || null);
-      const provider = data.payment_provider === "paystack" ? "paystack" : "stripe";
-      setPaymentProvider(provider);
-      if (provider === "stripe") {
-        try {
-          const cfgRes = await fetch(`${baseUrl}/owner/payments/stripe-config`, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-              "Content-Type": "application/json",
-            },
-          });
-          const cfg = await cfgRes.json();
-          if (cfgRes.ok && cfg.publishable_key) {
-            setStripePublishableKey(cfg.publishable_key);
-            setIsStripeTestMode(
-              String(cfg.publishable_key).startsWith("pk_test_"),
-            );
-          }
-        } catch {
-          setStripePublishableKey(null);
-          setIsStripeTestMode(false);
-        }
-      } else {
-        setStripePublishableKey(null);
-        setIsStripeTestMode(false);
-      }
     } catch (err: any) {
       setNotification({
         visible: true,
@@ -194,17 +157,7 @@ export default function OwnerSubscriptions() {
   }, [loadSubscriptions]);
 
   useEffect(() => {
-    if (stripePublishableKey) {
-      try {
-        initStripe({ publishableKey: stripePublishableKey });
-      } catch (e) {
-        console.warn("Failed to init Stripe SDK:", e);
-      }
-    }
-  }, [paymentProvider, stripePublishableKey]);
-
-  useEffect(() => {
-    // Detect checkout completion from Stripe redirect
+    // Detect checkout completion from the Paystack redirect.
     const status = searchParams.status as string | undefined;
     if (status === "success") {
       setNotification({
@@ -216,6 +169,17 @@ export default function OwnerSubscriptions() {
       setTimeout(() => {
         setNotification((prev) => ({ ...prev, visible: false }));
       }, 5000);
+      if (fromOnboarding) {
+        AsyncStorage.setItem("owner_onboarding_complete", "true")
+          .then(() => router.replace("/(owner)/(tabs)" as never))
+          .catch((storageError) => {
+            console.warn(
+              "Unable to persist owner onboarding completion:",
+              storageError,
+            );
+            router.replace("/(owner)/(tabs)" as never);
+          });
+      }
     } else if (status === "cancelled") {
       setNotification({
         visible: true,
@@ -226,11 +190,11 @@ export default function OwnerSubscriptions() {
         setNotification((prev) => ({ ...prev, visible: false }));
       }, 5000);
     }
-  }, [searchParams.status]);
+  }, [fromOnboarding, router, searchParams.status]);
 
   const openPaymentModal = (plan: any) => {
     const isCurrent = plan.id === currentPlan.id;
-    if (plan.name === "Free / Starter" || isCurrent) {
+    if (isFreePlan(plan) || isCurrent) {
       setNotification({
         visible: true,
         type: "warning",
@@ -295,61 +259,11 @@ export default function OwnerSubscriptions() {
         throw new Error(data.error || "Unable to create subscription.");
       }
 
-      const clientSecret = data.client_secret;
-
-      if (!clientSecret) {
-        // Fallback to checkout redirect if server doesn't return client secret
-        if (data.checkout_url) {
-          await Linking.openURL(data.checkout_url);
-          setPaymentModalVisible(false);
-          return;
-        }
-        throw new Error("Payment client secret missing from server response.");
+      if (!data.checkout_url) {
+        throw new Error("Payment checkout URL missing from server response.");
       }
-
-      // Initialize PaymentSheet with the PaymentIntent client secret
-      const initResult = await initPaymentSheet({
-        paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: "Track My Kid",
-      });
-
-      if (initResult.error) {
-        throw new Error(
-          initResult.error.message || "Failed to init payment sheet",
-        );
-      }
-
-      const presentResult = await presentPaymentSheet();
-      if (presentResult.error) {
-        throw new Error(presentResult.error.message || "Payment failed");
-      }
-
-      setNotification({
-        visible: true,
-        type: "success",
-        message: "Payment successful! Your subscription has been updated.",
-      });
+      await Linking.openURL(data.checkout_url);
       setPaymentModalVisible(false);
-
-      if (fromOnboarding) {
-        try {
-          await AsyncStorage.setItem("owner_onboarding_complete", "true");
-        } catch (storageError) {
-          console.warn(
-            "Unable to persist owner onboarding completion:",
-            storageError,
-          );
-        }
-      }
-
-      // Refresh subscription state
-      loadSubscriptions();
-
-      if (fromOnboarding) {
-        setTimeout(() => {
-          router.replace("/(owner)/(tabs)" as never);
-        }, 900);
-      }
     } catch (err: any) {
       setNotification({
         visible: true,
@@ -392,6 +306,23 @@ export default function OwnerSubscriptions() {
     return "trending-up";
   };
 
+  const contactAboutEnterprise = async () => {
+    try {
+      await Linking.openURL(
+        "mailto:support@trackmykid.co.za?subject=Track%20My%20Kid%20Enterprise%20plan",
+      );
+    } catch (error) {
+      setNotification({
+        visible: true,
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to open email. Contact support@trackmykid.co.za.",
+      });
+    }
+  };
+
   const renderNotification = () => {
     if (!notification.visible) return null;
 
@@ -425,18 +356,10 @@ export default function OwnerSubscriptions() {
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Choose a plan</Text>
-        <Text style={styles.headerSubtitle}>All features, no limit.</Text>
+        <Text style={styles.headerSubtitle}>
+          Choose a plan that fits your fleet today and grow when you need to.
+        </Text>
       </View>
-
-      {paymentProvider === "stripe" && isStripeTestMode && (
-        <View style={styles.testBanner}>
-          <MaterialIcons name="info" size={18} color="#111827" />
-          <Text style={styles.testBannerText}>
-            Test mode — use Stripe test card 4242 4242 4242 4242 (CVC any,
-            future expiry). Real cards will fail in test mode.
-          </Text>
-        </View>
-      )}
 
       {loading ? (
         <View style={styles.centered}>
@@ -458,7 +381,7 @@ export default function OwnerSubscriptions() {
             </View>
             <View style={styles.currentPlanMeta}>
               <View style={styles.currentPlanIcon}>
-                <MaterialIcons name="verified" size={20} color="#2563EB" />
+                <MaterialIcons name="verified" size={20} color="#35D9B3" />
               </View>
               <Text style={styles.currentPlanCaption}>
                 {currentSubscriptionLabelText}
@@ -497,7 +420,7 @@ export default function OwnerSubscriptions() {
                         <MaterialIcons
                           name={planIconName(plan)}
                           size={20}
-                          color="#2563EB"
+                          color="#35D9B3"
                         />
                       </View>
                       <View>
@@ -507,7 +430,8 @@ export default function OwnerSubscriptions() {
                         </Text>
                       </View>
                     </View>
-                    {plan.name === "Standard" && (
+                    {(plan.slug === "standard" ||
+                      plan.name?.toLowerCase() === "standard") && (
                       <View style={styles.planBadgeWithIcon}>
                         <MaterialIcons name="star" size={14} color="#FBBF24" />
                         <Text style={styles.planBadgeText}>Recommended</Text>
@@ -525,7 +449,7 @@ export default function OwnerSubscriptions() {
                           <MaterialIcons
                             name="check"
                             size={16}
-                            color="#7C3AED"
+                            color="#00B894"
                           />
                           <Text style={styles.planFeatureText}>{feature}</Text>
                         </View>
@@ -536,6 +460,41 @@ export default function OwnerSubscriptions() {
               );
             })
           )}
+          <View style={styles.planCard}>
+            <View style={styles.planCardHeader}>
+              <View style={styles.planTitleRow}>
+                <View style={styles.planIconBox}>
+                  <MaterialIcons
+                    name="business"
+                    size={20}
+                    color="#35D9B3"
+                  />
+                </View>
+                <View>
+                  <Text style={styles.planName}>Enterprise</Text>
+                  <Text style={styles.planPrice}>Custom pricing</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.planFeatures}>
+              {[
+                "Fleet limits tailored to your operation",
+                "Custom support and onboarding options",
+                "Contact us for a quote",
+              ].map((feature) => (
+                <View key={feature} style={styles.planFeatureRow}>
+                  <MaterialIcons name="check" size={16} color="#00B894" />
+                  <Text style={styles.planFeatureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={styles.enterpriseContactButton}
+              onPress={contactAboutEnterprise}
+            >
+              <Text style={styles.enterpriseContactText}>Contact us</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       )}
 
@@ -591,7 +550,7 @@ export default function OwnerSubscriptions() {
               <View style={styles.modalForm}>
                 {paymentMethod === "card" ? (
                   <Text style={styles.checkOutMessage}>
-                    You will be redirected to a secure {paymentProvider === "paystack" ? "Paystack" : "Stripe"} checkout page to
+                    You will be redirected to secure Paystack checkout to
                     complete your payment.
                   </Text>
                 ) : (
@@ -634,13 +593,13 @@ export default function OwnerSubscriptions() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#090D1A",
+    backgroundColor: "#050907",
   },
   header: {
     paddingTop: 52,
     paddingHorizontal: 20,
     paddingBottom: 24,
-    backgroundColor: "#111827",
+    backgroundColor: "#0D1713",
     borderBottomWidth: 0,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
@@ -655,7 +614,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
-    backgroundColor: "#1F2937",
+    backgroundColor: "#13231D",
   },
   headerTitle: {
     fontSize: 21,
@@ -669,23 +628,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: "90%",
   },
-  testBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#FDE68A",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginHorizontal: 20,
-    marginTop: 12,
-    borderRadius: 12,
-  },
-  testBannerText: {
-    color: "#111827",
-    marginLeft: 6,
-    flex: 1,
-    fontSize: 13,
-  },
   content: {
     paddingHorizontal: 20,
     paddingBottom: 40,
@@ -698,11 +640,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontSize: 15,
   },
   currentPlanCard: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0D1713",
     borderRadius: 18,
     padding: 16,
     marginBottom: 24,
@@ -721,14 +663,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   currentLabel: {
-    color: "#94A3B8",
+    color: "#82968D",
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
     fontSize: 12,
   },
   currentBadge: {
-    backgroundColor: "#1D4ED8",
+    backgroundColor: "#00B894",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 999,
@@ -739,13 +681,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   status_active: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#13231D",
   },
   status_pending: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#13231D",
   },
   status_past_due: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
   status_canceled: {
     backgroundColor: "#6B7280",
@@ -754,7 +696,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#6B7280",
   },
   status_trialing: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#00B894",
   },
   currentPlanName: {
     fontSize: 21,
@@ -782,7 +724,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#1E293B",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -799,7 +741,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   planCard: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0D1713",
     borderRadius: 24,
     padding: 22,
     marginBottom: 16,
@@ -812,8 +754,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   planCardCurrent: {
-    borderColor: "#2563EB",
-    backgroundColor: "#1F2937",
+    borderColor: "#00B894",
+    backgroundColor: "#13231D",
   },
   planCardHeader: {
     flexDirection: "row",
@@ -892,8 +834,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  enterpriseContactButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: "#00B894",
+  },
+  enterpriseContactText: {
+    color: "#05221B",
+    fontSize: 14,
+    fontWeight: "800",
+  },
   emptyState: {
-    backgroundColor: "#111827",
+    backgroundColor: "#0D1713",
     borderRadius: 22,
     padding: 24,
     alignItems: "center",
@@ -911,7 +866,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -931,10 +886,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   modalSubtitle: {
-    color: "#6B7280",
+    color: "#B1C4BC",
     lineHeight: 22,
     marginBottom: 18,
   },
@@ -946,11 +901,11 @@ const styles = StyleSheet.create({
   paymentMethodButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#294238",
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
   },
   paymentMethodIconRow: {
     flexDirection: "row",
@@ -958,15 +913,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   paymentMethodButtonActive: {
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
+    borderColor: "#00B894",
+    backgroundColor: "#13231D",
   },
   paymentMethodText: {
-    color: "#475569",
+    color: "#B1C4BC",
     fontWeight: "700",
   },
   paymentMethodTextActive: {
-    color: "#1D4ED8",
+    color: "#35D9B3",
   },
   modalForm: {
     marginBottom: 20,
@@ -978,13 +933,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   input: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#294238",
     marginBottom: 14,
-    color: "#111827",
+    color: "#F4FBF8",
     fontSize: 15,
   },
   inlineInputs: {
@@ -995,7 +950,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   confirmButton: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00B894",
     borderRadius: 18,
     paddingVertical: 16,
     alignItems: "center",
@@ -1018,17 +973,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   notificationSuccess: {
-    backgroundColor: "#D1FAE5",
+    backgroundColor: "#13231D",
   },
   notificationError: {
-    backgroundColor: "#FEE2E2",
+    backgroundColor: "#35151D",
   },
   notificationWarning: {
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#382D1B",
   },
   notificationText: {
     flex: 1,
-    color: "#111827",
+    color: "#F4FBF8",
     marginRight: 10,
     fontSize: 14,
   },

@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import * as Location from "expo-location";
 import { AuthContext } from "../../../../context/authContext/auth-context";
-import { resolveWorkingBaseUrl } from "../../../../url";
+import { BASE_URL, resolveWorkingBaseUrl } from "../../../../url";
 import {
   startDriverLocationTask,
   stopDriverLocationTask,
@@ -15,15 +15,24 @@ export type DriverTrackingStop = {
   latitude?: number;
   longitude?: number;
   status?: "pending" | "in_progress" | "completed" | "skipped";
+  boarded_at?: string | null;
 };
 
 export type DriverStopAction =
   | "arrived"
   | "picked_up"
+  | "boarded"
   | "dropped_off"
   | "skipped"
   | "child_not_present"
   | "incident";
+
+export type PickupContactOption = {
+  id: string;
+  name: string;
+  relationship: string;
+  valid_until: string | null;
+};
 
 type TrackingState = {
   online: boolean;
@@ -80,6 +89,41 @@ export const useDriverTracking = (
           historyId: data.history_id || null,
         });
         if (data.online) {
+          try {
+            const authorizationHeader = "Bearer " + String(user?.token || "");
+            const location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            if (active) {
+              updateTrackingState({ lastLocation: location });
+              const locationResponse = await fetch(
+                `${baseUrl}/driver/location`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authorizationHeader,
+                  },
+                  body: JSON.stringify({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    speed: location.coords.speed,
+                  }),
+                },
+              );
+              if (!locationResponse.ok) {
+                const locationData = await locationResponse.json().catch(() => ({}));
+                throw new Error(
+                  locationData.error || "Unable to publish restored driver location.",
+                );
+              }
+            }
+          } catch (locationError) {
+            console.error(
+              "[driver-tracking] could not restore current location",
+              locationError,
+            );
+          }
           await startDriverLocationTask();
         } else {
           await stopDriverLocationTask();
@@ -93,6 +137,41 @@ export const useDriverTracking = (
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!online || !user?.token) return;
+    let active = true;
+    const refreshStatus = async () => {
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/driver/tracking-status`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to refresh route status.");
+        }
+        if (!active) return;
+        if (!data.online) {
+          await stopDriverLocationTask();
+          updateTrackingState({ online: false, historyId: null });
+          return;
+        }
+        updateTrackingState({
+          online: true,
+          historyId: data.history_id || null,
+        });
+      } catch (statusError) {
+        console.error("[driver-tracking] status refresh failed", statusError);
+      }
+    };
+
+    const timer = setInterval(() => void refreshStatus(), 15_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [online, user?.token]);
 
   const requestLocation = useCallback(async () => {
     const foregroundPermission =
@@ -118,7 +197,7 @@ export const useDriverTracking = (
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
+          Authorization: ["Bearer ", user.token].join(""),
         },
         body: JSON.stringify({
           latitude: location.coords.latitude,
@@ -134,6 +213,46 @@ export const useDriverTracking = (
     },
     [user],
   );
+
+  useEffect(() => {
+    if (!online) return;
+    let active = true;
+    let subscription: Location.LocationSubscription | null = null;
+
+    const watchDriverLocation = async () => {
+      try {
+        subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 10,
+            timeInterval: 5000,
+          },
+          (location) => {
+            if (!active) return;
+            updateTrackingState({ lastLocation: location });
+            void sendLocation(location).catch((locationError) => {
+              console.error(
+                "[driver-tracking] foreground location upload failed",
+                locationError,
+              );
+            });
+          },
+        );
+        if (!active) subscription.remove();
+      } catch (locationError) {
+        console.error(
+          "[driver-tracking] foreground location watch failed",
+          locationError,
+        );
+      }
+    };
+
+    void watchDriverLocation();
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
+  }, [online, sendLocation]);
 
   const goOnline = useCallback(
     async (startRouteId = routeId) => {
@@ -163,7 +282,7 @@ export const useDriverTracking = (
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${user.token}`,
+            Authorization: "Bearer " + user.token,
           },
           body: JSON.stringify({
             route_id: startRouteId,
@@ -283,11 +402,22 @@ export const useDriverTracking = (
         details?: string;
         recipientName?: string;
         safetyPin?: string;
+        pickupContactId?: string;
         incidentType?: string;
       } = {},
     ) => {
       if (!user?.token) return;
-      const baseUrl = await resolveWorkingBaseUrl();
+      const resolvedBaseUrl = await resolveWorkingBaseUrl();
+      const baseUrl =
+        typeof resolvedBaseUrl === "string" &&
+        /^https?:\/\//i.test(resolvedBaseUrl)
+          ? resolvedBaseUrl.replace(/\/+$/, "")
+          : BASE_URL.replace(/\/+$/, "");
+      if (!/^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(baseUrl)) {
+        throw new Error(
+          "Unable to update stop because the API URL is not configured. Set EXPO_PUBLIC_API_URL and restart the app.",
+        );
+      }
       const response = await fetch(
         `${baseUrl}/driver/route-stops/${stopId}/action`,
         {
@@ -302,15 +432,39 @@ export const useDriverTracking = (
             details: options.details,
             recipient_name: options.recipientName,
             safety_pin: options.safetyPin,
+            pickup_contact_id: options.pickupContactId,
             incident_type: options.incidentType,
           }),
         },
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to update stop.");
+      if (data.route_window_completed) {
+        await stopDriverLocationTask();
+        updateTrackingState({ online: false, historyId: null });
+      }
       return data.stop as DriverTrackingStop;
     },
     [user],
+  );
+
+  const getPickupContacts = useCallback(
+    async (stopId: string): Promise<PickupContactOption[]> => {
+      if (!user?.token) {
+        throw new Error("You must be signed in to view authorized pickup contacts.");
+      }
+      const baseUrl = await resolveWorkingBaseUrl();
+      const response = await fetch(
+        `${baseUrl}/driver/route-stops/${stopId}/pickup-contacts`,
+        { headers: { Authorization: `Bearer ${user.token}` } },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load authorized pickup contacts.");
+      }
+      return Array.isArray(data) ? data : [];
+    },
+    [user?.token],
   );
 
   const sendEmergencyAlert = useCallback(
@@ -368,6 +522,7 @@ export const useDriverTracking = (
     goOnline,
     endRoute,
     updateStop,
+    getPickupContacts,
     sendEmergencyAlert,
   };
 };

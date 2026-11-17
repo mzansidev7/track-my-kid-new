@@ -12,7 +12,7 @@ import {
   getAllDepartureTimePreferences,
   getDepartureTimePreference,
 } from "../../../../store/asyncStorage/timePreferences.asyncStore";
-import { resolveWorkingBaseUrl } from "@/url";
+import { BASE_URL, resolveWorkingBaseUrl } from "@/url";
 import { useOwnerProfile } from "./useOwnerProfile";
 import { RouteStatus } from "../interface/owner.interfece";
 
@@ -76,7 +76,24 @@ export const useRoutes = () => {
         }
 
         // Fetch from server after cache load so UI updates with fresh data
-        const baseUrl = await resolveWorkingBaseUrl();
+        const resolvedBaseUrl = await resolveWorkingBaseUrl();
+        const baseUrl =
+          typeof resolvedBaseUrl === "string" &&
+          /^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(resolvedBaseUrl.trim()) &&
+          !/^https?:\/\/(?:undefined|null)(?:[/:]|$)/i.test(
+            resolvedBaseUrl.trim(),
+          )
+            ? resolvedBaseUrl.trim().replace(/\/+$/, "")
+            : BASE_URL;
+        if (
+          typeof baseUrl !== "string" ||
+          !/^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(baseUrl.trim()) ||
+          /^https?:\/\/(?:undefined|null)(?:[/:]|$)/i.test(baseUrl.trim())
+        ) {
+          throw new Error(
+            "The API base URL is missing or invalid. Configure EXPO_PUBLIC_API_URL and restart the app.",
+          );
+        }
         console.log("🌐 Fetching fresh routes from server", { baseUrl });
         const response = await fetch(`${baseUrl}/owner/routes`, {
           method: "GET",

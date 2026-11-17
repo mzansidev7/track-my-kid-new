@@ -18,16 +18,16 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
-import { AuthContext } from "../../context/authContext/auth-context";
-import { DRIVER_COLORS, useTheme } from "../../styles/theme";
-import { resolveWorkingBaseUrl } from "../../url";
+import { AuthContext } from "../context/authContext/auth-context";
+import { DRIVER_COLORS, useTheme } from "../styles/theme";
+import { resolveWorkingBaseUrl } from "../url";
 import { useOwnerPageHeader } from "@/app-support/owner/ownerHelpers/hooks/useOwnerPageHeader";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { client as supabase } from "../../supabaseConfig/supabaseConfig";
+import { client as supabase } from "../supabaseConfig/supabaseConfig";
 import {
   loadIncidentReportsCache,
   saveIncidentReportsCache,
-} from "../../store/asyncStorage/incidentReportsCache";
+} from "../store/asyncStorage/incidentReportsCache";
 
 const authHeaderKey = "Authorization";
 
@@ -233,41 +233,48 @@ export default function IncidentReportForm({
     return () => clearTimeout(timer);
   }, [loadOptions]);
 
-  const loadReports = useCallback(async (background = false) => {
-    if (!token) return;
-    if (!background) setLoadingReports(true);
-    if (!background) setReportError("");
-    try {
-      const baseUrl = await resolveWorkingBaseUrl();
-      const response = await fetch(`${baseUrl}/${role}/incidents`, {
-        headers: { [authHeaderKey]: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (!response.ok || !Array.isArray(data)) {
-        throw new Error(data.error || "Unable to load your incident reports.");
+  const loadReports = useCallback(
+    async (background = false) => {
+      if (!token) return;
+      if (!background) setLoadingReports(true);
+      if (!background) setReportError("");
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(`${baseUrl}/${role}/incidents`, {
+          headers: { [authHeaderKey]: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error(
+            data.error || "Unable to load your incident reports.",
+          );
+        }
+        setReports(data);
+        const validIds = new Set(
+          data.map((report: IncidentReport) => report.id),
+        );
+        repliesByIncidentId.current = Object.fromEntries(
+          Object.entries(repliesByIncidentId.current).filter(([id]) =>
+            validIds.has(id),
+          ),
+        );
+        setSelectedReportId((current) =>
+          data.some((report: IncidentReport) => report.id === current)
+            ? current
+            : data[0]?.id || "",
+        );
+      } catch (requestError) {
+        setReportError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load your incident reports.",
+        );
+      } finally {
+        setLoadingReports(false);
       }
-      setReports(data);
-      const validIds = new Set(data.map((report: IncidentReport) => report.id));
-      repliesByIncidentId.current = Object.fromEntries(
-        Object.entries(repliesByIncidentId.current).filter(([id]) =>
-          validIds.has(id),
-        ),
-      );
-      setSelectedReportId((current) =>
-        data.some((report: IncidentReport) => report.id === current)
-          ? current
-          : data[0]?.id || "",
-      );
-    } catch (requestError) {
-      setReportError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load your incident reports.",
-      );
-    } finally {
-      setLoadingReports(false);
-    }
-  }, [role, token]);
+    },
+    [role, token],
+  );
 
   useEffect(() => {
     let active = true;
@@ -278,8 +285,10 @@ export default function IncidentReportForm({
         if (active && cached) {
           hasCachedData = true;
           const cachedReports = cached.reports as IncidentReport[];
-          const cachedReplies =
-            cached.repliesByIncidentId as Record<string, IncidentReply[]>;
+          const cachedReplies = cached.repliesByIncidentId as Record<
+            string,
+            IncidentReply[]
+          >;
           repliesByIncidentId.current = cachedReplies;
           setReports(cachedReports);
           setSelectedReportId(cachedReports[0]?.id || "");
@@ -303,30 +312,33 @@ export default function IncidentReportForm({
     });
   }, [cacheReady, reports, replies, role, userId]);
 
-  const loadReplies = useCallback(async (incidentId: string) => {
-    if (!incidentId || !token) return;
-    const cachedReplies = repliesByIncidentId.current[incidentId];
-    if (cachedReplies) setReplies(cachedReplies);
-    try {
-      const baseUrl = await resolveWorkingBaseUrl();
-      const response = await fetch(
-        `${baseUrl}/${role}/incidents/${incidentId}/replies`,
-        { headers: { [authHeaderKey]: `Bearer ${token}` } },
-      );
-      const data = await response.json();
-      if (!response.ok || !Array.isArray(data)) {
-        throw new Error(data.error || "Unable to load incident responses.");
+  const loadReplies = useCallback(
+    async (incidentId: string) => {
+      if (!incidentId || !token) return;
+      const cachedReplies = repliesByIncidentId.current[incidentId];
+      if (cachedReplies) setReplies(cachedReplies);
+      try {
+        const baseUrl = await resolveWorkingBaseUrl();
+        const response = await fetch(
+          `${baseUrl}/${role}/incidents/${incidentId}/replies`,
+          { headers: { [authHeaderKey]: `Bearer ${token}` } },
+        );
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error(data.error || "Unable to load incident responses.");
+        }
+        repliesByIncidentId.current[incidentId] = data;
+        setReplies(data);
+      } catch (requestError) {
+        setReportError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load incident responses.",
+        );
       }
-      repliesByIncidentId.current[incidentId] = data;
-      setReplies(data);
-    } catch (requestError) {
-      setReportError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load incident responses.",
-      );
-    }
-  }, [role, token]);
+    },
+    [role, token],
+  );
 
   useEffect(() => {
     if (!selectedReportId) return;
@@ -368,7 +380,9 @@ export default function IncidentReportForm({
       )
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("Incident realtime unavailable; periodic refresh remains active.");
+          console.warn(
+            "Incident realtime unavailable; periodic refresh remains active.",
+          );
         }
       });
     interval = setInterval(() => {

@@ -1,10 +1,17 @@
 import { DashboardAction } from "@/types/school/client.interfaces";
 
-export const schoolStats = (students: any, routes: any, drivers: any) => {
+export const schoolStats = (
+  students: any[] | null | undefined,
+  routes: any[] | null | undefined,
+  drivers: any[] | null | undefined,
+) => {
+  const studentList = Array.isArray(students) ? students : [];
+  const routeList = Array.isArray(routes) ? routes : [];
+  const driverList = Array.isArray(drivers) ? drivers : [];
   const stats: (DashboardAction & { value: string })[] = [
     {
       title: "Students",
-      value: String(students.length),
+      value: String(studentList.length),
       icon: "people-outline",
       color: "#4285F4",
       screen: "Students",
@@ -12,7 +19,7 @@ export const schoolStats = (students: any, routes: any, drivers: any) => {
     {
       title: "Vehicles",
       value: String(
-        routes.reduce(
+        routeList.reduce(
           (count: number, route: any) =>
             count +
             (Array.isArray(route.assignments) ? route.assignments.length : 0),
@@ -25,14 +32,14 @@ export const schoolStats = (students: any, routes: any, drivers: any) => {
     },
     {
       title: "Drivers",
-      value: String(drivers.length),
+      value: String(driverList.length),
       icon: "person-outline",
       color: "#FB8C00",
       screen: "Drivers",
     },
     {
       title: "Routes",
-      value: String(routes.length),
+      value: String(routeList.length),
       icon: "map-outline",
       color: "#8E44AD",
       screen: "Routes",
@@ -177,6 +184,7 @@ export const operationsItems = [
     sub: "View connected families",
     icon: "family-restroom",
     color: "#8E44AD",
+    target: "parents",
   },
   {
     key: "staff-members",

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
+import { DRIVER_COLORS } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
 import { resolveWorkingBaseUrl } from "@/url";
@@ -75,9 +76,24 @@ const SupportTicketPage = () => {
     updater: any[] | ((currentTickets: any[]) => any[]),
   ) => {
     if (!isMountedRef.current) return;
-    setTickets((currentTickets: any[]) =>
-      typeof updater === "function" ? updater(currentTickets) : updater,
-    );
+    setTickets((currentTickets: any[]) => {
+      const nextTickets =
+        typeof updater === "function" ? updater(currentTickets) : updater;
+      const seenTicketIds = new Set<string>();
+
+      return nextTickets.filter((ticket) => {
+        if (ticket?.id == null) return true;
+
+        const ticketId = String(ticket.id);
+        if (seenTicketIds.has(ticketId)) {
+          console.warn("[support-tickets] Ignoring duplicate ticket", ticketId);
+          return false;
+        }
+
+        seenTicketIds.add(ticketId);
+        return true;
+      });
+    });
   };
 
   const fetchUserTickets = React.useCallback(async () => {
@@ -378,9 +394,9 @@ const SupportTicketPage = () => {
               No tickets yet. Your submitted tickets will appear here.
             </Text>
           ) : (
-            tickets.map((ticket) => (
+            tickets.map((ticket, index) => (
               <View
-                key={ticket.id}
+                key={`${ticket.id ?? "ticket"}-${index}`}
                 style={[
                   styles.ticketCard,
                   {
@@ -507,7 +523,7 @@ const SupportTicketPage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5FBF7",
+    backgroundColor: DRIVER_COLORS.background,
   },
   content: {
     padding: 20,
@@ -516,30 +532,31 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     marginBottom: 20,
     lineHeight: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: DRIVER_COLORS.cardBorder,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 18,
     fontSize: 14,
+    color: DRIVER_COLORS.text,
   },
   optionGrid: {
     flexDirection: "row",
@@ -549,18 +566,18 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: DRIVER_COLORS.cardBorder,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
   },
   optionButtonSelected: {
-    backgroundColor: "#0F9D58",
-    borderColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
+    borderColor: DRIVER_COLORS.primary,
   },
   optionButtonText: {
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     textTransform: "capitalize",
     fontSize: 12,
     fontWeight: "600",
@@ -573,7 +590,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   submitButton: {
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
@@ -592,14 +609,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     marginBottom: 12,
   },
   ticketCard: {
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: DRIVER_COLORS.cardBorder,
     padding: 16,
     marginBottom: 12,
     shadowColor: "#0F172A",
@@ -617,7 +634,7 @@ const styles = StyleSheet.create({
   ticketTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     flex: 1,
     marginRight: 12,
   },
@@ -649,19 +666,19 @@ const styles = StyleSheet.create({
   },
   metaPillText: {
     fontSize: 11,
-    color: "#1F2937",
+    color: DRIVER_COLORS.text,
     textTransform: "capitalize",
     fontWeight: "600",
   },
   ticketDate: {
     fontSize: 12,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     marginBottom: 10,
   },
   ticketMessage: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#1F2937",
+    color: DRIVER_COLORS.text,
   },
   conversationButton: {
     alignSelf: "flex-start",
@@ -669,7 +686,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   conversationButtonText: {
-    color: "#0F9D58",
+    color: DRIVER_COLORS.primary,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -677,36 +694,37 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#D1D5DB",
+    borderTopColor: DRIVER_COLORS.cardBorder,
   },
   reply: {
     padding: 10,
     borderRadius: 10,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     marginBottom: 8,
   },
   replyMeta: {
     fontSize: 11,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     marginBottom: 5,
   },
   replyBody: {
     fontSize: 14,
-    color: "#111827",
+    color: DRIVER_COLORS.text,
     lineHeight: 20,
   },
   replyInput: {
     minHeight: 70,
     textAlignVertical: "top",
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: DRIVER_COLORS.cardBorder,
     borderRadius: 10,
     padding: 10,
     marginTop: 8,
+    color: DRIVER_COLORS.text,
   },
   replyButton: {
-    backgroundColor: "#0F9D58",
+    backgroundColor: DRIVER_COLORS.primary,
     borderRadius: 10,
     paddingVertical: 11,
     alignItems: "center",
@@ -714,7 +732,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     fontSize: 14,
-    color: "#4B5563",
+    color: DRIVER_COLORS.muted,
     lineHeight: 20,
   },
 });
@@ -730,7 +748,7 @@ const getStatusColor = (status: string) => {
     case "closed":
       return "#6B7280";
     default:
-      return "#0F9D58";
+      return DRIVER_COLORS.primary;
   }
 };
 
@@ -745,7 +763,7 @@ const getPriorityBackgroundColor = (priority: string) => {
     case "urgent":
       return "#DC2626";
     default:
-      return "#0F9D58";
+      return DRIVER_COLORS.primary;
   }
 };
 

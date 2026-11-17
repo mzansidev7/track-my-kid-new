@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 import { useDriverProfile } from "@/app-support/driver/driverHelpers/hooks/useDriverProfile";
-import { DRIVER_COLORS, useTheme } from "@/styles/theme";
+import { DRIVER_COLORS, useDriverTheme } from "@/styles/theme";
 import { signOut } from "@/functions/auth";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
 
@@ -23,7 +23,7 @@ const DriverProfile = () => {
   const router = useRouter();
   const { logout } = useContext(AuthContext);
   const { driver, loading, error, refreshDriver } = useDriverProfile();
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
 
   const handleLogout = async () => {
     const userSignedOut = await signOut();
@@ -89,9 +89,7 @@ const DriverProfile = () => {
         ? `${dateValue}T00:00:00`
         : dateValue,
     );
-    return Number.isNaN(date.getTime())
-      ? dateValue
-      : date.toLocaleDateString();
+    return Number.isNaN(date.getTime()) ? dateValue : date.toLocaleDateString();
   };
 
   const formatAddress = (address: unknown) => {
@@ -133,13 +131,15 @@ const DriverProfile = () => {
   if (loading) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
+        style={[
+          localStyles.container,
+          { backgroundColor: DRIVER_COLORS.background },
+        ]}
         edges={["bottom", "top"]}
       >
         <DriverHeader
           title="Profile"
           subtitle="Manage your profile and account settings"
-          showBackButton={true}
         />
         <View style={[localStyles.container, localStyles.loadingContainer]}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -151,13 +151,15 @@ const DriverProfile = () => {
   if (error) {
     return (
       <SafeAreaView
-        style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
+        style={[
+          localStyles.container,
+          { backgroundColor: DRIVER_COLORS.background },
+        ]}
         edges={["bottom", "top"]}
       >
         <DriverHeader
           title="Profile"
           subtitle="Manage your profile and account settings"
-          showBackButton={true}
         />
         <View style={[localStyles.container, localStyles.loadingContainer]}>
           <Text style={[localStyles.errorText, { color: colors.text.primary }]}>
@@ -176,13 +178,15 @@ const DriverProfile = () => {
 
   return (
     <SafeAreaView
-      style={[localStyles.container, { backgroundColor: DRIVER_COLORS.background }]}
+      style={[
+        localStyles.container,
+        { backgroundColor: DRIVER_COLORS.background },
+      ]}
       edges={["bottom", "top"]}
     >
       <DriverHeader
         title="Profile"
         subtitle="Manage your profile and account settings"
-        showBackButton={true}
       />
 
       <ScrollView contentContainerStyle={localStyles.profileContent}>
@@ -490,11 +494,7 @@ const DriverProfile = () => {
             ]}
           >
             <View style={localStyles.sectionHeader}>
-              <MaterialIcons
-                name="photo"
-                size={19}
-                color={colors.primary}
-              />
+              <MaterialIcons name="photo" size={19} color={colors.primary} />
               <Text
                 style={[
                   localStyles.sectionTitle,
@@ -577,7 +577,7 @@ const DriverProfile = () => {
             {
               label: "Change Password",
               icon: "lock",
-              color: "#64748B",
+              color: DRIVER_COLORS.muted,
               route: "/(driver)/pages/change-password",
             },
             {
@@ -585,6 +585,12 @@ const DriverProfile = () => {
               icon: "notifications",
               color: "#0EA5E9",
               route: "/(driver)/pages/notification-settings",
+            },
+            {
+              label: "SOS Messages",
+              icon: "sos",
+              color: "#DC2626",
+              route: "/(driver)/pages/sos-messages",
             },
             {
               label: "Help & Support",
@@ -846,7 +852,7 @@ const localStyles = StyleSheet.create({
     marginHorizontal: 0,
     marginTop: 16,
     borderRadius: 22,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     paddingHorizontal: 18,
     paddingVertical: 19,
     borderWidth: 1,
@@ -940,7 +946,7 @@ const localStyles = StyleSheet.create({
   },
   qrCodeText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     textAlign: "center",
   },
   noQrContainer: {
@@ -951,14 +957,14 @@ const localStyles = StyleSheet.create({
   noQrText: {
     marginTop: 10,
     fontSize: 14,
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
   },
   documentsCard: {
     marginHorizontal: 16,
     marginTop: 16,
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
   },
@@ -974,14 +980,14 @@ const localStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DRIVER_COLORS.cardBorder,
     padding: 14,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     marginBottom: 12,
   },
   documentIconBox: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -992,7 +998,7 @@ const localStyles = StyleSheet.create({
     marginBottom: 6,
   },
   documentValid: {
-    color: "#6B7280",
+    color: DRIVER_COLORS.muted,
     fontSize: 12,
   },
   documentValidDate: {
@@ -1014,14 +1020,14 @@ const localStyles = StyleSheet.create({
   },
   documentVerifiedText: {
     fontSize: 12,
-    color: "#16A34A",
+    color: DRIVER_COLORS.success,
     fontWeight: "700",
   },
   menuCard: {
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 22,
-    backgroundColor: "#fff",
+    backgroundColor: DRIVER_COLORS.card,
     borderWidth: 1,
     borderColor: "rgba(15,157,88,0.08)",
     overflow: "hidden",

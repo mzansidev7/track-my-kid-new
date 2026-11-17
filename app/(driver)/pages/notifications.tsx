@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useDriverNotifications } from "@/app-support/driver/driverHelpers/hooks/useDriverNotifications";
 import { NotificationRow } from "@/app-support/driver/types/driver-types";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
@@ -17,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { DRIVER_COLORS } from "@/styles/theme";
 
 const DriverNotifications = () => {
+  const router = useRouter();
   const {
     notifications,
     unreadCount,
@@ -93,7 +95,14 @@ const DriverNotifications = () => {
         styles.notificationCard,
         !item.is_read && styles.unreadNotification,
       ]}
-      onPress={() => markAsRead(item.id, item.user_id)}
+      onPress={() => {
+        if (/sos/i.test(item.title || "")) {
+          void markAsRead(item.id, item.user_id);
+          router.push("/(driver)/pages/sos-messages" as never);
+          return;
+        }
+        void markAsRead(item.id, item.user_id);
+      }}
       activeOpacity={0.7}
     >
       <View style={styles.iconContainer}>
@@ -224,7 +233,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
   },
   readAllCount: {
     flex: 1,
@@ -258,7 +267,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   unreadNotification: {
-    backgroundColor: "#F0F6F2",
+    backgroundColor: DRIVER_COLORS.successSurface,
     borderLeftWidth: 4,
     borderLeftColor: DRIVER_COLORS.primary,
   },
@@ -266,7 +275,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#EAF2ED",
+    backgroundColor: DRIVER_COLORS.surfaceRaised,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -277,24 +286,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: DRIVER_COLORS.text,
     marginBottom: 4,
   },
   message: {
     fontSize: 14,
-    color: "#666",
+    color: DRIVER_COLORS.muted,
     marginBottom: 8,
     lineHeight: 20,
   },
   time: {
     fontSize: 12,
-    color: "#999",
+    color: DRIVER_COLORS.muted,
   },
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#4CAF50",
+    backgroundColor: DRIVER_COLORS.success,
     marginLeft: 8,
   },
   loadingContainer: {
@@ -311,12 +320,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: DRIVER_COLORS.text,
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#999",
+    color: DRIVER_COLORS.muted,
     textAlign: "center",
     marginTop: 8,
     marginHorizontal: 20,
@@ -329,7 +338,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: "#f44336",
+    color: DRIVER_COLORS.danger,
     marginTop: 16,
     textAlign: "center",
   },
@@ -337,7 +346,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: "#4CAF50",
+    backgroundColor: DRIVER_COLORS.primary,
     borderRadius: 8,
   },
   retryButtonText: {

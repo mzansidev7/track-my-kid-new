@@ -16,8 +16,8 @@ export const useWelcomeScreenStyles = () => {
     },
 
     logo: {
-      width: 104,
-      height: 104,
+      width: 200,
+      height: 200,
       resizeMode: "contain",
       marginBottom: 6,
     },
@@ -442,7 +442,7 @@ export const useWelcomeScreenStyles = () => {
 
     statNumber: { color: "#4A90E2", fontWeight: "700" },
 
-    statLabel: {     fontSize: 10, color: "#666" },
+    statLabel: { fontSize: 10, color: "#666" },
 
     footer: {
       marginTop: 16,

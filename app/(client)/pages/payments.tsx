@@ -20,6 +20,7 @@ import { AuthContext } from "../../../context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "../../../url";
 import {
   subscribeToClientChildrenUpdates,
+  subscribeToOwnerPayoutSettingsUpdates,
   subscribeToPaymentUpdates,
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/clientRealtime";
@@ -29,6 +30,25 @@ const formatCurrency = (cents = 0, currency = "zar") =>
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(cents / 100);
+
+const getPayoutSetupMessage = (reason: string | null | undefined) => {
+  switch (reason) {
+    case "OWNER_PAYOUT_ACCOUNT_REQUIRED":
+      return "This transport owner must add a bank account before card payments can be accepted.";
+    case "OWNER_PAYOUT_ACCOUNT_UNVERIFIED":
+      return "Paystack is verifying this owner’s bank details. Card payment will be available once verification succeeds.";
+    case "OWNER_CARD_PAYMENTS_DISABLED":
+      return "This transport owner has turned off card payments. Please report a cash payment or contact the owner.";
+    case "OWNER_CARD_PAYMENT_SCHEMA_MISSING":
+      return "Card payment settings are being updated. Please report a cash payment or try again later.";
+    case "OWNER_PAYOUT_SCHEMA_MISSING":
+      return "Card payments are temporarily unavailable while payment setup is updated. You can still report a cash payment.";
+    case "OWNER_PAYOUTS_NOT_ENABLED":
+      return "Card payments are currently unavailable because the platform has not enabled automatic owner bank transfers.";
+    default:
+      return "Card payments are temporarily unavailable. You can still report a cash payment.";
+  }
+};
 
 const PaymentHistory = ({
   payments,
@@ -226,9 +246,35 @@ const ClientPayments = () => {
     };
   }, [summary?.client_id, loadSummary]);
 
+  React.useEffect(() => {
+    const ownerIds: string[] = [
+      ...new Set<string>(
+        (summary?.payment_groups || [])
+          .map((group: any) => group.owner_id)
+          .filter(
+            (ownerId: unknown): ownerId is string =>
+              typeof ownerId === "string" && ownerId.length > 0,
+          ),
+      ),
+    ];
+    if (!ownerIds.length) return undefined;
+
+    const ownerSettingsChannel = subscribeToOwnerPayoutSettingsUpdates(
+      ownerIds,
+      () => loadSummary(true),
+    );
+    return () => {
+      unsubscribeFromRealtime(ownerSettingsChannel);
+    };
+  }, [summary?.payment_groups, loadSummary]);
+
   useFocusEffect(
     useCallback(() => {
       loadSummary();
+      const refreshInterval = setInterval(() => {
+        loadSummary(true);
+      }, 30000);
+      return () => clearInterval(refreshInterval);
     }, [loadSummary]),
   );
 
@@ -270,10 +316,24 @@ const ClientPayments = () => {
       }
       await Linking.openURL(data.checkout_url);
     } catch (paymentError) {
+      const errorCode =
+        paymentError instanceof Error ? paymentError.message : "";
       setError(
-        paymentError instanceof Error
-          ? paymentError.message
-          : "Unable to start payment.",
+        errorCode === "OWNER_PAYOUTS_NOT_ENABLED"
+          ? "Card payments are temporarily unavailable while owner bank transfers are being configured."
+          : errorCode === "OWNER_CARD_PAYMENTS_DISABLED"
+            ? "This transport owner has turned off card payments. Please report a cash payment or contact the owner."
+            : errorCode === "OWNER_CARD_PAYMENT_SCHEMA_MISSING"
+              ? "Card payment settings are being updated. Please report a cash payment or try again later."
+          : errorCode === "OWNER_PAYOUT_ACCOUNT_REQUIRED"
+            ? "The transport owner must add and verify a bank account before card payment."
+            : errorCode === "OWNER_PAYOUT_ACCOUNT_UNVERIFIED"
+              ? "Paystack has not verified the transport owner’s bank account yet. Please try again later."
+            : errorCode === "OWNER_PAYOUT_SCHEMA_MISSING"
+              ? "Card payments are temporarily unavailable while the payment system is updated. Please report a cash payment or try again later."
+            : errorCode === "OWNER_PAYOUT_ACCOUNT_VERIFICATION_FAILED"
+              ? "Paystack could not verify the owner’s payout account. Please try again later."
+              : errorCode || "Unable to start payment.",
       );
     } finally {
       setPayingGroupId(null);
@@ -364,7 +424,7 @@ const ClientPayments = () => {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={23} color="#17365E" />
+          <MaterialIcons name="arrow-back" size={23} color="#FBF8FF" />
         </TouchableOpacity>
         <View>
           <Text style={styles.title}>Payments</Text>
@@ -383,7 +443,7 @@ const ClientPayments = () => {
       >
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#159B3A" />
+            <ActivityIndicator color="#C14BFF" />
             <Text style={styles.stateText}>Loading payment details...</Text>
           </View>
         ) : error ? (
@@ -411,7 +471,7 @@ const ClientPayments = () => {
                 <MaterialIcons
                   name="card-giftcard"
                   size={21}
-                  color="#087C2B"
+                  color="#C14BFF"
                 />
                 <Text style={styles.trialNoticeText}>
                   {summary.service_fee_trial.starts_after_first_payment
@@ -433,7 +493,7 @@ const ClientPayments = () => {
               <>
                 <View style={styles.summaryCard}>
                   <View style={styles.paymentIcon}>
-                    <MaterialIcons name="payments" size={28} color="#159B3A" />
+                    <MaterialIcons name="payments" size={28} color="#C14BFF" />
                   </View>
                   <Text style={styles.cardTitle}>
                     Current transport amount (before service fees)
@@ -576,17 +636,36 @@ const ClientPayments = () => {
                       : "If you pay the transport fare in cash, pay this service fee online separately."}
                   </Text>
                 </View>
+                {!group.card_payment_available ? (
+                  <View style={styles.paymentNotice}>
+                    <MaterialIcons
+                      name="info-outline"
+                      size={20}
+                      color="#B45309"
+                    />
+                    <Text style={styles.paymentNoticeText}>
+                      {getPayoutSetupMessage(group.payout_setup_required)}
+                    </Text>
+                  </View>
+                ) : null}
                 <TouchableOpacity
                   style={[
                     styles.payButton,
-                    !group.owner_id && styles.payButtonDisabled,
+                    (!group.owner_id || !group.card_payment_available) &&
+                      styles.payButtonDisabled,
                   ]}
                   onPress={() => payForGroup(group.group_id)}
-                  disabled={payingGroupId !== null || !group.owner_id}
+                  disabled={
+                    payingGroupId !== null ||
+                    !group.owner_id ||
+                    !group.card_payment_available
+                  }
                 >
                   <Text style={styles.payButtonText}>
                     {!group.owner_id
                       ? "Owner unavailable"
+                      : !group.card_payment_available
+                        ? "Card payment unavailable"
                       : payingGroupId === group.group_id
                         ? "Opening checkout..."
                         : `Pay ${formatCurrency(group.total_due_cents, summary?.currency)}`}
@@ -641,14 +720,14 @@ const Row = ({ label, value }: { label: string; value: string }) => (
 export default ClientPayments;
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F4F9FF" },
+  safeArea: { flex: 1, backgroundColor: "#07040B" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
+    borderBottomColor: "#352341",
   },
   backButton: {
     width: 40,
@@ -657,14 +736,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 8,
   },
-  title: { color: "#17365E", fontSize: 22, fontWeight: "800" },
-  subtitle: { color: "#607A98", fontSize: 12, marginTop: 3 },
+  title: { color: "#FBF8FF", fontSize: 18, fontWeight: "800" },
+  subtitle: { color: "#B9AFC4", fontSize: 10, marginTop: 3 },
   content: { padding: 20, paddingBottom: 40 },
   summaryCard: {
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 22,
     alignItems: "center",
     marginBottom: 16,
@@ -673,26 +752,26 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 17,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
   },
-  cardTitle: { color: "#087C2B", fontSize: 14, fontWeight: "700" },
-  amount: { color: "#17365E", fontSize: 32, fontWeight: "800", marginTop: 8 },
-  mutedText: { color: "#607A98", fontSize: 12, marginTop: 4 },
+  cardTitle: { color: "#C14BFF", fontSize: 13, fontWeight: "700" },
+  amount: { color: "#FBF8FF", fontSize: 29, fontWeight: "800", marginTop: 8 },
+  mutedText: { color: "#B9AFC4", fontSize: 11, marginTop: 4 },
   detailCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     paddingHorizontal: 16,
   },
   paymentNotice: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#1C1026",
     borderRadius: 12,
     padding: 12,
     marginTop: 12,
@@ -700,14 +779,14 @@ const styles = StyleSheet.create({
   paymentNoticeText: {
     flex: 1,
     color: "#92400E",
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 18,
   },
   trialNotice: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
     borderColor: "#B8E4C4",
     borderWidth: 1,
     borderRadius: 12,
@@ -717,15 +796,15 @@ const styles = StyleSheet.create({
   trialNoticeText: {
     flex: 1,
     color: "#176B32",
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
     fontWeight: "600",
   },
   routeCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 14,
     marginTop: 12,
   },
@@ -735,92 +814,92 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  routeName: { color: "#17365E", fontSize: 14, fontWeight: "700", flex: 1 },
-  routeAmount: { color: "#087C2B", fontSize: 14, fontWeight: "800" },
-  routeDetails: { color: "#607A98", fontSize: 12, marginTop: 6 },
+  routeName: { color: "#FBF8FF", fontSize: 13, fontWeight: "700", flex: 1 },
+  routeAmount: { color: "#C14BFF", fontSize: 13, fontWeight: "800" },
+  routeDetails: { color: "#B9AFC4", fontSize: 11, marginTop: 6 },
   childNames: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     fontWeight: "700",
     marginTop: 6,
   },
   groupTitle: { flex: 1 },
-  ownerName: { color: "#607A98", fontSize: 11, marginBottom: 2 },
+  ownerName: { color: "#B9AFC4", fontSize: 11, marginBottom: 2 },
   payButton: {
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     borderRadius: 9,
     alignItems: "center",
     paddingVertical: 11,
     marginTop: 12,
   },
-  payButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
-  payButtonDisabled: { backgroundColor: "#607A98" },
+  payButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
+  payButtonDisabled: { backgroundColor: "#B9AFC4" },
   cashButton: {
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#159B3A",
+    borderColor: "#C14BFF",
     borderRadius: 9,
     paddingVertical: 10,
     marginTop: 8,
-    backgroundColor: "#E9F8EE",
+    backgroundColor: "#1C1026",
   },
-  cashButtonText: { color: "#087C2B", fontWeight: "700", fontSize: 12 },
+  cashButtonText: { color: "#C14BFF", fontWeight: "700", fontSize: 11 },
   historyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#130D1A",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: "#352341",
     padding: 16,
     marginTop: 14,
   },
-  historyTitle: { color: "#17365E", fontSize: 16, fontWeight: "800" },
-  historyEmpty: { color: "#607A98", fontSize: 13, marginTop: 10 },
+  historyTitle: { color: "#FBF8FF", fontSize: 14, fontWeight: "800" },
+  historyEmpty: { color: "#B9AFC4", fontSize: 12, marginTop: 10 },
   historyRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "#EDF7FF",
+    borderTopColor: "#1C1026",
     paddingVertical: 12,
     marginTop: 10,
   },
   historyCopy: { flex: 1 },
-  historyStatus: { color: "#17365E", fontSize: 13, fontWeight: "700" },
-  historyDetails: { color: "#607A98", fontSize: 12, marginTop: 4 },
+  historyStatus: { color: "#FBF8FF", fontSize: 12, fontWeight: "700" },
+  historyDetails: { color: "#B9AFC4", fontSize: 11, marginTop: 4 },
   historyAmount: {
-    color: "#17365E",
-    fontSize: 13,
+    color: "#FBF8FF",
+    fontSize: 12,
     fontWeight: "800",
     marginLeft: 12,
   },
   feeBreakdown: {
     borderTopWidth: 1,
-    borderTopColor: "#EDF7FF",
+    borderTopColor: "#1C1026",
     marginTop: 10,
     paddingTop: 4,
   },
   resumeFeeButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
     marginTop: 8,
   },
-  resumeFeeText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
+  resumeFeeText: { color: "#FFFFFF", fontWeight: "700", fontSize: 11 },
   row: {
     minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#EDF7FF",
+    borderBottomColor: "#1C1026",
   },
-  rowLabel: { color: "#607A98", fontSize: 13 },
-  rowValue: { color: "#17365E", fontSize: 13, fontWeight: "700" },
+  rowLabel: { color: "#B9AFC4", fontSize: 12 },
+  rowValue: { color: "#FBF8FF", fontSize: 12, fontWeight: "700" },
   note: {
-    color: "#607A98",
-    fontSize: 12,
+    color: "#B9AFC4",
+    fontSize: 11,
     lineHeight: 18,
     marginTop: 16,
     textAlign: "center",
@@ -831,9 +910,9 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     gap: 10,
   },
-  stateText: { color: "#607A98", fontSize: 13, textAlign: "center" },
+  stateText: { color: "#B9AFC4", fontSize: 12, textAlign: "center" },
   retryButton: {
-    backgroundColor: "#159B3A",
+    backgroundColor: "#9B2BE7",
     borderRadius: 9,
     paddingHorizontal: 16,
     paddingVertical: 9,

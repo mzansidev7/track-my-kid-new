@@ -1094,7 +1094,7 @@ export default function ManageVehicle() {
     return (
       <SafeAreaView style={styles.container} edges={["bottom", "top"]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#1769D2" />
+          <ActivityIndicator size="large" color="#35D9B3" />
           <Text style={styles.loadingText}>Loading vehicle details...</Text>
         </View>
       </SafeAreaView>
@@ -1208,7 +1208,7 @@ export default function ManageVehicle() {
                 <MaterialIcons
                   name="directions-bus"
                   size={64}
-                  color="#1769D2"
+                  color="#35D9B3"
                   opacity={0.8}
                 />
               </View>
@@ -1281,7 +1281,7 @@ export default function ManageVehicle() {
               style={styles.secondaryQuickAction}
               onPress={() => setShowLocationMap(true)}
             >
-              <MaterialIcons name="fullscreen" size={17} color="#1769D2" />
+              <MaterialIcons name="fullscreen" size={17} color="#35D9B3" />
               <Text style={styles.secondaryQuickActionLabel}>View on Map</Text>
             </TouchableOpacity>
           </View>
@@ -1291,7 +1291,7 @@ export default function ManageVehicle() {
             {/* Vehicle Information Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="info" size={20} color="#1769D2" />
+                <MaterialIcons name="info" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Vehicle Information</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1321,7 +1321,7 @@ export default function ManageVehicle() {
             {/* Assigned Driver Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="person" size={20} color="#1769D2" />
+                <MaterialIcons name="person" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Assigned Driver</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1334,7 +1334,7 @@ export default function ManageVehicle() {
                           : "person"
                       }
                       size={28}
-                      color="#1769D2"
+                      color="#35D9B3"
                     />
                   </View>
                   <View style={styles.driverInfo}>
@@ -1360,7 +1360,7 @@ export default function ManageVehicle() {
             {/* Assigned Route Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="route" size={20} color="#1769D2" />
+                <MaterialIcons name="route" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Assigned Route</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1377,7 +1377,7 @@ export default function ManageVehicle() {
             {vehicleImageUrls.length > 0 ? (
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <MaterialIcons name="photo-library" size={19} color="#1769D2" />
+                  <MaterialIcons name="photo-library" size={19} color="#35D9B3" />
                   <Text style={styles.cardTitle}>Vehicle Photos</Text>
                   <Text style={styles.photoCount}>
                     {vehicleImageUrls.length}
@@ -1403,7 +1403,7 @@ export default function ManageVehicle() {
 
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="build" size={20} color="#1769D2" />
+                <MaterialIcons name="build" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Maintenance</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1441,7 +1441,7 @@ export default function ManageVehicle() {
             {/* Insurance & License Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="verified" size={20} color="#1769D2" />
+                <MaterialIcons name="verified" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Insurance & License</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1486,7 +1486,7 @@ export default function ManageVehicle() {
             {/* GPS Status Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="location-on" size={20} color="#1769D2" />
+                <MaterialIcons name="location-on" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Vehicle Location</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1519,7 +1519,7 @@ export default function ManageVehicle() {
                   <MaterialIcons
                     name="map"
                     size={16}
-                    color="#1769D2"
+                    color="#35D9B3"
                   />
                   <Text style={styles.locationButtonText}>View Full Map</Text>
                 </TouchableOpacity>
@@ -1529,7 +1529,7 @@ export default function ManageVehicle() {
             {/* Statistics Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="show-chart" size={20} color="#1769D2" />
+                <MaterialIcons name="show-chart" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Statistics</Text>
               </View>
               <View style={styles.statsGrid}>
@@ -1569,7 +1569,7 @@ export default function ManageVehicle() {
             {/* QR Code Card */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <MaterialIcons name="qr-code" size={20} color="#1769D2" />
+                <MaterialIcons name="qr-code" size={20} color="#35D9B3" />
                 <Text style={styles.cardTitle}>Vehicle QR Code</Text>
               </View>
               <View style={styles.cardContent}>
@@ -1608,7 +1608,7 @@ export default function ManageVehicle() {
               style={styles.locationMapBack}
               onPress={() => setShowLocationMap(false)}
             >
-              <MaterialIcons name="arrow-back" size={21} color="#17385F" />
+              <MaterialIcons name="arrow-back" size={21} color="#F4FBF8" />
             </TouchableOpacity>
             <View style={styles.locationMapHeaderText}>
               <Text style={styles.locationMapTitle}>Vehicle Location</Text>
@@ -1664,7 +1664,7 @@ export default function ManageVehicle() {
           )}
           <View style={styles.locationMapFooter}>
             <View style={styles.vehicleMiniIcon}>
-              <MaterialIcons name="directions-bus" size={21} color="#1769D2" />
+              <MaterialIcons name="directions-bus" size={21} color="#35D9B3" />
             </View>
             <View style={styles.locationMapFooterText}>
               <Text style={styles.locationMapVehicleName}>{vehicle.name}</Text>
@@ -1690,7 +1690,7 @@ export default function ManageVehicle() {
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowSwitchDriverModal(false)}>
-                <MaterialIcons name="close" size={24} color="#1F2937" />
+                <MaterialIcons name="close" size={24} color="#F4FBF8" />
               </TouchableOpacity>
             </View>
 
@@ -1719,7 +1719,7 @@ export default function ManageVehicle() {
                         <MaterialIcons
                           name="person"
                           size={24}
-                          color="#1769D2"
+                          color="#35D9B3"
                         />
                       </View>
                       <View style={styles.driverItemInfo}>
@@ -1742,12 +1742,12 @@ export default function ManageVehicle() {
                       <MaterialIcons
                         name="check-circle"
                         size={24}
-                        color="#10B981"
+                        color="#35D9B3"
                       />
                     )}
                     {assigningDriver &&
                       selectedSwitchingDriverId === driver.id && (
-                        <ActivityIndicator size="small" color="#1769D2" />
+                        <ActivityIndicator size="small" color="#35D9B3" />
                       )}
                   </TouchableOpacity>
                 );
@@ -1771,7 +1771,7 @@ export default function ManageVehicle() {
             <View style={styles.optionsDrawerHeader}>
               <Text style={styles.optionsDrawerTitle}>Vehicle Actions</Text>
               <TouchableOpacity onPress={() => setShowOptionsDrawer(false)}>
-                <MaterialIcons name="close" size={24} color="#1F2937" />
+                <MaterialIcons name="close" size={24} color="#F4FBF8" />
               </TouchableOpacity>
             </View>
             <TouchableOpacity
@@ -1781,7 +1781,7 @@ export default function ManageVehicle() {
                 openEditVehicle();
               }}
             >
-              <MaterialIcons name="edit" size={24} color="#4F46E5" />
+              <MaterialIcons name="edit" size={24} color="#00B894" />
               <Text style={styles.optionsDrawerItemText}>Edit Vehicle</Text>
             </TouchableOpacity>
 
@@ -1841,7 +1841,7 @@ export default function ManageVehicle() {
                   <MaterialIcons
                     name="directions-bus"
                     size={18}
-                    color="#1769D2"
+                    color="#35D9B3"
                   />
                 </View>
                 <View>
@@ -1977,7 +1977,7 @@ const StatItem = ({
   value: string;
 }) => (
   <View style={styles.statItem}>
-    <MaterialIcons name={icon as any} size={24} color="#1769D2" />
+    <MaterialIcons name={icon as any} size={24} color="#35D9B3" />
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statLabel}>{label}</Text>
   </View>
@@ -1986,7 +1986,7 @@ const StatItem = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0D1713",
   },
   pageContent: {
     flex: 1,
@@ -2006,7 +2006,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: "#6B7280",
+    color: "#B1C4BC",
   },
   errorContainer: {
     flex: 1,
@@ -2017,14 +2017,14 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
     marginTop: 12,
   },
   errorButton: {
     marginTop: 20,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     borderRadius: 8,
   },
   errorButtonText: {
@@ -2034,9 +2034,9 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 0,
     paddingBottom: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderBottomWidth: 1,
-    borderBottomColor: "#E1EDF9",
+    borderBottomColor: "#294238",
   },
   headerTop: {
     flexDirection: "row",
@@ -2044,7 +2044,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
     height: 48,
-    backgroundColor: "#17385F",
+    backgroundColor: "#050907",
     gap: 10,
   },
   backButton: {
@@ -2077,7 +2077,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: "hidden",
     marginBottom: 10,
-    backgroundColor: "#EAF3FB",
+    backgroundColor: "#13231D",
   },
   vehicleImage: {
     width: "100%",
@@ -2088,7 +2088,7 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#EAF3FB",
+    backgroundColor: "#13231D",
   },
   vehicleNameBadgeContainer: {
     flexDirection: "row",
@@ -2100,11 +2100,11 @@ const styles = StyleSheet.create({
   vehicleNameInHeader: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   vehicleModel: {
     fontSize: 11,
-    color: "#647C95",
+    color: "#B1C4BC",
     marginTop: 4,
   },
   statusBadge: {
@@ -2130,7 +2130,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 4,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   primaryQuickAction: {
     flex: 1,
@@ -2140,7 +2140,7 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: 38,
     borderRadius: 9,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
   },
   primaryQuickActionLabel: {
     color: "#FFFFFF",
@@ -2155,12 +2155,12 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: 38,
     borderRadius: 9,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#1769D2",
+    borderColor: "#00B894",
   },
   secondaryQuickActionLabel: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -2168,11 +2168,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     paddingBottom: 40,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   card: {
-    backgroundColor: "#FFF",
-    borderColor: "#DDEBFA",
+    backgroundColor: "#0D1713",
+    borderColor: "#294238",
     borderWidth: 1,
     borderRadius: 13,
     marginBottom: 10,
@@ -2185,21 +2185,21 @@ const styles = StyleSheet.create({
   },
   dangerCard: {
     borderLeftWidth: 4,
-    borderLeftColor: "#EF4444",
+    borderLeftColor: "#294238",
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 13,
     paddingVertical: 10,
-    backgroundColor: "#F5F9FE",
+    backgroundColor: "#13231D",
     borderBottomWidth: 1,
-    borderBottomColor: "#E7F0F9",
+    borderBottomColor: "#294238",
     gap: 8,
   },
   photoCount: {
     marginLeft: "auto",
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
   },
   photoStrip: {
@@ -2210,12 +2210,12 @@ const styles = StyleSheet.create({
     width: 86,
     height: 60,
     borderRadius: 8,
-    backgroundColor: "#EAF3FB",
+    backgroundColor: "#13231D",
   },
   cardTitle: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   dangerTitle: {
     color: "#EF4444",
@@ -2230,7 +2230,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "#294238",
   },
   infoRowHighlighted: {
     backgroundColor: "rgba(245, 158, 11, 0.05)",
@@ -2245,12 +2245,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 13,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontWeight: "500",
   },
   infoValue: {
     fontSize: 13,
-    color: "#1F2937",
+    color: "#F4FBF8",
     fontWeight: "600",
   },
   infoValueHighlighted: {
@@ -2265,7 +2265,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -2276,18 +2276,18 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
   driverStatus: {
     fontSize: 12,
-    color: "#10B981",
+    color: "#35D9B3",
     marginTop: 2,
   },
   assignDriverButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     paddingVertical: 9,
     borderRadius: 8,
     gap: 6,
@@ -2306,7 +2306,7 @@ const styles = StyleSheet.create({
   },
   maintenanceStatusText: {
     fontSize: 12,
-    color: "#10B981",
+    color: "#35D9B3",
     fontWeight: "500",
   },
   insuranceStatus: {
@@ -2317,7 +2317,7 @@ const styles = StyleSheet.create({
   },
   insuranceStatusText: {
     fontSize: 12,
-    color: "#10B981",
+    color: "#35D9B3",
     fontWeight: "500",
   },
   gpsStatusRow: {
@@ -2330,22 +2330,22 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#10B981",
+    backgroundColor: "#13231D",
   },
   onlineBadgeActive: {
-    backgroundColor: "#10B981",
+    backgroundColor: "#13231D",
   },
   offlineBadge: {
-    backgroundColor: "#EF4444",
+    backgroundColor: "#13231D",
   },
   onlineText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
   lastUpdateText: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginLeft: 20,
   },
   locationButton: {
@@ -2353,14 +2353,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    borderColor: "#1769D2",
+    borderColor: "#00B894",
     borderWidth: 1,
     borderRadius: 9,
     paddingVertical: 9,
     marginTop: 12,
   },
   locationButtonText: {
-    color: "#1769D2",
+    color: "#35D9B3",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -2373,7 +2373,7 @@ const styles = StyleSheet.create({
   },
   statItem: {
     width: "48%",
-    backgroundColor: "#F3F8FE",
+    backgroundColor: "#13231D",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 8,
@@ -2382,12 +2382,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#1F2937",
+    color: "#F4FBF8",
     marginTop: 6,
   },
   statLabel: {
     fontSize: 11,
-    color: "#6B7280",
+    color: "#B1C4BC",
     marginTop: 2,
   },
   dangerButton: {
@@ -2404,7 +2404,7 @@ const styles = StyleSheet.create({
   },
   buttonDivider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#13231D",
   },
   deleteButton: {
     flexDirection: "row",
@@ -2438,7 +2438,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.5)",
   },
   indicatorDotActive: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
   },
   qrCodeContainer: {
     alignItems: "center",
@@ -2452,7 +2452,7 @@ const styles = StyleSheet.create({
   },
   qrCodeText: {
     fontSize: 12,
-    color: "#6B7280",
+    color: "#B1C4BC",
     fontStyle: "italic",
   },
   noQrContainer: {
@@ -2462,7 +2462,7 @@ const styles = StyleSheet.create({
   },
   noQrText: {
     fontSize: 14,
-    color: "#9CA3AF",
+    color: "#82968D",
   },
   modalOverlay: {
     position: "absolute",
@@ -2475,16 +2475,16 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   modalContent: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "80%",
     overflow: "hidden",
     borderTopWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
   },
   optionsDrawerContent: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 18,
@@ -2501,7 +2501,7 @@ const styles = StyleSheet.create({
   optionsDrawerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1F2937",
+    color: "#F4FBF8",
   },
   optionsDrawerItem: {
     flexDirection: "row",
@@ -2510,18 +2510,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#0D1713",
   },
   optionsDrawerItemText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   optionsDrawerSectionHeader: {
     paddingTop: 18,
     paddingBottom: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
+    borderTopColor: "#294238",
   },
   optionsDrawerSectionTitle: {
     fontSize: 14,
@@ -2529,7 +2529,7 @@ const styles = StyleSheet.create({
     color: "#EF4444",
   },
   dangerZoneItem: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#35151D",
   },
   modalHeader: {
     flexDirection: "row",
@@ -2538,15 +2538,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: "#294238",
   },
   modalTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#17385F",
+    color: "#F4FBF8",
   },
   assignmentVehicleLabel: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 3,
   },
@@ -2562,16 +2562,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 8,
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
   },
   driverItemSelected: {
-    backgroundColor: "#EDF6FF",
-    borderColor: "#1769D2",
+    backgroundColor: "#13231D",
+    borderColor: "#00B894",
   },
   driverItemOwner: {
-    backgroundColor: "#F0F9FF",
+    backgroundColor: "#13231D",
     borderColor: "#0EA5E9",
     borderWidth: 1.5,
   },
@@ -2585,7 +2585,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2600,12 +2600,12 @@ const styles = StyleSheet.create({
   driverItemName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1F2937",
+    color: "#F4FBF8",
     flex: 1,
   },
   driverItemEmail: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: "#82968D",
     marginTop: 2,
   },
   ownerBadge: {
@@ -2624,7 +2624,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 20,
     paddingVertical: 12,
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     borderRadius: 8,
     alignItems: "center",
   },
@@ -2635,7 +2635,7 @@ const styles = StyleSheet.create({
   },
   locationMapScreen: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   locationMapHeader: {
     flexDirection: "row",
@@ -2643,9 +2643,9 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderBottomWidth: 1,
-    borderBottomColor: "#DDEBFA",
+    borderBottomColor: "#294238",
   },
   locationMapBack: {
     width: 34,
@@ -2653,18 +2653,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF5FC",
+    backgroundColor: "#13231D",
   },
   locationMapHeaderText: {
     flex: 1,
   },
   locationMapTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "700",
   },
   locationMapSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 2,
   },
@@ -2680,7 +2680,7 @@ const styles = StyleSheet.create({
   locationMap: {
     flex: 1,
     width: "100%",
-    backgroundColor: "#E6EEF6",
+    backgroundColor: "#13231D",
   },
   noLocationState: {
     flex: 1,
@@ -2690,13 +2690,13 @@ const styles = StyleSheet.create({
   },
   noLocationTitle: {
     marginTop: 12,
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 15,
     fontWeight: "700",
   },
   noLocationDescription: {
     marginTop: 6,
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 12,
     textAlign: "center",
     lineHeight: 18,
@@ -2706,9 +2706,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     padding: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderTopWidth: 1,
-    borderTopColor: "#DDEBFA",
+    borderTopColor: "#294238",
   },
   vehicleMiniIcon: {
     width: 38,
@@ -2716,13 +2716,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
   },
   locationMapFooterText: {
     flex: 1,
   },
   locationMapVehicleName: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -2733,12 +2733,12 @@ const styles = StyleSheet.create({
   },
   editModalContent: {
     height: "92%",
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#DDEBFA",
+    borderColor: "#294238",
   },
   editModalHeader: {
     flexDirection: "row",
@@ -2746,9 +2746,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderBottomWidth: 1,
-    borderBottomColor: "#DDEBFA",
+    borderBottomColor: "#294238",
   },
   editModalTitleGroup: {
     flexDirection: "row",
@@ -2759,17 +2759,17 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EAF3FE",
+    backgroundColor: "#13231D",
     alignItems: "center",
     justifyContent: "center",
   },
   editModalTitle: {
-    color: "#17385F",
+    color: "#F4FBF8",
     fontSize: 14,
     fontWeight: "700",
   },
   editModalSubtitle: {
-    color: "#71869C",
+    color: "#B1C4BC",
     fontSize: 10,
     marginTop: 2,
   },
@@ -2779,7 +2779,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F6FB",
+    backgroundColor: "#13231D",
   },
   editModalBody: {
     flex: 1,
@@ -2794,30 +2794,30 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 11,
-    color: "#526981",
+    color: "#B1C4BC",
     fontWeight: "600",
     marginBottom: 6,
   },
   textInput: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D1713",
     borderWidth: 1,
-    borderColor: "#D8E7F6",
+    borderColor: "#294238",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
-    color: "#1F3552",
+    color: "#F4FBF8",
   },
   editModalFooter: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: "#DDEBFA",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: "#294238",
+    backgroundColor: "#0D1713",
   },
   saveButton: {
-    backgroundColor: "#1769D2",
+    backgroundColor: "#00B894",
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",

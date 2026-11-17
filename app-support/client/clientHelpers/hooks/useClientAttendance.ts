@@ -39,7 +39,8 @@ export const getClientDate = (value = new Date()) =>
 export const useClientAttendance = (selectedDate = getClientDate()) => {
   const { user } = useContext(AuthContext);
   const date = selectedDate;
-  const cacheKey = `clientAttendance:${user?.userData?.id || "current"}:${date}`;
+  const userId = user?.userData?.id || user?.id;
+  const cacheKey = userId ? `clientAttendance:${userId}:${date}` : null;
   const [attendance, setAttendance] = useState<ClientAttendanceItem[]>([]);
   const [history, setHistory] = useState<ClientAttendanceHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,10 +122,12 @@ export const useClientAttendance = (selectedDate = getClientDate()) => {
       const nextHistory = Array.from(historyByDate.values()).sort((a, b) =>
         b.date.localeCompare(a.date),
       );
-      await AsyncStorage.setItem(
-        cacheKey,
-        JSON.stringify({ attendance: next, history: nextHistory }),
-      );
+      if (cacheKey) {
+        await AsyncStorage.setItem(
+          cacheKey,
+          JSON.stringify({ attendance: next, history: nextHistory }),
+        );
+      }
       setAttendance(next);
       setHistory(nextHistory);
     } catch (error) {
@@ -135,18 +138,38 @@ export const useClientAttendance = (selectedDate = getClientDate()) => {
   }, [cacheKey, date, user]);
 
   useEffect(() => {
-    AsyncStorage.getItem(cacheKey)
-      .then((cached) => {
-        if (!cached) return;
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          setAttendance(parsed);
-          return;
+    let active = true;
+    const hydrateAndRefresh = async () => {
+      if (cacheKey) {
+        try {
+          const cached = await AsyncStorage.getItem(cacheKey);
+          if (cached && active) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              setAttendance(parsed);
+            } else {
+              setAttendance(
+                Array.isArray(parsed.attendance) ? parsed.attendance : [],
+              );
+              setHistory(
+                Array.isArray(parsed.history) ? parsed.history : [],
+              );
+            }
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error("Failed to load client attendance cache:", error);
         }
-        setAttendance(Array.isArray(parsed.attendance) ? parsed.attendance : []);
-        setHistory(Array.isArray(parsed.history) ? parsed.history : []);
-      })
-      .finally(() => loadAttendance());
+      }
+      if (active) void loadAttendance();
+    };
+
+    setAttendance([]);
+    setHistory([]);
+    void hydrateAndRefresh();
+    return () => {
+      active = false;
+    };
   }, [cacheKey, loadAttendance]);
 
   useEffect(() => {

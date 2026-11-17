@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { OWNER_COLORS } from "@/styles/theme";
 
 type OwnerCompactHeaderProps = {
   title: string;
@@ -20,7 +21,11 @@ export default function OwnerCompactHeader({
           onPress={onBackPress}
           accessibilityLabel={`Back from ${title}`}
         >
-          <MaterialIcons name="arrow-back" size={21} color="#FFFFFF" />
+          <MaterialIcons
+            name="arrow-back"
+            size={21}
+            color={OWNER_COLORS.textPrimary}
+          />
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -32,7 +37,7 @@ export default function OwnerCompactHeader({
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: "#17385F",
+    backgroundColor: OWNER_COLORS.background,
   },
   header: {
     minHeight: 52,
@@ -51,7 +56,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    color: "#FFFFFF",
+    color: OWNER_COLORS.textPrimary,
     fontSize: 16,
     fontWeight: "700",
   },

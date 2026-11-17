@@ -46,6 +46,7 @@ import {
 } from "../../../../store/asyncStorage/incidentReportsCache";
 import { resolveWorkingBaseUrl } from "../../../../url";
 import { useTheme } from "../../../../styles/theme";
+import AdminMessages from "../../../../components/messages/AdminMessages";
 
 const authHeaderKey = "Authorization";
 
@@ -348,8 +349,6 @@ export default function AdminToolScreen() {
   const [toolData, setToolData] = useState<Row>({});
   const [settings, setSettings] = useState<Row>({});
   const [profile, setProfile] = useState<Row>({});
-  const [messages, setMessages] = useState<Row[]>([]);
-  const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [requestKind, setRequestKind] = useState("ticket");
   const [incidentFilter, setIncidentFilter] = useState<IncidentFilter>("all");
@@ -397,6 +396,10 @@ export default function AdminToolScreen() {
     useState<SupportUserForm>(emptySupportUser);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    current: false,
+    new: false,
+  });
   const [profileName, setProfileName] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
   const driversRequestInFlight = useRef(false);
@@ -466,24 +469,6 @@ export default function AdminToolScreen() {
           };
           setToolData(result);
           setItems(rowsFor(tool, result));
-        } else if (tool === "messages" && chatId) {
-          const driverConversation = conversationType === "admin_driver";
-          const linkedConversation = [
-            "client_driver",
-            "client_owner",
-            "driver_owner",
-            "client_school",
-            "owner_school",
-            "driver_school",
-            "school_staff",
-          ].includes(conversationType || "");
-          const path = linkedConversation
-            ? `/admin/linked-conversations/${encodeURIComponent(chatId)}/messages`
-            : driverConversation
-              ? `/admin/driver-conversations/${encodeURIComponent(chatId)}/messages`
-              : `/admin/user-conversations/${encodeURIComponent(chatId)}/messages`;
-          const result = await apiRequest(path, token);
-          setMessages(Array.isArray(result) ? result.map(asRow) : []);
         } else if (tool === "profile") {
           const result = asRow(await apiRequest("/admin/profile", token));
           const details = asRow(result.admin);
@@ -522,7 +507,7 @@ export default function AdminToolScreen() {
         setRefreshing(false);
       }
     },
-    [adminUserId, chatId, conversationType, isSuperAdmin, token, tool],
+    [adminUserId, isSuperAdmin, token, tool],
   );
 
   useFocusEffect(
@@ -570,7 +555,7 @@ export default function AdminToolScreen() {
             }
           }
         }
-        if (active) void loadData();
+        if (active && tool !== "messages") void loadData();
       };
       void initialize();
       return () => {
@@ -724,6 +709,10 @@ export default function AdminToolScreen() {
         "owners",
         "tracking_sessions",
         "route_children",
+        "school_trips",
+        "school_trip_vehicles",
+        "school_trip_tracking",
+        "school_trip_learners",
       ]);
       const updateRealtimeStatus = (
         status: "connecting" | "live" | "unavailable",
@@ -876,27 +865,6 @@ export default function AdminToolScreen() {
     }
   };
 
-  const sendMessage = async () => {
-    if (!token || !chatId || !draft.trim() || saving) return;
-    setSaving(true);
-    try {
-      const driverConversation = conversationType === "admin_driver";
-      const endpoint = driverConversation
-        ? `/admin/driver-conversations/${encodeURIComponent(chatId)}/messages`
-        : `/admin/user-conversations/${encodeURIComponent(chatId)}/messages`;
-      await apiRequest(endpoint, token, {
-        method: "POST",
-        body: JSON.stringify({ content: draft.trim() }),
-      });
-      setDraft("");
-      await loadData(true);
-    } catch (requestError) {
-      Alert.alert("Message was not sent", errorMessage(requestError));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const updateTicket = async (row: Row) => {
     if (!token) return;
     const status = getText(row, "status");
@@ -906,12 +874,30 @@ export default function AdminToolScreen() {
         : status === "in_progress"
           ? "resolved"
           : "open";
+    const update = async () => {
+      try {
+        await apiRequest(`/admin/support-tickets/${String(row.id)}`, token, {
+          method: "PATCH",
+          body: JSON.stringify({ status: nextStatus }),
+        });
+        await loadData(true);
+      } catch (requestError) {
+        Alert.alert("Ticket update failed", errorMessage(requestError));
+      }
+    };
+    if (["resolved", "closed"].includes(nextStatus)) {
+      Alert.alert(
+        "Close this ticket?",
+        `Ticket #${getText(row, "id")} will be automatically removed 48 hours after closing.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Close ticket", onPress: () => void update() },
+        ],
+      );
+      return;
+    }
     try {
-      await apiRequest(`/admin/support-tickets/${String(row.id)}`, token, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      await loadData(true);
+      await update();
     } catch (requestError) {
       Alert.alert("Ticket update failed", errorMessage(requestError));
     }
@@ -967,7 +953,7 @@ export default function AdminToolScreen() {
 
     Alert.alert(
       "Resolve this incident?",
-      "Only resolve it after the follow-up is complete.",
+      `Incident #${getText(row, "id")} will be automatically removed 48 hours after closing. Only resolve it after the follow-up is complete.`,
       [
         { text: "Keep investigating", style: "cancel" },
         {
@@ -1258,15 +1244,61 @@ export default function AdminToolScreen() {
       );
       details.push(getText(row, "route.route_name"));
     } else if (tool === "trips") {
-      details.push(getText(row, "route.route_name") || "Route unavailable");
+      const isSchoolTrip = getText(row, "trip_type") === "school_trip";
+      details.push(
+        isSchoolTrip
+          ? `School: ${getText(row, "school.name") || "Unknown"}`
+          : getText(row, "route.route_name") || "Route unavailable",
+      );
       details.push(
         `Driver: ${getText(row, "driver.users.name") || "Unassigned"}`,
       );
+      if (isSchoolTrip && getText(row, "coordinator.name")) {
+        details.push(`Coordinator: ${getText(row, "coordinator.name")}`);
+      }
       details.push(
-        `Vehicle: ${getText(row, "vehicle.license_plate") || "Unassigned"}`,
+        `Vehicle: ${getText(row, "vehicle.license_plate", "vehicle.registration_number") || "Unassigned"}`,
       );
       details.push(`${getText(row, "studentCount") || "0"} students`);
-      details.push(pretty(getText(row, "status") || "unknown"));
+      if (isSchoolTrip) {
+        const tripStatus = getText(row, "trip_status");
+        const phase = getText(row, "journey_phase");
+        const locationRecordedAt = getText(row, "location.recorded_at");
+        const locationAge = locationRecordedAt
+          ? Date.now() - new Date(locationRecordedAt).getTime()
+          : Number.POSITIVE_INFINITY;
+        const trackingSummary = ["confirmed", "preparing"].includes(tripStatus)
+          ? `Trip ${pretty(tripStatus)}`
+          : phase === "completed"
+            ? "Journey complete"
+            : phase === "at_destination"
+              ? "At destination · location sharing paused"
+              : !locationRecordedAt
+                ? "No GPS update yet"
+                : locationAge <= 2 * 60 * 1000
+                  ? `${pretty(phase || "outbound")} · live location`
+                  : `Last GPS update ${formatDate(locationRecordedAt)} · stale`;
+        details.push(`Trip status: ${pretty(tripStatus || "unknown")}`);
+        if (!["confirmed", "preparing"].includes(tripStatus)) {
+          details.push(`Journey: ${pretty(phase || "outbound")}`);
+        }
+        details.push(trackingSummary);
+        if (
+          locationAge <= 2 * 60 * 1000 &&
+          phase !== "at_destination" &&
+          getText(row, "location.latitude") &&
+          getText(row, "location.longitude")
+        ) {
+          details.push(
+            `GPS: ${getText(row, "location.latitude")}, ${getText(row, "location.longitude")}`,
+          );
+        }
+        if (getText(row, "location.shared_by.name")) {
+          details.push(`Shared by ${getText(row, "location.shared_by.name")}`);
+        }
+      } else {
+        details.push(pretty(getText(row, "status") || "unknown"));
+      }
     } else if (tool === "vehicles") {
       const scope = getVehicleScope(row);
       details.push(
@@ -1396,7 +1428,12 @@ export default function AdminToolScreen() {
       return getText(row, "name", "email") || "Unnamed user";
     if (tool === "drivers")
       return getText(row, "users.name", "users.email") || "Driver";
-    if (tool === "trips") return getText(row, "route.route_name") || "Trip";
+    if (tool === "trips") {
+      const title = getText(row, "route.route_name") || "Trip";
+      return getText(row, "trip_type") === "school_trip"
+        ? `School trip · ${title}`
+        : title;
+    }
     if (tool === "vehicles")
       return getText(row, "name", "license_plate") || "Vehicle";
     if (tool === "payments")
@@ -1471,29 +1508,6 @@ export default function AdminToolScreen() {
         >
           <MaterialIcons name="chat" size={16} color="#2563EB" />
           <Text style={styles.actionText}>Message</Text>
-        </TouchableOpacity>
-      );
-    }
-    if (tool === "messages") {
-      return (
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() =>
-            router.push({
-              pathname: "/(admin)/(tabs)/tools/messages",
-              params: {
-                chatId: getText(row, "id"),
-                conversationType: getText(row, "conversation_type"),
-                conversationLabel: getTitle(row),
-                conversationAvatar:
-                  getText(row, "participant.avatar") ||
-                  getText(asRow(row.participants?.[0]), "avatar"),
-              },
-            } as never)
-          }
-        >
-          <MaterialIcons name="open-in-new" size={16} color="#2563EB" />
-          <Text style={styles.actionText}>Open</Text>
         </TouchableOpacity>
       );
     }
@@ -1658,156 +1672,6 @@ export default function AdminToolScreen() {
     }
     return null;
   };
-
-  const messageParticipantAvatar =
-    conversationAvatar ||
-    getText(
-      messages.find((message) => getText(message, "users.avatar")) || {},
-      "users.avatar",
-    );
-
-  const renderMessages = () => (
-    <>
-      {chatId ? (
-        <>
-          <View style={styles.chatHeader}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <MaterialIcons name="arrow-back" size={20} color="#1E293B" />
-            </TouchableOpacity>
-            {messageParticipantAvatar ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="View conversation participant profile photo"
-                onPress={() =>
-                  setSelectedUserPhoto({
-                    uri: messageParticipantAvatar,
-                    name: conversationLabel || "Conversation participant",
-                  })
-                }
-              >
-                <Image
-                  source={{ uri: messageParticipantAvatar }}
-                  style={styles.messageParticipantAvatar}
-                />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.messageParticipantAvatarFallback}>
-                <MaterialIcons name="person" size={22} color="#2563EB" />
-              </View>
-            )}
-            <Text style={styles.chatTitle}>
-              {conversationLabel ||
-                (conversationType
-                  ? conversationTypeLabels[conversationType] ||
-                    pretty(conversationType)
-                  : "Conversation")}
-            </Text>
-          </View>
-          {[
-            "client_driver",
-            "client_owner",
-            "driver_owner",
-            "client_school",
-            "owner_school",
-            "driver_school",
-            "school_staff",
-          ].includes(conversationType || "") ? (
-            <Text style={styles.readOnlyNotice}>
-              Read-only review · messages are not marked as read
-            </Text>
-          ) : null}
-          {messages.map((message) => {
-            const ownMessage =
-              getText(message, "sender_id") ===
-              String(user?.userData?.id || "");
-            const senderAvatar = getText(message, "users.avatar");
-            return (
-              <View
-                key={getText(message, "id")}
-                style={[
-                  styles.messageRow,
-                  ownMessage && styles.ownMessageRow,
-                ]}
-              >
-                {!ownMessage && senderAvatar ? (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${getText(message, "users.name") || "User"} profile photo`}
-                    onPress={() =>
-                      setSelectedUserPhoto({
-                        uri: senderAvatar,
-                        name: getText(message, "users.name") || "User",
-                      })
-                    }
-                  >
-                    <Image
-                      source={{ uri: senderAvatar }}
-                      style={styles.messageBubbleAvatar}
-                    />
-                  </TouchableOpacity>
-                ) : null}
-                <View
-                  style={[
-                    styles.messageBubble,
-                    ownMessage ? styles.ownMessage : styles.otherMessage,
-                  ]}
-                >
-                  <Text style={styles.messageSender}>
-                    {ownMessage
-                      ? "You"
-                      : getText(message, "users.name") || "User"}
-                  </Text>
-                  <Text style={styles.messageText}>
-                    {getText(message, "content")}
-                  </Text>
-                  <Text style={styles.messageTime}>
-                    {getText(message, "sent_at")
-                      ? formatDate(getText(message, "sent_at"))
-                      : ""}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-          {![
-            "client_driver",
-            "client_owner",
-            "driver_owner",
-            "client_school",
-            "owner_school",
-            "driver_school",
-            "school_staff",
-          ].includes(conversationType || "") ? (
-            <View style={styles.composer}>
-              <TextInput
-                style={styles.composerInput}
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Write a reply..."
-                multiline
-              />
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={() => void sendMessage()}
-                disabled={saving || !draft.trim()}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <MaterialIcons name="send" size={18} color="#FFFFFF" />
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : null}
-        </>
-      ) : (
-        renderRows()
-      )}
-    </>
-  );
 
   const renderRows = () => (
     <>
@@ -2030,22 +1894,19 @@ export default function AdminToolScreen() {
         const userAvatar =
           tool === "users"
             ? getText(
-                row,
-                "avatar",
-                "profiles.client.avatar",
-                "profiles.driver.avatar",
-                "profiles.owner.avatar",
-              )
-            : tool === "messages"
-              ? getText(row, "participant.avatar") ||
-                getText(asRow(row.participants?.[0]), "avatar")
+              row,
+              "avatar",
+              "profiles.client.avatar",
+              "profiles.driver.avatar",
+              "profiles.owner.avatar",
+            )
             : "";
         const schoolName = tool === "users" ? getText(row, "school.name") : "";
         const schoolLogo = tool === "users" ? getText(row, "school.logo") : "";
         const cardContent = (
           <View style={styles.dataCard}>
             <View style={styles.cardHeading}>
-              {userAvatar && (tool === "users" || tool === "messages") ? (
+              {userAvatar && tool === "users" ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel={`View ${getTitle(row)} profile photo`}
@@ -2059,10 +1920,7 @@ export default function AdminToolScreen() {
                 >
                   <Image
                     source={{ uri: userAvatar }}
-                    style={[
-                      styles.userAvatar,
-                      tool === "messages" && styles.messageParticipantAvatar,
-                    ]}
+                    style={styles.userAvatar}
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
@@ -2220,22 +2078,70 @@ export default function AdminToolScreen() {
       </TouchableOpacity>
       <View style={styles.formDivider} />
       <Text style={styles.sectionHeading}>Change password</Text>
-      <TextInput
-        style={styles.input}
-        value={currentPassword}
-        onChangeText={setCurrentPassword}
-        placeholder="Current password"
-        secureTextEntry
-        autoComplete="current-password"
-      />
-      <TextInput
-        style={styles.input}
-        value={newPassword}
-        onChangeText={setNewPassword}
-        placeholder="New password (8+ characters)"
-        secureTextEntry
-        autoComplete="new-password"
-      />
+      <View style={styles.passwordInput}>
+        <TextInput
+          style={styles.passwordTextInput}
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="Current password"
+          secureTextEntry={!visiblePasswords.current}
+          autoComplete="current-password"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          onPress={() =>
+            setVisiblePasswords((visible) => ({
+              ...visible,
+              current: !visible.current,
+            }))
+          }
+          accessibilityRole="button"
+          accessibilityLabel={
+            visiblePasswords.current
+              ? "Hide current password"
+              : "Show current password"
+          }
+          hitSlop={8}
+        >
+          <MaterialIcons
+            name={visiblePasswords.current ? "visibility-off" : "visibility"}
+            size={20}
+            color="#64748B"
+          />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.passwordInput}>
+        <TextInput
+          style={styles.passwordTextInput}
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="New password (8+ characters)"
+          secureTextEntry={!visiblePasswords.new}
+          autoComplete="new-password"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          onPress={() =>
+            setVisiblePasswords((visible) => ({
+              ...visible,
+              new: !visible.new,
+            }))
+          }
+          accessibilityRole="button"
+          accessibilityLabel={
+            visiblePasswords.new ? "Hide new password" : "Show new password"
+          }
+          hitSlop={8}
+        >
+          <MaterialIcons
+            name={visiblePasswords.new ? "visibility-off" : "visibility"}
+            size={20}
+            color="#64748B"
+          />
+        </TouchableOpacity>
+      </View>
       <TouchableOpacity
         style={styles.secondaryButton}
         onPress={() => void changePassword()}
@@ -2817,6 +2723,20 @@ export default function AdminToolScreen() {
 
   const title = toolTitles[tool] || "Admin tools";
 
+  if (tool === "messages") {
+    return (
+      <AdminMessages
+        key={chatId || "inbox"}
+        token={token || ""}
+        adminUserId={adminUserId}
+        initialChatId={chatId}
+        initialConversationType={conversationType}
+        initialConversationLabel={conversationLabel}
+        initialConversationAvatar={conversationAvatar}
+      />
+    );
+  }
+
   return (
     <SafeAreaView
       style={[styles.safe, { backgroundColor: colors.background }]}
@@ -2869,8 +2789,6 @@ export default function AdminToolScreen() {
           renderProfile()
         ) : tool === "settings" ? (
           renderSettings()
-        ) : tool === "messages" ? (
-          renderMessages()
         ) : (
           <>
             {tool === "payments" ? renderPaymentsSummary() : null}
@@ -3676,6 +3594,24 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 10,
     paddingHorizontal: 11,
+    paddingVertical: 10,
+    color: "#0F172A",
+    fontSize: 12,
+  },
+  passwordInput: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "white",
+    borderRadius: 10,
+  },
+  passwordTextInput: {
+    flex: 1,
+    minWidth: 0,
     paddingVertical: 10,
     color: "#0F172A",
     fontSize: 12,

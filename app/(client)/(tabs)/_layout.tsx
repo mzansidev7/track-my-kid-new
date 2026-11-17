@@ -14,6 +14,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="children" />
       <Tabs.Screen name="messages" />
       <Tabs.Screen name="profile" />
+      <Tabs.Screen name="school-trip/[tripId]" options={{ href: null }} />
     </Tabs>
   );
 }

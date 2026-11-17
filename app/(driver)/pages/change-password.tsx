@@ -9,10 +9,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTheme } from "@/styles/theme";
+import { useDriverTheme } from "@/styles/theme";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { resolveWorkingBaseUrl } from "@/url";
 import DriverHeader from "@/app/(driver)/components/DriverHeader";
@@ -20,12 +21,17 @@ import AppNotification from "@/components/Notification";
 
 const ChangePassword = () => {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors } = useDriverTheme();
   const { user } = useContext(AuthContext);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [notifVisible, setNotifVisible] = useState(false);
@@ -106,63 +112,150 @@ const ChangePassword = () => {
             <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
               Current Password
             </Text>
-            <TextInput
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              placeholder="Current password"
-              placeholderTextColor={colors.text.secondary}
-              secureTextEntry
+            <View
               style={[
-                styles.input,
+                styles.passwordInput,
                 {
                   borderColor: colors.primary,
                   backgroundColor: colors.surface,
-                  color: colors.text.primary,
                 },
               ]}
-            />
+            >
+              <TextInput
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="Current password"
+                placeholderTextColor={colors.text.secondary}
+                secureTextEntry={!visiblePasswords.current}
+                style={[
+                  styles.passwordTextInput,
+                  { color: colors.text.primary },
+                ]}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setVisiblePasswords((visible) => ({
+                    ...visible,
+                    current: !visible.current,
+                  }))
+                }
+                accessibilityRole="button"
+                accessibilityLabel={
+                  visiblePasswords.current
+                    ? "Hide current password"
+                    : "Show current password"
+                }
+                hitSlop={8}
+              >
+                <MaterialIcons
+                  name={visiblePasswords.current ? "visibility-off" : "visibility"}
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ marginBottom: 12 }}>
             <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
               New Password
             </Text>
-            <TextInput
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="New password"
-              placeholderTextColor={colors.text.secondary}
-              secureTextEntry
+            <View
               style={[
-                styles.input,
+                styles.passwordInput,
                 {
                   borderColor: colors.primary,
                   backgroundColor: colors.surface,
-                  color: colors.text.primary,
                 },
               ]}
-            />
+            >
+              <TextInput
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="New password"
+                placeholderTextColor={colors.text.secondary}
+                secureTextEntry={!visiblePasswords.new}
+                style={[
+                  styles.passwordTextInput,
+                  { color: colors.text.primary },
+                ]}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setVisiblePasswords((visible) => ({
+                    ...visible,
+                    new: !visible.new,
+                  }))
+                }
+                accessibilityRole="button"
+                accessibilityLabel={
+                  visiblePasswords.new ? "Hide new password" : "Show new password"
+                }
+                hitSlop={8}
+              >
+                <MaterialIcons
+                  name={visiblePasswords.new ? "visibility-off" : "visibility"}
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ marginBottom: 20 }}>
             <Text style={{ color: colors.text.primary, marginBottom: 6 }}>
               Confirm New Password
             </Text>
-            <TextInput
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirm new password"
-              placeholderTextColor={colors.text.secondary}
-              secureTextEntry
+            <View
               style={[
-                styles.input,
+                styles.passwordInput,
                 {
                   borderColor: colors.primary,
                   backgroundColor: colors.surface,
-                  color: colors.text.primary,
                 },
               ]}
-            />
+            >
+              <TextInput
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm new password"
+                placeholderTextColor={colors.text.secondary}
+                secureTextEntry={!visiblePasswords.confirm}
+                style={[
+                  styles.passwordTextInput,
+                  { color: colors.text.primary },
+                ]}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setVisiblePasswords((visible) => ({
+                    ...visible,
+                    confirm: !visible.confirm,
+                  }))
+                }
+                accessibilityRole="button"
+                accessibilityLabel={
+                  visiblePasswords.confirm
+                    ? "Hide confirmation password"
+                    : "Show confirmation password"
+                }
+                hitSlop={8}
+              >
+                <MaterialIcons
+                  name={
+                    visiblePasswords.confirm ? "visibility-off" : "visibility"
+                  }
+                  size={20}
+                  color={colors.text.secondary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Notification component handles showing messages */}
@@ -201,10 +294,16 @@ const ChangePassword = () => {
 };
 
 const styles = StyleSheet.create({
-  input: {
+  passwordInput: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
     borderRadius: 8,
     paddingHorizontal: 12,
+  },
+  passwordTextInput: {
+    flex: 1,
+    minWidth: 0,
     paddingVertical: 10,
   },
 });

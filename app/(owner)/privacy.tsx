@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useTheme } from "../../styles/theme";
+import { useOwnerTheme } from "../../styles/theme";
 
 const Privacy = () => {
-  const { colors, shadows, getBrandColors } = useTheme();
+  const { colors, shadows, getBrandColors } = useOwnerTheme();
   const ownerColors = getBrandColors("owner");
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },

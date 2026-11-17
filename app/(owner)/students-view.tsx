@@ -11,6 +11,32 @@ import {
 import MapView, { Marker } from "react-native-maps";
 import OwnerCompactHeader from "@/app-support/owner/ownerHelpers/components/OwnerCompactHeader";
 
+const getValidCoordinate = (latitudeValue: unknown, longitudeValue: unknown) => {
+  if (
+    latitudeValue == null ||
+    longitudeValue == null ||
+    latitudeValue === "" ||
+    longitudeValue === ""
+  ) {
+    return null;
+  }
+
+  const latitude = Number(latitudeValue);
+  const longitude = Number(longitudeValue);
+  if (
+    !Number.isFinite(latitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    !Number.isFinite(longitude) ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return null;
+  }
+
+  return { latitude, longitude };
+};
+
 const StudentsView = () => {
   const router = useRouter();
   const { studentData, routeId } = useLocalSearchParams();
@@ -65,19 +91,23 @@ const StudentsView = () => {
       };
     }
 
-    const pickupLat = Number(student.pickup_latitude);
-    const pickupLng = Number(student.pickup_longitude);
-    const dropoffLat = Number(student.dropoff_latitude);
-    const dropoffLng = Number(student.dropoff_longitude);
-
-    const validPoints = [
-      pickupLat && pickupLng
-        ? { latitude: pickupLat, longitude: pickupLng }
-        : null,
-      dropoffLat && dropoffLng
-        ? { latitude: dropoffLat, longitude: dropoffLng }
-        : null,
-    ].filter(Boolean) as { latitude: number; longitude: number }[];
+    const home = getValidCoordinate(
+      student.pickup_latitude,
+      student.pickup_longitude,
+    );
+    const school =
+      getValidCoordinate(
+        student.school_location?.latitude,
+        student.school_location?.longitude,
+      ) ||
+      getValidCoordinate(
+        student.dropoff_latitude,
+        student.dropoff_longitude,
+      );
+    const validPoints = [home, school].filter(
+      (point): point is { latitude: number; longitude: number } =>
+        point !== null,
+    );
 
     if (validPoints.length === 0) {
       return {
@@ -94,12 +124,37 @@ const StudentsView = () => {
     const lng =
       validPoints.reduce((sum, point) => sum + point.longitude, 0) /
       validPoints.length;
+    const latitudes = validPoints.map((point) => point.latitude);
+    const longitudes = validPoints.map((point) => point.longitude);
 
     return {
       latitude: lat,
       longitude: lng,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08,
+      latitudeDelta: Math.max(
+        (Math.max(...latitudes) - Math.min(...latitudes)) * 1.6,
+        0.012,
+      ),
+      longitudeDelta: Math.max(
+        (Math.max(...longitudes) - Math.min(...longitudes)) * 1.6,
+        0.012,
+      ),
+    };
+  }, [student]);
+
+  const parentDetails = useMemo(() => {
+    const nestedClients = student?.clients;
+    const parent = Array.isArray(nestedClients)
+      ? nestedClients[0]
+      : nestedClients;
+    const nameFromProfile = parent?.users?.name?.trim();
+    const nameFromClient = [parent?.first_name, parent?.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return {
+      name: nameFromProfile || nameFromClient || "Not provided",
+      phone: parent?.phone || parent?.users?.phone || "Not provided",
     };
   }, [student]);
 
@@ -110,9 +165,10 @@ const StudentsView = () => {
       { label: "Name", value: student.name || "Unknown" },
       { label: "School", value: student.school_name || "Not provided" },
       { label: "Grade", value: student.grade || "Not provided" },
-      { label: "Phone", value: student.phone || "Not provided" },
+      { label: "Parent", value: parentDetails.name },
+      { label: "Parent phone", value: parentDetails.phone },
     ];
-  }, [student]);
+  }, [student, parentDetails]);
 
   const routeMarkers = useMemo(() => {
     if (!student) return [];
@@ -125,27 +181,36 @@ const StudentsView = () => {
       icon: "home" | "school";
     }[] = [];
 
-    const pickupLat = Number(student.pickup_latitude);
-    const pickupLng = Number(student.pickup_longitude);
-    const dropoffLat = Number(student.dropoff_latitude);
-    const dropoffLng = Number(student.dropoff_longitude);
+    const home = getValidCoordinate(
+      student.pickup_latitude,
+      student.pickup_longitude,
+    );
+    const school =
+      getValidCoordinate(
+        student.school_location?.latitude,
+        student.school_location?.longitude,
+      ) ||
+      getValidCoordinate(
+        student.dropoff_latitude,
+        student.dropoff_longitude,
+      );
 
-    if (pickupLat && pickupLng) {
+    if (home) {
       markers.push({
-        id: "pickup",
-        latitude: pickupLat,
-        longitude: pickupLng,
-        label: "Pickup",
+        id: "home",
+        latitude: home.latitude,
+        longitude: home.longitude,
+        label: "Home",
         icon: "home",
       });
     }
 
-    if (dropoffLat && dropoffLng) {
+    if (school) {
       markers.push({
-        id: "dropoff",
-        latitude: dropoffLat,
-        longitude: dropoffLng,
-        label: "Dropoff",
+        id: "school",
+        latitude: school.latitude,
+        longitude: school.longitude,
+        label: student.school_name || "School",
         icon: "school",
       });
     }
@@ -188,6 +253,7 @@ const StudentsView = () => {
               <Text style={styles.heroTitle}>{student.name || "Child"}</Text>
               <Text style={styles.heroSubtitle}>
                 {student.school_name || "School not provided"}
+                {student.grade ? ` · Grade ${student.grade}` : ""}
               </Text>
             </View>
           </View>
@@ -195,9 +261,22 @@ const StudentsView = () => {
           <View style={styles.mapCard}>
             <View style={styles.mapHeaderRow}>
               <Text style={styles.mapTitle}>Route overview</Text>
-              <Text style={styles.mapSubtitle}>Pickup and dropoff</Text>
+              <Text style={styles.mapSubtitle}>Home and school stops</Text>
             </View>
-            <MapView style={styles.map} initialRegion={routeRegion}>
+            <MapView
+              style={styles.map}
+              initialRegion={routeRegion}
+              pointerEvents="none"
+              scrollEnabled={false}
+              zoomEnabled={false}
+              rotateEnabled={false}
+              pitchEnabled={false}
+              toolbarEnabled={false}
+              moveOnMarkerPress={false}
+              showsCompass={false}
+              showsScale={false}
+              showsUserLocation={false}
+            >
               {routeMarkers.map((marker) => (
                 <Marker
                   key={marker.id}
@@ -207,12 +286,19 @@ const StudentsView = () => {
                   }}
                   title={marker.label}
                 >
-                  <View style={styles.markerBubble}>
-                    <MaterialIcons
-                      name={marker.icon}
-                      size={20}
-                      color={marker.icon === "home" ? "#2563EB" : "#F59E0B"}
-                    />
+                  <View style={styles.markerPin}>
+                    <View style={styles.markerBubble}>
+                      <MaterialIcons
+                        name={marker.icon}
+                        size={20}
+                        color={marker.icon === "home" ? "#35D9B3" : "#F2B84B"}
+                      />
+                    </View>
+                    <View style={styles.markerLabelWrap}>
+                      <Text style={styles.markerLabel} numberOfLines={1}>
+                        {marker.label}
+                      </Text>
+                    </View>
                   </View>
                 </Marker>
               ))}
@@ -227,7 +313,6 @@ const StudentsView = () => {
               </View>
             ))}
           </View>
-
         </ScrollView>
       ) : null}
     </View>
@@ -239,7 +324,7 @@ export default StudentsView;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FC",
+    backgroundColor: "#050907",
   },
   content: {
     paddingHorizontal: 10,
@@ -255,26 +340,26 @@ const styles = StyleSheet.create({
   stateText: {
     marginTop: 8,
     fontSize: 13,
-    color: "#607A98",
+    color: "#B1C4BC",
     textAlign: "center",
   },
   heroCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
   mapCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
   mapHeaderRow: {
     marginBottom: 7,
@@ -282,12 +367,12 @@ const styles = StyleSheet.create({
   mapTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   mapSubtitle: {
     marginTop: 2,
     fontSize: 10,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   map: {
     height: 175,
@@ -298,22 +383,40 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  markerPin: {
+    alignItems: "center",
+  },
+  markerLabelWrap: {
+    maxWidth: 120,
+    marginTop: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "#0D1713",
+    borderWidth: 1,
+    borderColor: "#294238",
+  },
+  markerLabel: {
+    color: "#F4FBF8",
+    fontSize: 9,
+    fontWeight: "700",
+  },
   avatarContainer: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: "#13231D",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
@@ -330,36 +433,36 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F4FBF8",
   },
   heroSubtitle: {
     marginTop: 3,
     fontSize: 11,
-    color: "#71869C",
+    color: "#B1C4BC",
   },
   sectionCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#0D1713",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 4,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#D6E9FC",
+    borderColor: "#294238",
   },
   infoRow: {
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    borderBottomColor: "#294238",
   },
   infoLabel: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#71869C",
+    color: "#B1C4BC",
     textTransform: "uppercase",
     marginBottom: 4,
   },
   infoValue: {
     fontSize: 13,
-    color: "#17385F",
+    color: "#F4FBF8",
   },
 });

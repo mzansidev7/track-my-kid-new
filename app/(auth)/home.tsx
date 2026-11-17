@@ -16,7 +16,7 @@ import Constants from "expo-constants";
 // import Register from "./register";
 import { MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import ThemeToggle from "../../components/ThemeToggle";
+// import ThemeToggle from "../../components/ThemeToggle";
 import { useTheme } from "../../styles/theme";
 import { useWelcomeScreenStyles } from "../../styles/welcomeScreenStyles";
 import Login from "./login";
@@ -112,9 +112,9 @@ const WelcomeScreen = () => {
           { backgroundColor: colors.background },
         ]}
       >
-        <View style={styles.themeToggleContainer}>
+        {/* <View style={styles.themeToggleContainer}>
           <ThemeToggle />
-        </View>
+        </View> */}
 
         <Animated.View
           style={[
@@ -314,6 +314,26 @@ const WelcomeScreen = () => {
                 <Text style={styles.footerText}>
                   © 2026 Track My Kid • Keeping children safe on every journey
                 </Text>
+                <View
+                  accessibilityLabel="A product by Mzansi Digital"
+                  style={{
+                    alignSelf: "center",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 9,
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <Image
+                    source={require("@/assets/images/Mzansi-Digital-Logo.png")}
+                    style={{ width: 104, height: 35 }}
+                    resizeMode="contain"
+                    accessible={false}
+                  />
+                </View>
               </View>
             </>
           ) : (

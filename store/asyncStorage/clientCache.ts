@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Cache configuration
 const CACHE_CONFIG = {
   children: { key: "client_children", ttl: 5 * 60 * 1000 }, // 5 minutes
+  schools: { key: "client_schools", ttl: 30 * 60 * 1000 }, // 30 minutes
   childDetails: { key: "client_child_details", ttl: 10 * 60 * 1000 }, // 10 minutes
   linkedVehicles: { key: "client_linked_vehicles", ttl: 5 * 60 * 1000 }, // 5 minutes
   paymentSummary: { key: "client_payment_summary", ttl: 2 * 60 * 1000 }, // 2 minutes
@@ -21,6 +22,7 @@ interface CacheItem<T> {
 export const saveToCache = async <T>(
   cacheType: keyof typeof CACHE_CONFIG,
   data: T,
+  scope?: string,
 ): Promise<void> => {
   try {
     const config = CACHE_CONFIG[cacheType];
@@ -30,7 +32,8 @@ export const saveToCache = async <T>(
       expiresAt: Date.now() + config.ttl,
     };
 
-    await AsyncStorage.setItem(config.key, JSON.stringify(cacheItem));
+    const key = scope ? `${config.key}:${scope}` : config.key;
+    await AsyncStorage.setItem(key, JSON.stringify(cacheItem));
   } catch (error) {
     console.error(`Error saving ${cacheType} to cache:`, error);
   }
@@ -38,10 +41,15 @@ export const saveToCache = async <T>(
 
 export const loadFromCache = async <T>(
   cacheType: keyof typeof CACHE_CONFIG,
+  {
+    allowExpired = false,
+    scope,
+  }: { allowExpired?: boolean; scope?: string } = {},
 ): Promise<T | null> => {
   try {
     const config = CACHE_CONFIG[cacheType];
-    const cached = await AsyncStorage.getItem(config.key);
+    const key = scope ? `${config.key}:${scope}` : config.key;
+    const cached = await AsyncStorage.getItem(key);
 
     if (!cached) return null;
 
@@ -49,8 +57,8 @@ export const loadFromCache = async <T>(
     const now = Date.now();
 
     // Check if cache is expired
-    if (now > cacheItem.expiresAt) {
-      await AsyncStorage.removeItem(config.key);
+    if (now > cacheItem.expiresAt && !allowExpired) {
+      await AsyncStorage.removeItem(key);
       return null;
     }
     return cacheItem.data;
@@ -78,32 +86,42 @@ export const clearCache = async (
 };
 
 // Specific cache functions for each data type
-export const saveChildren = (children: any[]) =>
-  saveToCache("children", children);
-export const loadChildren = () => loadFromCache<any[]>("children");
+export const saveChildren = (children: any[], scope?: string) =>
+  saveToCache("children", children, scope);
+export const loadChildren = (scope?: string) =>
+  loadFromCache<any[]>("children", { allowExpired: true, scope });
+
+export const saveSchools = (schools: any[], scope?: string) =>
+  saveToCache("schools", schools, scope);
+export const loadSchools = (scope?: string) =>
+  loadFromCache<any[]>("schools", { allowExpired: true, scope });
 
 export const updateChildInChildrenCache = async (
   childId: string,
   updatedChild: any,
+  scope?: string,
 ): Promise<void> => {
   try {
-    const cachedChildren = await loadChildren();
+    const cachedChildren = await loadChildren(scope);
     if (!cachedChildren) return;
 
     const updated = cachedChildren.map((child) =>
       child?.id === childId ? { ...child, ...updatedChild } : child,
     );
 
-    await saveChildren(updated);
+    await saveChildren(updated, scope);
   } catch (error) {
     console.error("Error updating child in children cache:", error);
   }
 };
 
-export const saveChildDetails = (childId: string, childData: any) =>
-  saveToCache("childDetails", { childId, ...childData });
-export const loadChildDetails = (childId: string) =>
-  loadFromCache<any>("childDetails").then((data) =>
+export const saveChildDetails = (
+  childId: string,
+  childData: any,
+  scope?: string,
+) => saveToCache("childDetails", { childId, ...childData }, scope);
+export const loadChildDetails = (childId: string, scope?: string) =>
+  loadFromCache<any>("childDetails", { scope }).then((data) =>
     data && data.childId === childId ? data : null,
   );
 

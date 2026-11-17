@@ -5,7 +5,9 @@ import {
   unsubscribeFromRealtime,
 } from "../../../../store/subscriptions/clientRealtime";
 import {
+  loadSchools,
   loadChildren,
+  saveSchools,
   saveChildren,
 } from "../../../../store/asyncStorage/clientCache";
 import { resolveWorkingBaseUrl } from "../../../../url";
@@ -67,6 +69,7 @@ interface Child {
     pickup_end_time?: string;
     dropoff_start_time?: string;
     dropoff_end_time?: string;
+    operating_days?: number[];
     time_scope?: string;
     start_latitude?: number;
     start_longitude?: number;
@@ -74,6 +77,7 @@ interface Child {
     end_longitude?: number;
   };
   vehicle_id?: string;
+  absence_dates?: string[];
   vehicle?: {
     id: string;
     name: string;
@@ -139,8 +143,11 @@ const applyWeekendRouteVisibility = (children: Child[], date = new Date()) => {
   });
 };
 
-export const useChildren = (): UseChildrenReturn => {
+export const useChildren = (
+  { includeWeekendRoutes = false }: { includeWeekendRoutes?: boolean } = {},
+): UseChildrenReturn => {
   const { user } = useContext(AuthContext);
+  const userId = user?.userData?.id || user?.id;
 
   const [schools, setSchools] = useState<School[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
@@ -153,17 +160,39 @@ export const useChildren = (): UseChildrenReturn => {
   const fetchData = useCallback(async () => {
     if (!user?.token) return;
 
-    const cachedChildren = await loadChildren();
+    const [cachedChildren, cachedSchools] = await Promise.all([
+      loadChildren(userId),
+      loadSchools(userId),
+    ]);
     if (Array.isArray(cachedChildren)) {
-      setChildren(applyWeekendRouteVisibility(cachedChildren));
+      setChildren(
+        includeWeekendRoutes
+          ? cachedChildren
+          : applyWeekendRouteVisibility(cachedChildren),
+      );
+    }
+    if (Array.isArray(cachedSchools)) setSchools(cachedSchools);
+    setSchoolsLoading(!Array.isArray(cachedSchools));
+    setChildrenLoading(!Array.isArray(cachedChildren));
+
+    let baseUrl: string;
+    try {
+      baseUrl = await resolveWorkingBaseUrl();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unable to reach the server.";
+      setSchoolsError(errorMessage);
+      setChildrenError(errorMessage);
+      setSchoolsLoading(false);
+      setChildrenLoading(false);
+      console.error("Resolve client API URL error:", error);
+      return;
     }
 
-    const baseUrl = await resolveWorkingBaseUrl();
-
     // Fetch schools
-    setSchoolsLoading(true);
+    setSchoolsLoading(!Array.isArray(cachedSchools));
     setSchoolsError(undefined);
-    let schoolList: School[] = [];
+    let schoolList: School[] = cachedSchools || [];
     try {
       const response = await fetch(`${baseUrl}/client/schools`, {
         headers: {
@@ -186,6 +215,7 @@ export const useChildren = (): UseChildrenReturn => {
           : [];
 
       setSchools(schoolList);
+      await saveSchools(schoolList, userId);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to fetch schools";
@@ -200,7 +230,7 @@ export const useChildren = (): UseChildrenReturn => {
     );
 
     // Fetch children
-    setChildrenLoading(true);
+    setChildrenLoading(!Array.isArray(cachedChildren));
     setChildrenError(undefined);
     try {
       const response = await fetch(`${baseUrl}/client/children`, {
@@ -218,11 +248,13 @@ export const useChildren = (): UseChildrenReturn => {
 
       const childrenList = (Array.isArray(data) ? data : []).map((child) => ({
         ...child,
-        school: schoolsById.get(child.school_id),
+        school: schoolsById.get(child.school_id) || child.school,
       }));
-      const visibleChildren = applyWeekendRouteVisibility(childrenList);
+      const visibleChildren = includeWeekendRoutes
+        ? childrenList
+        : applyWeekendRouteVisibility(childrenList);
       setChildren(visibleChildren);
-      await saveChildren(visibleChildren);
+      await saveChildren(visibleChildren, userId);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to fetch children";
@@ -231,7 +263,12 @@ export const useChildren = (): UseChildrenReturn => {
     } finally {
       setChildrenLoading(false);
     }
-  }, [user?.token]);
+  }, [includeWeekendRoutes, user?.token, userId]);
+
+  useEffect(() => {
+    setSchools([]);
+    setChildren([]);
+  }, [userId]);
 
   useEffect(() => {
     fetchData();

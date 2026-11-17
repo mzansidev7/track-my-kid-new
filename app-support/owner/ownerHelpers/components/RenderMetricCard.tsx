@@ -1,12 +1,12 @@
 import { View, Text } from "react-native";
 import React from "react";
 import { useOwnerStyles } from "../styles/ownerStyles";
-import { useTheme } from "@/styles/theme";
+import { useOwnerTheme } from "@/styles/theme";
 import { MaterialIcons } from "@expo/vector-icons";
 
 const RenderMetricCard = ({ icon, label, value, subtext, color }: any) => {
   const styles = useOwnerStyles();
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useOwnerTheme();
 
   return (
     <View

@@ -19,9 +19,7 @@
       },
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/images/logo-light.png",
-        "backgroundImage": "./assets/images/logo-light.png",
-        "monochromeImage": "./assets/images/logo-light.png"
+        "foregroundImage": "./assets/images/logo-light.png"
       },
 
       "predictiveBackGestureEnabled": false

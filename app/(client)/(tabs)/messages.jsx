@@ -7,8 +7,10 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   View,
   Text,
   StyleSheet,
@@ -25,9 +27,14 @@ import {
 } from "../../../components/messages/MessageAttachment";
 import MessageComposer from "../../../components/messages/MessageComposer";
 import MessageReactions from "../../../components/messages/MessageReactions";
+import GroupChatMenu from "../../../components/messages/GroupChatMenu";
+import GroupSenderAvatar from "../../../components/messages/GroupSenderAvatar";
+import PresenceDot from "../../../components/presence/PresenceDot";
+import PresenceStatus from "../../../components/presence/PresenceStatus";
 import { SafeAreaView } from "react-native-safe-area-context";
 import ClientHeader from "../components/ClientHeader";
 import { AuthContext } from "../../../context/authContext/auth-context";
+import { CLIENT_COLORS } from "../../../styles/theme";
 import { BASE_URL } from "../../../url";
 import {
   fetchConversationsWithCache,
@@ -37,19 +44,11 @@ import {
   unsubscribeFromRealtime,
 } from "../../../store/subscriptions/messagesRealtime";
 
-const tabs = ["All", "Drivers", "Schools", "Owners"];
+const tabs = ["All", "Groups", "Drivers", "Schools", "Owners"];
 
 const getRoleColor = (role) => {
-  switch (role) {
-    case "driver":
-      return "#EDF7FF";
-    case "school":
-      return "#EDF7FF";
-    case "owner":
-      return "#E9F8EE";
-    default:
-      return "#DCEAF8";
-  }
+  void role;
+  return CLIENT_COLORS.surfaceElevated;
 };
 
 const getInitials = (name = "") => {
@@ -93,6 +92,7 @@ const ClientMessages = () => {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState("");
 
   const fetchConversations = useCallback(async () => {
     if (!user?.token || !userId) {
@@ -102,10 +102,14 @@ const ClientMessages = () => {
     }
 
     try {
-      const data = await fetchConversationsWithCache(userId, (cached) => {
-        setConversations(cached);
-        setLoading(false);
-      });
+      const data = await fetchConversationsWithCache(
+        userId,
+        (cached) => {
+          setConversations(cached);
+          setLoading(false);
+        },
+        user.token,
+      );
       setConversations(data);
     } catch (error) {
       console.error("Error loading client conversations:", error);
@@ -184,13 +188,24 @@ const ClientMessages = () => {
     fetchLinkedContacts();
 
     const conversationsChannel = userId
-      ? subscribeToConversations(userId, setConversations)
+      ? subscribeToConversations(userId, setConversations, user?.token)
       : null;
+    const refreshInterval = userId
+      ? setInterval(() => void fetchConversations(), 20_000)
+      : null;
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state === "active") void fetchConversations();
+      },
+    );
 
     return () => {
       if (conversationsChannel) unsubscribeFromRealtime(conversationsChannel);
+      if (refreshInterval) clearInterval(refreshInterval);
+      appStateSubscription.remove();
     };
-  }, [fetchConversations, fetchLinkedContacts, userId]);
+  }, [fetchConversations, fetchLinkedContacts, user?.token, userId]);
 
   const startConversation = async (contact) => {
     if (!contact?.userId || !contact?.type || !user?.token) {
@@ -324,6 +339,7 @@ const ClientMessages = () => {
     if (selectedTab === "All") return conversations;
 
     const roleMap = {
+      Groups: "group",
       Drivers: "driver",
       Schools: "school",
       Owners: "owner",
@@ -344,8 +360,13 @@ const ClientMessages = () => {
           <TouchableOpacity
             style={styles.chatBackButton}
             onPress={() => setSelectedConversation(null)}
+            accessibilityLabel="Back to conversations"
           >
-            <MaterialIcons name="arrow-back" size={22} color="#17365E" />
+            <MaterialIcons
+              name="arrow-back"
+              size={22}
+              color={CLIENT_COLORS.textPrimary}
+            />
           </TouchableOpacity>
           <View style={styles.chatHeaderIdentity}>
             <View style={styles.chatAvatar}>
@@ -355,83 +376,204 @@ const ClientMessages = () => {
                   style={styles.chatAvatarImage}
                   resizeMode="contain"
                 />
+              ) : selectedConversation.conversation_type === "school_group" &&
+                participant.avatar ? (
+                <Image
+                  source={{ uri: participant.avatar }}
+                  style={styles.chatAvatarImage}
+                  resizeMode="cover"
+                />
+              ) : participant.avatar || participant.profile?.avatar ? (
+                <Image
+                  source={{
+                    uri: participant.avatar || participant.profile.avatar,
+                  }}
+                  style={styles.chatAvatarImage}
+                  resizeMode="cover"
+                />
               ) : (
                 <Text style={styles.avatarText}>
                   {getInitials(participant.name)}
                 </Text>
               )}
+              {participant.role !== "group" ? (
+                <PresenceDot userId={participant.id} />
+              ) : null}
             </View>
-            <View>
-              <Text style={styles.chatName}>
+            <View style={styles.chatHeaderText}>
+              <Text style={styles.chatName} numberOfLines={1}>
                 {participant.name || "Contact"}
               </Text>
-              <Text style={styles.chatRole}>
-                {participant.role === "group"
-                  ? "Group chat"
-                  : participant.role || "Contact"}
-              </Text>
+              <View style={styles.chatHeaderMeta}>
+                <Text style={styles.chatRole} numberOfLines={1}>
+                  {participant.role === "school"
+                    ? participant.school_name || "School"
+                    : participant.role === "group"
+                      ? "Group chat"
+                      : participant.role || "Contact"}
+                </Text>
+                {participant.role !== "group" ? (
+                  <PresenceStatus
+                    userId={participant.id}
+                    style={styles.chatPresenceStatus}
+                  />
+                ) : null}
+              </View>
             </View>
           </View>
+          {["admin_group", "school_group"].includes(
+            selectedConversation.conversation_type,
+          ) ? (
+            <GroupChatMenu
+              key={selectedConversation.id}
+              conversation={selectedConversation}
+              role="client"
+              token={user?.token || ""}
+              currentUserId={userId}
+              onRemoved={() => {
+                setSelectedConversation(null);
+                setConversationMessages([]);
+                void fetchConversations();
+              }}
+              onUpdated={() => void fetchConversations()}
+              iconColor={CLIENT_COLORS.textPrimary}
+            />
+          ) : null}
         </View>
 
-        {loadingMessages ? (
-          <View style={styles.chatLoading}>
-            <ActivityIndicator size="large" color="#159B3A" />
-          </View>
-        ) : (
-          <ScrollView
-            style={styles.chatList}
-            contentContainerStyle={styles.chatListContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {conversationMessages.length === 0 ? (
-              <View style={styles.chatEmpty}>
-                <Text style={styles.emptyText}>No messages yet.</Text>
-                <Text style={styles.emptySubtext}>
-                  Send the first message to start this conversation.
-                </Text>
-              </View>
-            ) : (
-              conversationMessages.map((message) => {
-                const own =
-                  message.sender_id ===
-                  (user?.userData?.id || user?.userData?.user_id);
-                const attachment = parseMessageAttachment(message.content);
-                return (
-                  <View
-                    key={message.id}
-                    style={[
-                      styles.chatMessageRow,
-                      own && styles.chatMessageRowOwn,
-                    ]}
-                  >
+        <KeyboardAvoidingView
+          style={styles.chatKeyboardArea}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          {loadingMessages ? (
+            <View style={styles.chatLoading}>
+              <ActivityIndicator
+                size="large"
+                color={CLIENT_COLORS.primary}
+              />
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.chatList}
+              contentContainerStyle={styles.chatListContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {conversationMessages.length === 0 ? (
+                <View style={styles.chatEmpty}>
+                  <Text style={styles.emptyText}>No messages yet.</Text>
+                  <Text style={styles.emptySubtext}>
+                    Send the first message to start this conversation.
+                  </Text>
+                </View>
+              ) : (
+                conversationMessages.map((message) => {
+                  const own =
+                    message.sender_id ===
+                    (user?.userData?.id || user?.userData?.user_id);
+                  const isGroupChat = ["admin_group", "school_group"].includes(
+                    selectedConversation.conversation_type,
+                  );
+                  const attachment = parseMessageAttachment(message.content);
+                  return (
                     <View
-                      style={[styles.chatBubble, own && styles.chatBubbleOwn]}
+                      key={message.id}
+                      style={[
+                        styles.chatMessageRow,
+                        own && styles.chatMessageRowOwn,
+                      ]}
                     >
-                      {attachment ? (
-                        <MessageAttachment
-                          content={message.content}
-                          isOwn={own}
+                      {!own &&
+                      (isGroupChat ||
+                        (selectedConversation.other_participant.role ===
+                          "school" &&
+                          message.sender_id ===
+                            selectedConversation.other_participant.id)) ? (
+                        <GroupSenderAvatar
+                          name={message.users?.name}
+                          avatar={message.users?.avatar}
+                          userId={message.sender_id}
                         />
-                      ) : (
-                        <Text
-                          style={
-                            own ? styles.chatMessageOwn : styles.chatMessage
-                          }
-                        >
-                          {message.content}
-                        </Text>
-                      )}
+                      ) : null}
                       <View
                         style={[
-                          styles.chatFooter,
-                          own && styles.chatFooterOwn,
+                          styles.chatMessageGroup,
+                          own && styles.chatMessageGroupOwn,
                         ]}
                       >
-                        <Text style={own ? styles.chatTimeOwn : styles.chatTime}>
-                          {formatConversationTime(message.sent_at)}
-                          {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
-                        </Text>
+                        {!own &&
+                        !isGroupChat &&
+                        selectedConversation.other_participant.role ===
+                          "school" &&
+                        message.sender_id ===
+                          selectedConversation.other_participant.id ? (
+                          <View style={styles.schoolSenderLabel}>
+                            <Text style={styles.schoolSenderName}>
+                              {message.users?.name ||
+                                selectedConversation.other_participant.name}
+                            </Text>
+                            {selectedConversation.other_participant
+                              .school_name ? (
+                              <Text style={styles.schoolSenderSchool}>
+                                {
+                                  selectedConversation.other_participant
+                                    .school_name
+                                }
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+                        <View
+                          style={[
+                            styles.chatBubble,
+                            own && styles.chatBubbleOwn,
+                          ]}
+                        >
+                          <Pressable
+                            onLongPress={() => {
+                              if (!own) setReactionPickerMessageId(message.id);
+                            }}
+                            delayLongPress={250}
+                          >
+                            {attachment ? (
+                              <MessageAttachment
+                                content={message.content}
+                                isOwn={own}
+                              />
+                            ) : (
+                              <Text
+                                style={
+                                  own
+                                    ? styles.chatMessageOwn
+                                    : styles.chatMessage
+                                }
+                              >
+                                {message.content}
+                              </Text>
+                            )}
+                            <View
+                              style={[
+                                styles.chatFooter,
+                                own && styles.chatFooterOwn,
+                              ]}
+                            >
+                              <Text
+                                style={
+                                  own ? styles.chatTimeOwn : styles.chatTime
+                                }
+                              >
+                                {formatConversationTime(message.sent_at)}
+                                {own ? (message.is_read ? "  ✓✓" : "  ✓") : ""}
+                              </Text>
+                            </View>
+                          </Pressable>
+                          {message.deliveryError ? (
+                            <Text style={styles.messageDeliveryError}>
+                              Message not sent
+                            </Text>
+                          ) : null}
+                        </View>
                         {!message.deliveryError &&
                         (!own || message.reactions?.length) ? (
                           <MessageReactions
@@ -441,34 +583,30 @@ const ClientMessages = () => {
                             messageId={message.id}
                             token={user?.token || ""}
                             currentUserId={userId}
-                            accentColor="#159B3A"
+                            accentColor={CLIENT_COLORS.primary}
                             reactions={message.reactions}
                             isOwn={own}
+                            longPressToReact
+                            pickerOpen={reactionPickerMessageId === message.id}
+                            onPickerOpenChange={(open) =>
+                              setReactionPickerMessageId(open ? message.id : "")
+                            }
                           />
                         ) : null}
                       </View>
-                      {message.deliveryError ? (
-                        <Text style={styles.messageDeliveryError}>
-                          Message not sent
-                        </Text>
-                      ) : null}
                     </View>
-                  </View>
-                );
-              })
-            )}
-          </ScrollView>
-        )}
+                  );
+                })
+              )}
+            </ScrollView>
+          )}
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
           <MessageComposer
             apiBaseUrl={BASE_URL}
             role="client"
             conversationId={selectedConversation.id}
             token={user?.token || ""}
-            accentColor="#159B3A"
+            accentColor={CLIENT_COLORS.primary}
             onSendText={sendMessage}
             onSent={async () =>
               setConversationMessages(
@@ -486,14 +624,21 @@ const ClientMessages = () => {
       <ClientHeader
         title="My Messages"
         subtitle="Schools, drivers and fleet owners"
-        showBackButton={true}
       />
       <View style={styles.container}>
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={24} color="#607A98" />
+          <Ionicons
+            name="search-outline"
+            size={24}
+            color={CLIENT_COLORS.textMuted}
+          />
           <Text style={styles.searchText}>Search messages or contacts</Text>
           <TouchableOpacity style={styles.filterButton}>
-            <MaterialIcons name="tune" size={22} color="#17365E" />
+            <MaterialIcons
+              name="tune"
+              size={22}
+              color={CLIENT_COLORS.textPrimary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -502,7 +647,11 @@ const ClientMessages = () => {
             <View style={styles.contactHeaderRow}>
               <Text style={styles.contactTitle}>Start a conversation</Text>
               <TouchableOpacity onPress={() => setContactSheetVisible(false)}>
-                <MaterialIcons name="close" size={22} color="#607A98" />
+                <MaterialIcons
+                  name="close"
+                  size={22}
+                  color={CLIENT_COLORS.textMuted}
+                />
               </TouchableOpacity>
             </View>
 
@@ -539,7 +688,7 @@ const ClientMessages = () => {
                   <MaterialIcons
                     name="chevron-right"
                     size={20}
-                    color="#607A98"
+                    color={CLIENT_COLORS.textMuted}
                   />
                 </TouchableOpacity>
               ))
@@ -575,8 +724,8 @@ const ClientMessages = () => {
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No messages yet.</Text>
               <Text style={styles.emptySubtext}>
-                Conversations with schools, drivers, and fleet owners will
-                appear here.
+                Conversations with support groups, schools, drivers, and fleet
+                owners will appear here.
               </Text>
             </View>
           ) : (
@@ -612,11 +761,22 @@ const ClientMessages = () => {
                         style={styles.conversationAvatarImage}
                         resizeMode="contain"
                       />
+                    ) : participant.avatar || participant.profile?.avatar ? (
+                      <Image
+                        source={{
+                          uri: participant.avatar || participant.profile.avatar,
+                        }}
+                        style={styles.conversationAvatarImage}
+                        resizeMode="cover"
+                      />
                     ) : (
                       <Text style={styles.avatarText}>
                         {getInitials(participant.name)}
                       </Text>
                     )}
+                    {role !== "group" ? (
+                      <PresenceDot userId={participant.id} showOffline />
+                    ) : null}
                   </View>
 
                   <View style={styles.messageBody}>
@@ -628,13 +788,15 @@ const ClientMessages = () => {
                     </View>
 
                     <Text style={styles.messageTitle}>
-                      {role === "driver"
-                        ? "Driver update"
-                        : role === "school"
-                          ? "School notice"
-                          : role === "owner"
-                            ? "Fleet owner update"
-                            : "Conversation"}
+                      {role === "group"
+                        ? "Group chat"
+                        : role === "driver"
+                          ? "Driver update"
+                          : role === "school"
+                            ? item.other_participant?.school_name || "School"
+                            : role === "owner"
+                              ? "Fleet owner update"
+                              : "Conversation"}
                     </Text>
                     <View style={styles.previewRow}>
                       <Text style={styles.previewText} numberOfLines={1}>
@@ -680,28 +842,34 @@ export default ClientMessages;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
   },
   container: {
     flex: 1,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
     paddingHorizontal: 14,
   },
   chatHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    minHeight: 76,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#DCEAF8",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: CLIENT_COLORS.border,
+    backgroundColor: CLIENT_COLORS.background,
+  },
+  chatKeyboardArea: {
+    flex: 1,
   },
   chatBackButton: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
+    marginRight: 12,
+    borderRadius: 20,
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
   },
   chatHeaderIdentity: {
     flexDirection: "row",
@@ -709,28 +877,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chatAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    position: "relative",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
-    backgroundColor: "#EDF7FF",
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: CLIENT_COLORS.border,
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
+    shadowColor: CLIENT_COLORS.overlay,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 2,
   },
   chatAvatarImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 24,
+  },
+  chatHeaderText: {
+    flex: 1,
+    minWidth: 0,
   },
   chatName: {
-    color: "#17365E",
-    fontSize: 16,
+    color: CLIENT_COLORS.textPrimary,
+    fontSize: 15,
     fontWeight: "800",
   },
+  chatHeaderMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 3,
+  },
   chatRole: {
-    marginTop: 2,
-    color: "#607A98",
-    fontSize: 12,
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
     textTransform: "capitalize",
+  },
+  chatPresenceStatus: {
+    color: CLIENT_COLORS.success,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  chatSenderAvatarContainer: {
+    position: "relative",
+    alignSelf: "flex-start",
   },
   chatLoading: {
     flex: 1,
@@ -739,7 +935,7 @@ const styles = StyleSheet.create({
   },
   chatList: {
     flex: 1,
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
   },
   chatListContent: {
     padding: 14,
@@ -759,37 +955,64 @@ const styles = StyleSheet.create({
   chatMessageRowOwn: {
     justifyContent: "flex-end",
   },
+  chatSenderAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 7,
+    marginTop: 2,
+  },
   chatBubble: {
-    maxWidth: "82%",
+    maxWidth: "100%",
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 16,
     borderBottomLeftRadius: 4,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
   },
   chatBubbleOwn: {
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 4,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
+  },
+  chatMessageGroup: {
+    maxWidth: "82%",
+    alignItems: "flex-start",
+  },
+  chatMessageGroupOwn: {
+    alignItems: "flex-end",
+  },
+  schoolSenderLabel: {
+    marginBottom: 4,
+    paddingHorizontal: 3,
+  },
+  schoolSenderName: {
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  schoolSenderSchool: {
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 10,
   },
   chatMessage: {
-    color: "#17365E",
-    fontSize: 14,
+    color: CLIENT_COLORS.textPrimary,
+    fontSize: 13,
     lineHeight: 20,
   },
   chatMessageOwn: {
-    color: "#FFFFFF",
-    fontSize: 14,
+    color: CLIENT_COLORS.textPrimary,
+    fontSize: 13,
     lineHeight: 20,
   },
   chatTime: {
-    color: "#607A98",
+    color: CLIENT_COLORS.textSecondary,
     fontSize: 10,
   },
   chatTimeOwn: {
-    color: "#E9F8EE",
+    color: CLIENT_COLORS.textPrimary,
     fontSize: 10,
     textAlign: "right",
   },
@@ -808,7 +1031,7 @@ const styles = StyleSheet.create({
   },
   messageDeliveryError: {
     marginTop: 5,
-    color: "#B42318",
+    color: CLIENT_COLORS.error,
     fontSize: 11,
     fontWeight: "600",
     textAlign: "right",
@@ -819,8 +1042,8 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: "#DCEAF8",
-    backgroundColor: "#FFFFFF",
+    borderTopColor: CLIENT_COLORS.border,
+    backgroundColor: CLIENT_COLORS.background,
   },
   composerInput: {
     flex: 1,
@@ -829,10 +1052,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
     borderRadius: 14,
-    color: "#17365E",
-    fontSize: 14,
+    color: CLIENT_COLORS.textPrimary,
+    fontSize: 13,
   },
   sendButton: {
     width: 42,
@@ -840,10 +1063,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 21,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
   },
   sendButtonDisabled: {
-    backgroundColor: "#607A98",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
   },
   topBar: {
     flexDirection: "row",
@@ -853,10 +1076,10 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   timeText: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     letterSpacing: -0.5,
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
   },
   statusIcons: {
     flexDirection: "row",
@@ -870,16 +1093,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   title: {
-    fontSize: 30,
+    fontSize: 25,
     lineHeight: 36,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     letterSpacing: -1,
   },
   subtitle: {
     marginTop: 2,
-    fontSize: 13,
-    color: "#607A98",
+    fontSize: 10,
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "500",
   },
   bellButton: {
@@ -887,32 +1110,32 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
-    backgroundColor: "#F4F9FF",
+    borderColor: CLIENT_COLORS.border,
+    backgroundColor: CLIENT_COLORS.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF1F5",
+    backgroundColor: CLIENT_COLORS.surface,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
   },
   searchText: {
     flex: 1,
     marginLeft: 10,
-    color: "#607A98",
-    fontSize: 13,
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 12,
   },
   filterButton: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "#DCEAF8",
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -920,9 +1143,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: 14,
     borderRadius: 14,
-    backgroundColor: "#EDF7FF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
     overflow: "hidden",
   },
   tab: {
@@ -933,28 +1156,28 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 3,
-    borderBottomColor: "#159B3A",
-    backgroundColor: "#F4F9FF",
+    borderBottomColor: CLIENT_COLORS.primaryBright,
+    backgroundColor: CLIENT_COLORS.surfaceElevated,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#607A98",
+    color: CLIENT_COLORS.textSecondary,
   },
   tabTextActive: {
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
   },
   list: {
     flex: 1,
     marginTop: 8,
   },
   contactSheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderRadius: 18,
     padding: 12,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
   },
   contactHeaderRow: {
     flexDirection: "row",
@@ -963,16 +1186,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   contactTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
   },
   contactItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#DCEAF8",
+    borderTopColor: CLIENT_COLORS.border,
   },
   contactAvatar: {
     width: 38,
@@ -986,13 +1209,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contactName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
   },
   contactSubtitle: {
-    fontSize: 12,
-    color: "#607A98",
+    fontSize: 10,
+    color: CLIENT_COLORS.textSecondary,
     marginTop: 2,
   },
   messageRow: {
@@ -1001,27 +1224,28 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderWidth: 1,
-    borderColor: "#DCEAF8",
+    borderColor: CLIENT_COLORS.border,
     borderRadius: 16,
   },
   avatar: {
+    position: "relative",
     width: 46,
     height: 46,
     borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
-    overflow: "hidden",
   },
   conversationAvatarImage: {
     width: "100%",
     height: "100%",
+    borderRadius: 23,
   },
   avatarText: {
-    color: "#17365E",
-    fontSize: 15,
+    color: CLIENT_COLORS.textPrimary,
+    fontSize: 14,
     fontWeight: "800",
   },
   messageBody: {
@@ -1034,18 +1258,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   senderName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
   },
   time: {
     fontSize: 11,
-    color: "#607A98",
+    color: CLIENT_COLORS.textSecondary,
     fontWeight: "600",
   },
   messageTitle: {
-    fontSize: 12,
-    color: "#159B3A",
+    fontSize: 11,
+    color: CLIENT_COLORS.primaryBright,
     fontWeight: "700",
     marginBottom: 4,
   },
@@ -1055,15 +1279,15 @@ const styles = StyleSheet.create({
   },
   previewText: {
     flex: 1,
-    color: "#607A98",
-    fontSize: 12,
+    color: CLIENT_COLORS.textSecondary,
+    fontSize: 11,
     lineHeight: 18,
   },
   unreadBadge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
@@ -1075,7 +1299,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   ctaCard: {
-    backgroundColor: "#EDF7FF",
+    backgroundColor: CLIENT_COLORS.surface,
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 16,
@@ -1087,22 +1311,22 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
   },
   ctaTitle: {
-    fontSize: 22,
+    fontSize: 16,
     lineHeight: 28,
     fontWeight: "800",
-    color: "#17365E",
+    color: CLIENT_COLORS.textPrimary,
     textAlign: "center",
     marginBottom: 6,
   },
   ctaSub: {
-    fontSize: 13,
-    color: "#607A98",
+    fontSize: 12,
+    color: CLIENT_COLORS.textSecondary,
     textAlign: "center",
     marginBottom: 14,
   },
@@ -1110,7 +1334,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#159B3A",
+    backgroundColor: CLIENT_COLORS.primary,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 18,
@@ -1119,18 +1343,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
   bottomNav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F4F9FF",
+    backgroundColor: CLIENT_COLORS.background,
     paddingTop: 10,
     paddingBottom: 18,
     borderTopWidth: 1,
-    borderTopColor: "#DCEAF8",
+    borderTopColor: CLIENT_COLORS.border,
   },
   navItem: {
     flex: 1,
@@ -1139,12 +1363,12 @@ const styles = StyleSheet.create({
   },
   navText: {
     marginTop: 6,
-    fontSize: 12,
-    color: "#607A98",
+    fontSize: 11,
+    color: CLIENT_COLORS.textMuted,
     fontWeight: "600",
   },
   navTextActive: {
-    color: "#159B3A",
+    color: CLIENT_COLORS.primaryBright,
     fontWeight: "800",
   },
 });

@@ -1,14 +1,14 @@
 import { View, Text, Modal, TouchableOpacity } from "react-native";
 import React from "react";
 import { ownersProfileStyles, useOwnerStyles } from "../styles/ownerStyles";
-import { useTheme } from "@/styles/theme";
+import { useOwnerTheme } from "@/styles/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 export const ForceProfileUpdate = ({ missingOwnerFields }: any) => {
   const styles = useOwnerStyles();
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useOwnerTheme();
   const router = useRouter();
 
   return (
@@ -25,7 +25,7 @@ export const ForceProfileUpdate = ({ missingOwnerFields }: any) => {
         <View
           style={{
             flex: 1,
-            backgroundColor: "#F8FAFC",
+            backgroundColor: "#0D1713",
             justifyContent: "center",
             padding: 16,
           }}
@@ -47,7 +47,7 @@ export const ForceProfileUpdate = ({ missingOwnerFields }: any) => {
                 width: 64,
                 height: 64,
                 borderRadius: 32,
-                backgroundColor: "#FEF2F2",
+                backgroundColor: "#35151D",
                 justifyContent: "center",
                 alignItems: "center",
                 marginBottom: 16,
@@ -126,7 +126,7 @@ export const LogoutModal = ({
   setShowLogoutModal,
   confirmLogout,
 }: any) => {
-  const { colors, shadows } = useTheme();
+  const { colors, shadows } = useOwnerTheme();
   return (
     <Modal
       visible={showLogoutModal}

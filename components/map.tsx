@@ -4,7 +4,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 import * as Location from "expo-location";
+import CarLogo from "../assets/mapIconsAndImages/carLogo.svg";
 import { GOOGLE_API_KEY } from "../url";
+import { getCarMarkerRotation } from "../utils/mapHeading";
 
 type Props = {
   markers?: {
@@ -13,6 +15,7 @@ type Props = {
     title?: string;
     type?: "pickup" | "dropoff" | "driver" | "start" | "end" | "waypoint";
     endpoint?: "start" | "end";
+    heading?: number;
   }[];
   origin?: { latitude: number; longitude: number } | null;
   destination?: { latitude: number; longitude: number } | null;
@@ -22,6 +25,8 @@ type Props = {
   style?: any;
   centerOnUser?: boolean;
   focus?: { latitude: number; longitude: number } | null;
+  interactive?: boolean;
+  showDistanceBadge?: boolean;
   showMarkerLabels?: boolean;
   requestLocationPermission?: boolean;
   onRouteReady?: (route: { distanceKm: number; durationMinutes: number }) => void;
@@ -38,6 +43,8 @@ const Map: React.FC<Props> = ({
   style,
   centerOnUser = false,
   focus = null,
+  interactive = true,
+  showDistanceBadge = true,
   showMarkerLabels = false,
   requestLocationPermission = true,
   onRouteReady,
@@ -109,7 +116,7 @@ const Map: React.FC<Props> = ({
   }, [focus]);
 
   useEffect(() => {
-    if (!hasMarkers || !mapRef.current) return;
+    if (focus || !hasMarkers || !mapRef.current) return;
 
     try {
       if (markers.length === 1) {
@@ -140,13 +147,14 @@ const Map: React.FC<Props> = ({
     } catch (e) {
       // ignore
     }
-  }, [hasMarkers, markers]);
+  }, [focus, hasMarkers, markers]);
 
   // Fit to origin/destination bounds when both are available
   useEffect(() => {
     if (
       origin &&
       destination &&
+      !focus &&
       mapRef.current &&
       typeof mapRef.current.fitToCoordinates === "function"
     ) {
@@ -159,7 +167,7 @@ const Map: React.FC<Props> = ({
         // ignore
       }
     }
-  }, [origin, destination, waypoints]);
+  }, [focus, origin, destination, waypoints]);
 
   return (
     <View collapsable={false} style={[styles.container, style]}>
@@ -175,7 +183,11 @@ const Map: React.FC<Props> = ({
         showsMyLocationButton={requestLocationPermission}
         showsUserLocation={requestLocationPermission}
         toolbarEnabled={false}
-        pitchEnabled={false}
+        scrollEnabled={interactive}
+        zoomEnabled={interactive}
+        rotateEnabled={interactive}
+        pitchEnabled={interactive}
+        moveOnMarkerPress={interactive}
       >
         {markers.map((m, i) => {
           const isStart = m.endpoint === "start";
@@ -198,34 +210,45 @@ const Map: React.FC<Props> = ({
               title={m.title}
               tracksViewChanges={showMarkerLabels}
               anchor={{ x: 0.5, y: 0.5 }}
+              flat={m.type === "driver"}
+              rotation={
+                m.type === "driver" &&
+                typeof m.heading === "number" &&
+                Number.isFinite(m.heading)
+                  ? getCarMarkerRotation(m.heading)
+                  : 0
+              }
+              zIndex={m.type === "driver" ? 100 : undefined}
             >
-              <View
-                style={[
-                  styles.markerPin,
-                  {
-                    backgroundColor: iconColor + "55",
-                    borderColor: iconColor + "33",
-                  },
-                ]}
-              >
-                <MaterialIcons
-                  name={
-                    isStart
-                      ? "play-arrow"
-                      : isEnd
-                        ? "flag"
-                        : isPickup
-                          ? "home"
-                          : m.type === "waypoint"
-                            ? "place"
-                          : m.type === "driver"
-                            ? "directions-car"
-                            : "school"
-                  }
-                  size={20}
-                  color={iconColor}
-                />
-              </View>
+              {m.type === "driver" ? (
+                <CarLogo width={48} height={22} />
+              ) : (
+                <View
+                  style={[
+                    styles.markerPin,
+                    {
+                      backgroundColor: iconColor + "55",
+                      borderColor: iconColor + "33",
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={
+                      isStart
+                        ? "play-arrow"
+                        : isEnd
+                          ? "flag"
+                          : isPickup
+                            ? "home"
+                            : m.type === "waypoint"
+                              ? "place"
+                              : "school"
+                    }
+                    size={20}
+                    color={iconColor}
+                  />
+                </View>
+              )}
               {showMarkerLabels && m.title ? (
                 <View style={styles.markerLabel}>
                   <Text style={styles.markerLabelText} numberOfLines={1}>
@@ -277,7 +300,7 @@ const Map: React.FC<Props> = ({
         ) : null}
       </MapView>
 
-      {distanceKm !== null ? (
+      {showDistanceBadge && distanceKm !== null ? (
         <View style={styles.distanceBadge} pointerEvents="none">
           <Text style={styles.distanceText}>{distanceKm} km</Text>
         </View>

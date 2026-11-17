@@ -6,49 +6,70 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useColorScheme } from "react-native";
 import { getStoredTheme, saveTheme } from "../store/themeStore/themeStore";
 
-// Driver-specific color tokens requested by the designer
 export const DRIVER_COLORS = {
-  background: "#F3F7F4",
-  card: "#FFFFFF",
-  cardBorder: "#DFE8E2",
+  background: "#05090B",
+  card: "#0C1719",
+  surfaceRaised: "#102225",
+  cardBorder: "#1C3C3D",
 
-  primary: "#145A45",
-  primaryDark: "#0C3F31",
+  primary: "#00B9A7",
+  primaryDark: "#073A3A",
 
-  cyan: "#B6D94C",
+  cyan: "#3DE0D2",
 
-  success: "#21845D",
-  warning: "#D58A16",
-  danger: "#D94D48",
+  success: "#38D6A4",
+  successSurface: "#12342F",
+  warning: "#F2B84B",
+  warningSurface: "#382D1B",
+  danger: "#FF7777",
+  dangerSurface: "#3B1D20",
+  infoSurface: "#152A3B",
+  neutralSurface: "#182527",
 
-  white: "#FFFFFF",
-  text: "#172B24",
-  muted: "#64766D",
+  white: "#F5FAFA",
+  text: "#F5FAFA",
+  muted: "#9AB0B1",
 };
 
 export const CLIENT_COLORS = {
-  background: "#03151C",
-  surface: "#052A32",
-  surfaceElevated: "#07343D",
+  background: "#07040B",
+  surface: "#130D1A",
+  surfaceElevated: "#1C1026",
 
-  primary: "#00D084",
-  primaryBright: "#00E5B0",
-  primaryDark: "#008F72",
+  primary: "#9B2BE7",
+  primaryBright: "#C14BFF",
+  primaryDark: "#7016B6",
 
-  success: "#19D66B",
+  success: "#43D17A",
   error: "#FF4D5D",
   warning: "#E9B83F",
 
-  textPrimary: "#F4F7F5",
-  textSecondary: "#8FA6A8",
-  textMuted: "#587276",
+  textPrimary: "#FBF8FF",
+  textSecondary: "#B9AFC4",
+  textMuted: "#84788E",
 
-  border: "#0C454D",
-  divider: "#10343A",
+  border: "#352341",
+  divider: "#261831",
   overlay: "#000000",
+};
+
+export const OWNER_COLORS = {
+  background: "#050907",
+  surface: "#0D1713",
+  surfaceElevated: "#13231D",
+  primary: "#00B894",
+  primaryBright: "#35D9B3",
+  primaryDark: "#087A62",
+  success: "#35D9B3",
+  error: "#FF6673",
+  warning: "#F2B84B",
+  textPrimary: "#F4FBF8",
+  textSecondary: "#B1C4BC",
+  textMuted: "#82968D",
+  border: "#294238",
+  divider: "#1C3028",
 };
 
 export type Theme = "light" | "dark";
@@ -63,7 +84,7 @@ export const lightTheme = {
     success: "#10B981",
     warning: "#F59E0B",
     error: "#EF4444",
-    background: "#FFFFFF",
+    background: "#141c29", // Need to change this to a light background color, e.g., "#F9FAFB" when we complete the theme for the entire app. For now, keeping it dark to match the current UI.
     gradientStart: "#064E3B",
     gradientEnd: "#10B981",
     surface: "#F9FAFB",
@@ -79,13 +100,16 @@ export const lightTheme = {
     // Separate role/brand palettes for Owner, Driver, Client, School
     brands: {
       owner: {
-        primary: "#064E3B",
-        primaryDark: "#0F766E",
-        gradientStart: "#064E3B",
-        gradientEnd: "#10B981",
-        surface: "#ECFDF5",
-        border: "#0F766E",
-        divider: "#10B981",
+        background: OWNER_COLORS.background,
+        card: OWNER_COLORS.surface,
+        cardBorder: OWNER_COLORS.border,
+        primary: OWNER_COLORS.primary,
+        primaryDark: OWNER_COLORS.primaryDark,
+        gradientStart: OWNER_COLORS.primaryDark,
+        gradientEnd: OWNER_COLORS.primaryBright,
+        surface: OWNER_COLORS.surface,
+        border: OWNER_COLORS.border,
+        divider: OWNER_COLORS.divider,
       },
       driver: {
         background: DRIVER_COLORS.background,
@@ -106,13 +130,16 @@ export const lightTheme = {
         cardBorder: CLIENT_COLORS.border,
         primary: CLIENT_COLORS.primary,
         primaryDark: CLIENT_COLORS.primaryDark,
-        gradientStart: CLIENT_COLORS.primary,
+        gradientStart: CLIENT_COLORS.primaryDark,
         gradientEnd: CLIENT_COLORS.primaryBright,
         surface: CLIENT_COLORS.surface,
         border: CLIENT_COLORS.border,
         divider: CLIENT_COLORS.divider,
       },
       school: {
+        background: "#291503",
+        card: "#FFF7ED",
+        cardBorder: "#B45309",
         primary: "#B45309",
         primaryDark: "#92400E",
         gradientStart: "#B45309",
@@ -172,13 +199,16 @@ export const darkTheme = {
     // Separate role/brand palettes for Owner, Driver, Client, School (dark variants)
     brands: {
       owner: {
-        primary: "#0F766E",
-        primaryDark: "#064E3B",
-        gradientStart: "#0F766E",
-        gradientEnd: "#10B981",
-        surface: "#052E24",
-        border: "#0F766E",
-        divider: "#10B981",
+        background: OWNER_COLORS.background,
+        card: OWNER_COLORS.surface,
+        cardBorder: OWNER_COLORS.border,
+        primary: OWNER_COLORS.primary,
+        primaryDark: OWNER_COLORS.primaryDark,
+        gradientStart: OWNER_COLORS.primaryDark,
+        gradientEnd: OWNER_COLORS.primaryBright,
+        surface: OWNER_COLORS.surface,
+        border: OWNER_COLORS.border,
+        divider: OWNER_COLORS.divider,
       },
       driver: {
         background: DRIVER_COLORS.background,
@@ -189,23 +219,26 @@ export const darkTheme = {
         primaryDark: DRIVER_COLORS.primaryDark,
         gradientStart: DRIVER_COLORS.primaryDark,
         gradientEnd: DRIVER_COLORS.primary,
-        surface: DRIVER_COLORS.background,
+        surface: DRIVER_COLORS.card,
         border: DRIVER_COLORS.cardBorder,
         divider: DRIVER_COLORS.cyan,
       },
       client: {
         background: CLIENT_COLORS.background,
-        card: "#1F133D",
-        cardBorder: "#7C3AED",
-        primary: "#7C3AED",
-        primaryDark: "#5B21B6",
-        gradientStart: "#7C3AED",
-        gradientEnd: "#C084FC",
-        surface: "#1F133D",
-        border: "#7C3AED",
-        divider: "#C084FC",
+        card: CLIENT_COLORS.surface,
+        cardBorder: CLIENT_COLORS.border,
+        primary: CLIENT_COLORS.primary,
+        primaryDark: CLIENT_COLORS.primaryDark,
+        gradientStart: CLIENT_COLORS.primaryDark,
+        gradientEnd: CLIENT_COLORS.primaryBright,
+        surface: CLIENT_COLORS.surface,
+        border: CLIENT_COLORS.border,
+        divider: CLIENT_COLORS.divider,
       },
       school: {
+        background: "#1A0D02",
+        card: "#291503",
+        cardBorder: "#B45309",
         primary: "#B45309",
         primaryDark: "#92400E",
         gradientStart: "#B45309",
@@ -262,6 +295,133 @@ export const useTheme = () => {
   return context;
 };
 
+export const useDriverTheme = () => {
+  const context = useTheme();
+  const { colors } = context;
+
+  return {
+    ...context,
+    colors: {
+      ...colors,
+      primary: DRIVER_COLORS.primary,
+      primaryDark: DRIVER_COLORS.primaryDark,
+      secondary: DRIVER_COLORS.surfaceRaised,
+      success: DRIVER_COLORS.success,
+      warning: DRIVER_COLORS.warning,
+      error: DRIVER_COLORS.danger,
+      background: DRIVER_COLORS.background,
+      gradientStart: DRIVER_COLORS.primaryDark,
+      gradientEnd: DRIVER_COLORS.primary,
+      surface: DRIVER_COLORS.card,
+      surfaceHover: DRIVER_COLORS.surfaceRaised,
+      text: {
+        ...colors.text,
+        primary: DRIVER_COLORS.text,
+        secondary: DRIVER_COLORS.muted,
+        tertiary: DRIVER_COLORS.muted,
+        inverse: DRIVER_COLORS.background,
+      },
+      border: DRIVER_COLORS.cardBorder,
+      divider: DRIVER_COLORS.cardBorder,
+    },
+  };
+};
+
+export const useClientTheme = () => {
+  const context = useTheme();
+  const { colors } = context;
+  const clientColors = {
+    ...colors,
+    primary: CLIENT_COLORS.primary,
+    primaryDark: CLIENT_COLORS.primaryDark,
+    secondary: CLIENT_COLORS.surfaceElevated,
+    success: CLIENT_COLORS.success,
+    warning: CLIENT_COLORS.warning,
+    error: CLIENT_COLORS.error,
+    background: CLIENT_COLORS.background,
+    gradientStart: CLIENT_COLORS.primaryDark,
+    gradientEnd: CLIENT_COLORS.primaryBright,
+    surface: CLIENT_COLORS.surface,
+    surfaceHover: CLIENT_COLORS.surfaceElevated,
+    text: {
+      ...colors.text,
+      primary: CLIENT_COLORS.textPrimary,
+      secondary: CLIENT_COLORS.textSecondary,
+      tertiary: CLIENT_COLORS.textMuted,
+      inverse: CLIENT_COLORS.background,
+    },
+    border: CLIENT_COLORS.border,
+    divider: CLIENT_COLORS.divider,
+    brands: {
+      ...colors.brands,
+      client: {
+        background: CLIENT_COLORS.background,
+        card: CLIENT_COLORS.surface,
+        cardBorder: CLIENT_COLORS.border,
+        primary: CLIENT_COLORS.primary,
+        primaryDark: CLIENT_COLORS.primaryDark,
+        gradientStart: CLIENT_COLORS.primaryDark,
+        gradientEnd: CLIENT_COLORS.primaryBright,
+        surface: CLIENT_COLORS.surface,
+        border: CLIENT_COLORS.border,
+        divider: CLIENT_COLORS.divider,
+      },
+    },
+  };
+
+  return { ...context, colors: clientColors };
+};
+
+export const useOwnerTheme = () => {
+  const context = useTheme();
+  const { colors } = context;
+  const ownerColors = {
+    ...colors,
+    primary: OWNER_COLORS.primary,
+    primaryDark: OWNER_COLORS.primaryDark,
+    secondary: OWNER_COLORS.surfaceElevated,
+    success: OWNER_COLORS.success,
+    warning: OWNER_COLORS.warning,
+    error: OWNER_COLORS.error,
+    background: OWNER_COLORS.background,
+    gradientStart: OWNER_COLORS.primaryDark,
+    gradientEnd: OWNER_COLORS.primaryBright,
+    surface: OWNER_COLORS.surface,
+    surfaceHover: OWNER_COLORS.surfaceElevated,
+    text: {
+      ...colors.text,
+      primary: OWNER_COLORS.textPrimary,
+      secondary: OWNER_COLORS.textSecondary,
+      tertiary: OWNER_COLORS.textMuted,
+      inverse: OWNER_COLORS.background,
+    },
+    border: OWNER_COLORS.border,
+    divider: OWNER_COLORS.divider,
+    brands: {
+      ...colors.brands,
+      owner: {
+        background: OWNER_COLORS.background,
+        card: OWNER_COLORS.surface,
+        cardBorder: OWNER_COLORS.border,
+        primary: OWNER_COLORS.primary,
+        primaryDark: OWNER_COLORS.primaryDark,
+        gradientStart: OWNER_COLORS.primaryDark,
+        gradientEnd: OWNER_COLORS.primaryBright,
+        surface: OWNER_COLORS.surface,
+        border: OWNER_COLORS.border,
+        divider: OWNER_COLORS.divider,
+      },
+    },
+  };
+
+  return {
+    ...context,
+    colors: ownerColors,
+    getBrandColors: (brand: BrandName) =>
+      brand === "owner" ? ownerColors.brands.owner : context.getBrandColors(brand),
+  };
+};
+
 interface ThemeProviderProps {
   children: ReactNode;
 }
@@ -269,12 +429,7 @@ interface ThemeProviderProps {
 export const ThemeProvider: FC<ThemeProviderProps> = ({
   children,
 }): React.ReactElement => {
-  const systemColorScheme = useColorScheme();
-  const resolvedSystemTheme: Theme =
-    systemColorScheme === "dark" || systemColorScheme === "light"
-      ? systemColorScheme
-      : "light";
-  const [theme, setTheme] = useState<Theme>(() => resolvedSystemTheme);
+  const [theme, setTheme] = useState<Theme>("light");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -282,14 +437,12 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
       const stored = await getStoredTheme();
       if (stored) {
         setTheme(stored);
-      } else {
-        setTheme(resolvedSystemTheme);
       }
       setIsReady(true);
     };
 
     loadTheme();
-  }, [resolvedSystemTheme]);
+  }, []);
 
   useEffect(() => {
     if (!isReady) {
@@ -298,16 +451,6 @@ export const ThemeProvider: FC<ThemeProviderProps> = ({
 
     saveTheme(theme);
   }, [theme, isReady]);
-
-  useEffect(() => {
-    if (!isReady && systemColorScheme) {
-      return;
-    }
-
-    if (isReady && !theme) {
-      setTheme(resolvedSystemTheme);
-    }
-  }, [resolvedSystemTheme, isReady, theme]);
 
   const colors = theme === "dark" ? darkTheme.colors : lightTheme.colors;
   const shadows = theme === "dark" ? darkTheme.shadows : lightTheme.shadows;

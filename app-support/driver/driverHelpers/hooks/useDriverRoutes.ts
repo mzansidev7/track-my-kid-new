@@ -3,7 +3,8 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthContext } from "@/context/authContext/auth-context";
 import { client } from "@/supabaseConfig/supabaseConfig";
-import { resolveWorkingBaseUrl } from "@/url";
+import { BASE_URL, resolveWorkingBaseUrl } from "@/url";
+import { getSouthAfricaDateKey } from "@/app-support/client/clientHelpers/utils/routeStops";
 
 export interface DriverRoute {
   id: string;
@@ -29,7 +30,16 @@ export interface DriverRoute {
     latitude?: number;
     longitude?: number;
     status?: "pending" | "in_progress" | "completed" | "skipped";
+    status_updated_at?: string | null;
+    schedule_date?: string | null;
     stop_order?: number;
+    boarded_at?: string | null;
+  }>;
+  route_absences?: Array<{
+    child_id: string;
+    child_name: string;
+    absence_date: string;
+    message: string;
   }>;
   vehicle?: {
     id: string;
@@ -41,6 +51,7 @@ export interface DriverRoute {
   children?: any[];
   route_children?: Array<{
     child_id: string;
+    transport_restricted?: boolean;
     children?: {
       id?: string;
       name?: string;
@@ -63,39 +74,91 @@ export type DriverStudentStatus =
   | "WAITING"
   | "CURRENT STOP"
   | "ONBOARD"
-  | "DROPPED OFF";
+  | "DROPPED OFF"
+  | "SCHEDULED"
+  | "NOT PICKED UP"
+  | "TRIP INCOMPLETE"
+  | "SCHEDULE UNAVAILABLE";
+
+export const timeToMinutes = (value?: string | null) => {
+  if (!value) return null;
+  const match = String(value).match(/(?:^|T|\s)(\d{1,2}):([0-5]\d)/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || hours < 0 || hours > 23) return null;
+  return hours * 60 + minutes;
+};
 
 export const deriveDriverStudentStatus = (
   stops: DriverRoute["route_stops"] = [],
+  route?: Pick<
+    DriverRoute,
+    | "pickup_start_time"
+    | "pickup_end_time"
+    | "dropoff_end_time"
+  >,
+  nowMinutes?: number,
 ) => {
   const childStops = stops || [];
   const pickupStops = childStops.filter((stop) => stop.stop_type === "pickup");
   const dropoffStops = childStops.filter((stop) => stop.stop_type === "dropoff");
   const currentStop = childStops.find((stop) => stop.status === "in_progress");
   const pickedUp = pickupStops.some((stop) => stop.status === "completed");
+  const schoolBoarded = dropoffStops.some((stop) => Boolean(stop.boarded_at));
   const droppedOff =
     dropoffStops.length > 0 &&
     dropoffStops.every((stop) =>
       ["completed", "skipped"].includes(stop.status || ""),
     ) &&
     dropoffStops.some((stop) => stop.status === "completed");
-  const onboard = pickedUp && !droppedOff;
+  const onboard = (pickedUp || schoolBoarded) && !droppedOff;
+  let status: DriverStudentStatus = droppedOff
+    ? "DROPPED OFF"
+    : currentStop
+      ? "CURRENT STOP"
+      : onboard
+        ? "ONBOARD"
+        : "WAITING";
+
+  if (route && nowMinutes !== undefined && !droppedOff) {
+    const pickupEnd = timeToMinutes(route.pickup_end_time);
+    const dropoffEnd = timeToMinutes(route.dropoff_end_time);
+
+    if (currentStop) {
+      const stopWindowEnd =
+        currentStop.stop_type === "dropoff" ? dropoffEnd : pickupEnd;
+      if (stopWindowEnd !== null && nowMinutes > stopWindowEnd) {
+        status = "TRIP INCOMPLETE";
+      }
+    } else if (onboard) {
+      if (dropoffEnd !== null && nowMinutes > dropoffEnd) {
+        status = "TRIP INCOMPLETE";
+      }
+    } else {
+      const pickupStart = timeToMinutes(route.pickup_start_time);
+      if (pickupStart === null || pickupEnd === null) {
+        status =
+          dropoffEnd !== null && nowMinutes > dropoffEnd
+            ? "NOT PICKED UP"
+            : "SCHEDULE UNAVAILABLE";
+      } else if (nowMinutes < pickupStart) {
+        status = "SCHEDULED";
+      } else if (nowMinutes > pickupEnd) {
+        status = "NOT PICKED UP";
+      }
+    }
+  }
 
   return {
-    status: droppedOff
-      ? ("DROPPED OFF" as const)
-      : currentStop
-        ? ("CURRENT STOP" as const)
-        : onboard
-          ? ("ONBOARD" as const)
-          : ("WAITING" as const),
+    status,
     pickedUp,
     onboard,
     currentStop,
   };
 };
 
-const DRIVER_ROUTES_CACHE_KEY = "driver_routes_cache";
+const DRIVER_ROUTES_CACHE_KEY = "driver_routes_cache_v2";
 const DRIVER_ROUTES_CACHE_TTL = 5 * 60 * 1000;
 
 const loadDriverRoutesCache = async (
@@ -134,6 +197,23 @@ const saveDriverRoutesCache = async (cacheKey: string, data: DriverRoute[]) => {
   }
 };
 
+const normalizeRouteStopStatusesForToday = (routes: DriverRoute[]) => {
+  const serviceDate = getSouthAfricaDateKey();
+  return routes.map((route) => ({
+    ...route,
+    route_stops: route.route_stops?.map((stop) => {
+      const updatedAt = stop.status_updated_at
+        ? new Date(stop.status_updated_at)
+        : null;
+      const updatedToday =
+        updatedAt &&
+        !Number.isNaN(updatedAt.getTime()) &&
+        getSouthAfricaDateKey(updatedAt) === serviceDate;
+      return updatedToday ? stop : { ...stop, status: "pending" as const };
+    }),
+  }));
+};
+
 export const useDriverRoutes = () => {
   const { user } = useContext(AuthContext);
   const driverUserId = user?.userData?.id || user?.userData?.user_id || user?.id;
@@ -161,14 +241,27 @@ export const useDriverRoutes = () => {
       if (!forceRefresh) {
         const cachedRoutes = await loadDriverRoutesCache(cacheKey);
         if (cachedRoutes) {
-          setRoutes(cachedRoutes);
+          setRoutes(normalizeRouteStopStatusesForToday(cachedRoutes));
         }
       }
 
       setLoading(true);
 
       try {
-        const baseUrl = await resolveWorkingBaseUrl();
+        const resolvedBaseUrl = await resolveWorkingBaseUrl();
+        const baseUrl =
+          typeof resolvedBaseUrl === "string" &&
+          /^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(resolvedBaseUrl)
+            ? resolvedBaseUrl.replace(/\/+$/, "")
+            : BASE_URL.replace(/\/+$/, "");
+        if (
+          !/^https?:\/\/[^/\s]+(?:\/.*)?$/i.test(baseUrl) ||
+          /^https?:\/\/(?:undefined|null)(?:[/:]|$)/i.test(baseUrl)
+        ) {
+          throw new Error(
+            "Unable to load routes because the API URL is not configured. Set EXPO_PUBLIC_API_URL and restart the app.",
+          );
+        }
         console.log("[driver-routes] requesting", `${baseUrl}/driver/routes`);
         const response = await axios.get(`${baseUrl}/driver/routes`, {
           headers: {
@@ -180,7 +273,9 @@ export const useDriverRoutes = () => {
         if (!Array.isArray(response?.data)) {
           throw new Error("The server returned invalid route data.");
         }
-        const data = response.data as DriverRoute[];
+        const data = normalizeRouteStopStatusesForToday(
+          response.data as DriverRoute[],
+        );
         console.log("[driver-routes] fetch success", {
           status: response.status,
           routeIds: data.map((route) => route.id),
@@ -245,6 +340,13 @@ export const useDriverRoutes = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "route_stops" },
+        () => {
+          fetchDriverRoutes(true);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "absence_reports" },
         () => {
           fetchDriverRoutes(true);
         },
